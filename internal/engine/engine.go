@@ -320,7 +320,7 @@ func (e *Engine) sync(ctx context.Context, folder string, session mail.Session) 
 			continue
 		}
 		messageID := event.ID(e.eventNamespace, folder, msg.Key)
-		n := event.Notification{Location: msg.Location, ID: messageID, Account: label, MailboxID: e.account, Folder: folder, ReceivedAt: msg.ReceivedAt}
+		n := event.Notification{Location: msg.Location, ID: messageID, Account: label, AccountID: e.eventNamespace, MailboxID: e.account, Folder: folder, ReceivedAt: msg.ReceivedAt}
 		if e.preview.Load() {
 			n.Sender, n.Subject, n.Code = msg.Sender, msg.Subject, msg.Code
 		}

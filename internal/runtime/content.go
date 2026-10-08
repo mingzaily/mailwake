@@ -22,6 +22,7 @@ func (m *Manager) ReadContent(ctx context.Context, reference native.MessageRefer
 	}
 	b.mu.RLock()
 	source, deleted := b.source, b.deleted
+	accountID := b.config.Identity()
 	subscribed := false
 	for _, folder := range b.monitor.Subscriptions().Folders {
 		if folder.Name == reference.Folder {
@@ -30,7 +31,7 @@ func (m *Manager) ReadContent(ctx context.Context, reference native.MessageRefer
 		}
 	}
 	b.mu.RUnlock()
-	if deleted || !subscribed {
+	if deleted || !subscribed || reference.AccountID != accountID {
 		return mail.Body{}, fault.New("message_not_found")
 	}
 	if source == nil {

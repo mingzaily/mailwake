@@ -12,6 +12,7 @@ type Notification struct {
 	Location   *mail.Location `json:"location,omitempty"`
 	Test       bool           `json:"test,omitempty"`
 	ID         string         `json:"id"`
+	AccountID  string         `json:"account_id"`
 	MailboxID  string         `json:"mailbox_id"`
 	Account    string         `json:"account"`
 	Folder     string         `json:"folder"`
