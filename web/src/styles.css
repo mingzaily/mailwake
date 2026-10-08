@@ -1,0 +1,134 @@
+@import "tailwindcss";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+@theme inline {
+  --font-sans:
+    "Geist Variable", -apple-system, "PingFang SC", "Microsoft YaHei",
+    sans-serif;
+  --font-mono: "Geist Mono Variable", monospace;
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+  --color-primary: var(--accent);
+  --color-primary-foreground: var(--accent-ink);
+  --color-secondary: var(--panel-2);
+  --color-secondary-foreground: var(--text);
+  --color-muted: var(--panel-2);
+  --color-muted-foreground: var(--muted);
+  --color-accent: var(--hover);
+  --color-accent-foreground: var(--text);
+  --color-destructive: var(--crit);
+  --color-border: var(--line);
+  --color-input: var(--line);
+  --color-ring: var(--ring);
+  --color-card: var(--panel);
+  --color-card-foreground: var(--text);
+  --color-popover: var(--panel);
+  --color-popover-foreground: var(--text);
+  --color-success: var(--ok);
+  --color-warning: var(--warn);
+  --color-border-subtle: var(--line-soft);
+  --color-sidebar: var(--panel);
+  --color-sidebar-foreground: var(--text);
+  --color-sidebar-primary: var(--accent);
+  --color-sidebar-primary-foreground: var(--accent-ink);
+  --color-sidebar-accent: var(--accent-soft);
+  --color-sidebar-accent-foreground: var(--text);
+  --color-sidebar-border: var(--line);
+  --color-sidebar-ring: var(--ring);
+  --radius-xs: calc(var(--radius) - 6px);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+:root {
+  --radius: 0.5rem;
+  --drawer-backdrop: #0008;
+  --dialog-backdrop: oklch(0% 0 0 / 55%);
+  --ring: var(--accent);
+  color-scheme: dark;
+  --bg: #0b0d12;
+  --panel: #11141b;
+  --panel-2: #161a23;
+  --hover: #1a1f2a;
+  --line: #232836;
+  --line-soft: #1b1f2a;
+  --text: #e6e9f2;
+  --muted: #8a91a6;
+  --faint: #71798e;
+  --accent: #8fa8ff;
+  --accent-ink: #0b0d12;
+  --accent-soft: rgba(143, 168, 255, 0.12);
+  --ok: #3dd68c;
+  --warn: #f5b544;
+  --crit: #ff6b6b;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f5f6f9;
+  --panel: #fff;
+  --panel-2: #f0f2f7;
+  --hover: #eceff6;
+  --line: #dde1ea;
+  --line-soft: #e8ebf1;
+  --text: #11141b;
+  --muted: #5a6175;
+  --faint: #697187;
+  --accent: #3f5bd8;
+  --accent-ink: #fff;
+  --accent-soft: rgba(63, 91, 216, 0.09);
+  --ok: #187847;
+  --warn: #916014;
+  --crit: #c23030;
+}
+@layer base {
+  * {
+    box-sizing: border-box;
+    border-color: var(--line);
+  }
+  body {
+    margin: 0;
+    min-width: 360px;
+    background: var(--bg);
+    color: var(--text);
+    font: 400 14.5px/1.55 var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  button,
+  a {
+    touch-action: manipulation;
+  }
+  button:not(:disabled) {
+    cursor: pointer;
+  }
+  :focus-visible:not([data-slot]) {
+    outline: 2px solid var(--ring);
+    outline-offset: 3px;
+  }
+  a:where(:not([data-slot])) {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  a:where(:not([data-slot])):hover {
+    text-decoration: underline;
+  }
+  h1,
+  h2,
+  p {
+    margin: 0;
+  }
+  h1,
+  h2 {
+    text-wrap: balance;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

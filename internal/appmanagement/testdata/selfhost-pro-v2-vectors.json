@@ -1,0 +1,75 @@
+{
+  "contract_name": "selfhost-pro-v2",
+  "note": "Synthetic test-only keys. Never use in production.",
+  "device": {
+    "signing_private_pkcs8": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgm5wU_pziZ_ywBCeSKhTj1VDfacGbjOJzx9gXww-d_1ehRANCAAQ7aN8lTWHbSN-kga_-xlYN70zzF8oS90aSXYKiMjyBfBkXpZ3WuuBpAQrh4eWn2XLoKl6BC6-Hq3HNkKMK7Lwh",
+    "signing_key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEO2jfJU1h20jfpIGv_sZWDe9M8xfKEvdGkl2CojI8gXwZF6Wd1rrgaQEK4eHlp9ly6CpegQuvh6txzZCjCuy8IQ",
+    "encryption_private_pkcs8": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQghpWBA29Ga2BxZcNLYg9NBwShlAp7S3m2KSDYPTKAYmWhRANCAAQ1ntCFUbcP80gOtXqRJDE403SO_0gRN9Ecs_saBOSj5aSqJvlE3ZUfEQWJ6_7ucCJi4tvFMrmWCmkw-c6QOmNJ",
+    "encryption_key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAENZ7QhVG3D_NIDrV6kSQxONN0jv9IETfRHLP7GgTko-Wkqib5RN2VHxEFiev-7nAiYuLbxTK5lgppMPnOkDpjSQ",
+    "device_id": "31a9f59555a7c74a0ddc5e5a842816c7b92319d3e0c7bc37f0787dccb831cbb5"
+  },
+  "platform_enrollment": {
+    "audience": "mailwake-platform-sandbox",
+    "environment": "sandbox",
+    "challenge_id": "6f0b6a0e-5f43-4c2c-9f0e-2c1f7e3c9a11",
+    "nonce": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc",
+    "signing_payload": "mailwake-platform-enroll-v2\nmailwake-platform-sandbox\nsandbox\n6f0b6a0e-5f43-4c2c-9f0e-2c1f7e3c9a11\nBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc\n31a9f59555a7c74a0ddc5e5a842816c7b92319d3e0c7bc37f0787dccb831cbb5\ne89cd35aa12f2f36fcee5e428b5f0f406510fde3d15792d01264c0a14ea8481b",
+    "signature": "4R8vf_mn4TsbQDJ9b1IuaQTTT81WhHsU21i4wVhQcVtuYG4pXX6KpolhhSb0ay7sHCDIHUVsGdgxdcUOH4_-WA"
+  },
+  "app_management_qualification": {
+    "trust": {
+      "issuer": "mailwake-platform",
+      "environment": "sandbox",
+      "keys": {
+        "test-2026-10": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEyXznDMOsZ2BEArtvktBJDPWSTgGJa42ufs5i1_jZOVk937KHUQppqcZ9UOrByTABvoBX3dWHHnZtblr5MmBBfw"
+      }
+    },
+    "issuer_private_pkcs8": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgwaEFUNBlJWDaJ8uQkJrgj7NOkDJ_3R3wS--Pqfxu322hRANCAATJfOcMw6xnYEQCu2-S0EkM9ZJOAYlrja5-zmLX-Nk5WT3fsodRCmmpxn1Q6sHJMAG-gFfd1Ycedm1uWvkyYEF_",
+    "header": {
+      "alg": "ES256",
+      "typ": "JWT",
+      "kid": "test-2026-10"
+    },
+    "claims": {
+      "iss": "mailwake-platform",
+      "aud": "mailwake-core",
+      "sub": "subj_test",
+      "environment": "sandbox",
+      "device_id": "31a9f59555a7c74a0ddc5e5a842816c7b92319d3e0c7bc37f0787dccb831cbb5",
+      "core_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "iat": 1790000000,
+      "exp": 1790000300,
+      "purpose": "app_management"
+    },
+    "verify_at": 1790000100,
+    "jwt": "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InRlc3QtMjAyNi0xMCJ9.eyJpc3MiOiJtYWlsd2FrZS1wbGF0Zm9ybSIsImF1ZCI6Im1haWx3YWtlLWNvcmUiLCJzdWIiOiJzdWJqX3Rlc3QiLCJlbnZpcm9ubWVudCI6InNhbmRib3giLCJkZXZpY2VfaWQiOiIzMWE5ZjU5NTU1YTdjNzRhMGRkYzVlNWE4NDI4MTZjN2I5MjMxOWQzZTBjN2JjMzdmMDc4N2RjY2I4MzFjYmI1IiwiY29yZV9pZCI6ImFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJpYXQiOjE3OTAwMDAwMDAsImV4cCI6MTc5MDAwMDMwMCwicHVycG9zZSI6ImFwcF9tYW5hZ2VtZW50In0.Vwsr_s6jyFa3adXEiBczkLvbQ0YueCIfjCTMonWDouvnFPuTHGpwP7r0vwzhWnKyFODouL5x15VKRSt6z88Oqw"
+  },
+  "native_push_qualification": {
+    "trust": {
+      "issuer": "mailwake-platform",
+      "environment": "sandbox",
+      "keys": {
+        "test-2026-10": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEyXznDMOsZ2BEArtvktBJDPWSTgGJa42ufs5i1_jZOVk937KHUQppqcZ9UOrByTABvoBX3dWHHnZtblr5MmBBfw"
+      }
+    },
+    "issuer_private_pkcs8": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgwaEFUNBlJWDaJ8uQkJrgj7NOkDJ_3R3wS--Pqfxu322hRANCAATJfOcMw6xnYEQCu2-S0EkM9ZJOAYlrja5-zmLX-Nk5WT3fsodRCmmpxn1Q6sHJMAG-gFfd1Ycedm1uWvkyYEF_",
+    "header": {
+      "alg": "ES256",
+      "typ": "JWT",
+      "kid": "test-2026-10"
+    },
+    "claims": {
+      "iss": "mailwake-platform",
+      "aud": "mailwake-core",
+      "sub": "subj_test",
+      "environment": "sandbox",
+      "device_id": "31a9f59555a7c74a0ddc5e5a842816c7b92319d3e0c7bc37f0787dccb831cbb5",
+      "core_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "iat": 1790000000,
+      "exp": 1790000300,
+      "purpose": "native_push"
+    },
+    "verify_at": 1790000100,
+    "jwt": "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InRlc3QtMjAyNi0xMCJ9.eyJpc3MiOiJtYWlsd2FrZS1wbGF0Zm9ybSIsImF1ZCI6Im1haWx3YWtlLWNvcmUiLCJzdWIiOiJzdWJqX3Rlc3QiLCJlbnZpcm9ubWVudCI6InNhbmRib3giLCJkZXZpY2VfaWQiOiIzMWE5ZjU5NTU1YTdjNzRhMGRkYzVlNWE4NDI4MTZjN2I5MjMxOWQzZTBjN2JjMzdmMDc4N2RjY2I4MzFjYmI1IiwiY29yZV9pZCI6ImFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJpYXQiOjE3OTAwMDAwMDAsImV4cCI6MTc5MDAwMDMwMCwicHVycG9zZSI6Im5hdGl2ZV9wdXNoIn0.DrNJw5FMREBetF7l75wNkzPVt9WG_1Ws8eBcfLvauJbbNZ6ifOc3EiwdVqiwOczZ2BPeVF90q7-wHw-XQ8L-_Q"
+  }
+}
