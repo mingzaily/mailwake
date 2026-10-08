@@ -1,0 +1,22 @@
+services:
+  core:
+    image: ghcr.io/mingzaily/mailwake:latest
+    # Source checkout: docker compose up -d --build --pull never
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      MAILWAKE_LISTEN: "0.0.0.0:8080"
+      MAILWAKE_DATA_DIR: "/data"
+      MAILWAKE_RELAY_URL: "${MAILWAKE_RELAY_URL:-}"
+    volumes:
+      - core-data:/data
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_grace_period: 30s
+volumes:
+  core-data:

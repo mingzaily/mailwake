@@ -1,0 +1,22 @@
+Mailwake Core
+Copyright (C) 2026 Mailwake contributors
+SPDX-License-Identifier: AGPL-3.0-only
+
+Mailwake Core is free software: you can redistribute it and/or modify it
+under the terms of the GNU Affero General Public License, version 3 only,
+as published by the Free Software Foundation.
+
+Mailwake Core is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public
+License for more details.
+
+A copy of the license is included in LICENSE. Third-party dependencies
+remain governed by their respective licenses.
+
+The management interface bundles Geist and Geist Mono (SIL Open Font
+License 1.1) and third-party JavaScript/CSS under their respective licenses.
+The reproducible web build audits package-lock.json and embeds the full
+license texts at /third-party-notices.txt. Container images also include
+this file in /usr/share/licenses/mailwake/. Frontend sources include
+MIT-licensed shadcn/ui components, adapted for Mailwake's strict CSP.

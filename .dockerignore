@@ -1,0 +1,16 @@
+*
+!go.mod
+!go.sum
+!cmd/
+!cmd/**
+!internal/
+!internal/**
+**/*_test.go
+**/*_test.mjs
+!LICENSE
+!COPYRIGHT
+
+!web/
+!web/**
+web/node_modules/
+internal/httpapi/webdist/

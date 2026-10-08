@@ -1,0 +1,6 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Public synthetic interoperability vectors with fixed test keys and token material"
+paths = ['''^internal/native/testdata/test-vectors\.json$''', '''^internal/appmanagement/testdata/selfhost-pro-v2-vectors\.json$''']

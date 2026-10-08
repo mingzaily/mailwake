@@ -1,0 +1,335 @@
+import { afterEach, expect, test, vi } from "vitest";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { I18nContext } from "@/lib/i18n";
+import catalog from "../../../internal/i18n/locales/en.json";
+import {
+  NativeDevices,
+  ManagementDevices,
+  PairingDialog,
+  type NativePairing,
+} from "./native-devices";
+import { DeliveryEditor } from "./delivery-form";
+import type { ReactNode } from "react";
+function mount(element: ReactNode) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={client}>
+      <I18nContext.Provider
+        value={{ language: "en", catalog, setLanguage: () => {} }}
+      >
+        {element}
+      </I18nContext.Provider>
+    </QueryClientProvider>,
+  );
+}
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+function created(): NativePairing {
+  return {
+    id: "pairing",
+    status: "waiting",
+    device_name: "",
+    expires_at: new Date(Date.now() + 300000).toISOString(),
+    uri: "mailwake://pair?v=1&relay=https%3A%2F%2Frelay.test&aud=test&pid=pairing&core=public&t=private&exp=9999999999",
+    fingerprint: "7F3A 9C21 E4B0 55D2",
+  };
+}
+function dialogSupport() {
+  vi.spyOn(HTMLDialogElement.prototype, "showModal").mockImplementation(
+    function (this: HTMLDialogElement) {
+      this.setAttribute("open", "");
+    },
+  );
+}
+test("pairing dialog renders CSP-compatible SVG, fingerprint and one-time warning", async () => {
+  dialogSupport();
+  const data = created();
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ ...data, uri: undefined })),
+      ),
+  );
+  mount(<PairingDialog created={data} onClose={() => {}} />);
+  const image = await screen.findByAltText(catalog["ui.pairing_qr"]);
+  expect(image.getAttribute("src")).toMatch(/^data:image\/svg\+xml/);
+  expect(image.hasAttribute("style")).toBe(false);
+  expect(screen.getByText(data.fingerprint!)).toBeTruthy();
+  expect(screen.getByText(catalog["ui.pairing_warning"])).toBeTruthy();
+  expect(screen.getByRole("status").textContent).toBe(
+    catalog["ui.pairing_waiting"],
+  );
+});
+test.each(["active", "expired", "failed"] as const)(
+  "pairing dialog displays %s and clears QR",
+  async (status) => {
+    dialogSupport();
+    const data = created();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            id: data.id,
+            status,
+            device_name: "My iPhone",
+            expires_at: data.expires_at,
+          }),
+        ),
+      ),
+    );
+    mount(<PairingDialog created={data} onClose={() => {}} />);
+    await waitFor(() =>
+      expect(screen.getByRole("status").textContent).toContain(
+        catalog[`ui.pairing_${status}`],
+      ),
+    );
+    expect(screen.queryByAltText(catalog["ui.pairing_qr"])).toBeNull();
+    if (status === "active")
+      expect(screen.getByRole("status").textContent).toContain("My iPhone");
+  },
+);
+test("channel switches retain preview and hide native when unavailable", async () => {
+  const data = {
+    revision: 1,
+    channel: "bark",
+    preview: "subject",
+    language: "en",
+    retry_count: 0,
+    native_available: true,
+    bark: { endpoint: "https://api.day.app", key: { configured: true } },
+    pushover: { token: { configured: false }, user: { configured: false } },
+    webhook: { url: { configured: false }, secret: { configured: false } },
+  };
+  const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify(data)));
+  vi.stubGlobal("fetch", fetcher);
+  mount(<DeliveryEditor />);
+  const channel = await screen.findByLabelText(catalog["ui.channel"]);
+  fireEvent.change(channel, { target: { value: "native" } });
+  expect(screen.queryByRole("radio")).toBeNull();
+  expect(screen.getByText(catalog["ui.native_encrypted"])).toBeTruthy();
+  fireEvent.change(channel, { target: { value: "webhook" } });
+  expect(
+    (
+      screen.getByRole("radio", {
+        name: catalog["ui.preview_subject"],
+      }) as HTMLInputElement
+    ).checked,
+  ).toBe(true);
+  cleanup();
+  fetcher.mockResolvedValue(
+    new Response(JSON.stringify({ ...data, native_available: false })),
+  );
+  mount(<DeliveryEditor />);
+  await screen.findByLabelText(catalog["ui.channel"]);
+  expect(screen.queryByRole("option", { name: "Mailwake App" })).toBeNull();
+});
+
+test("environment mismatch explains the reset command and re-pairing", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      if (url.endsWith("/settings/delivery"))
+        return new Response(JSON.stringify({ native_available: true }));
+      if (url.endsWith("/native/devices"))
+        return new Response(JSON.stringify({ devices: [] }));
+      return new Response(
+        JSON.stringify({
+          error: {
+            code: "native_environment_mismatch",
+            message: catalog["native_environment_mismatch"],
+          },
+        }),
+        { status: 409 },
+      );
+    }),
+  );
+  mount(<NativeDevices />);
+  fireEvent.click(
+    await screen.findByRole("button", { name: catalog["ui.pair_phone"] }),
+  );
+  await waitFor(() =>
+    expect(screen.getByRole("alert").textContent).toContain(
+      "mailwake admin reset-native-push",
+    ),
+  );
+  expect(screen.getByRole("alert").textContent).toContain(
+    "pair your phones again",
+  );
+});
+
+test("canceling unpair keeps the device and restores the trigger focus", async () => {
+  const fetcher = vi.fn(
+    async (url: string) =>
+      new Response(
+        JSON.stringify(
+          url.endsWith("/settings/delivery")
+            ? { native_available: true }
+            : {
+                devices: [
+                  { ...created(), status: "active", device_name: "Test phone" },
+                ],
+              },
+        ),
+      ),
+  );
+  vi.stubGlobal("fetch", fetcher);
+  mount(<NativeDevices />);
+  const trigger = await screen.findByRole("button", {
+    name: catalog["ui.unpair"],
+  });
+  trigger.focus();
+  fireEvent.click(trigger);
+  const cancel = screen.getByRole("button", {
+    name: catalog["ui.cancel"],
+  });
+  expect(document.activeElement).toBe(cancel);
+  fireEvent.click(cancel);
+  expect(document.activeElement).toBe(
+    screen.getByRole("button", { name: catalog["ui.unpair"] }),
+  );
+  expect(
+    fetcher.mock.calls.every(([url]) => !url.includes("/native/devices/")),
+  ).toBe(true);
+});
+
+test("revoked devices show the revocation time and local removal action", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async (url: string) =>
+        new Response(
+          JSON.stringify(
+            url.endsWith("/settings/delivery")
+              ? { native_available: true }
+              : {
+                  devices: [
+                    {
+                      ...created(),
+                      status: "revoked",
+                      device_name: "Old iPhone",
+                      revoked_at: "2026-09-30T00:00:00Z",
+                    },
+                  ],
+                },
+          ),
+        ),
+    ),
+  );
+  mount(<NativeDevices />);
+  await screen.findByRole("button", { name: catalog["ui.remove"] });
+  expect(screen.getByText(/Unpaired on device/)).toBeTruthy();
+  expect(document.querySelector("time")?.getAttribute("datetime")).toBe(
+    "2026-09-30T00:00:00Z",
+  );
+});
+
+test("a Native-only invitation omits management origin and scopes", async () => {
+  dialogSupport();
+  let accepted: unknown;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.endsWith("/settings/delivery"))
+        return new Response(JSON.stringify({ native_available: true }));
+      if (url.endsWith("/management/devices"))
+        return new Response(JSON.stringify({ devices: [] }));
+      if (url.endsWith("/device-invitations") && init?.method === "POST") {
+        accepted = JSON.parse(String(init.body));
+        return new Response(
+          JSON.stringify({
+            invitation_id: "invitation",
+            pairing_id: "pairing",
+            expires_at: new Date(Date.now() + 300000).toISOString(),
+            uri: "mailwake://connect?v=3&core=synthetic&pair=synthetic",
+            fingerprint: "ABCD",
+          }),
+        );
+      }
+      return new Response(
+        JSON.stringify({
+          id: "pairing",
+          status: "waiting",
+          device_name: "",
+          expires_at: new Date(Date.now() + 300000).toISOString(),
+        }),
+      );
+    }),
+  );
+  mount(<ManagementDevices />);
+  const native = await screen.findByRole("checkbox", {
+    name: catalog["ui.enable_native_push"],
+  });
+  await waitFor(() =>
+    expect((native as HTMLButtonElement).disabled).toBe(false),
+  );
+  fireEvent.click(
+    screen.getByRole("checkbox", { name: catalog["ui.allow_app_management"] }),
+  );
+  fireEvent.click(native);
+  fireEvent.click(
+    screen.getByRole("button", { name: catalog["ui.add_phone"] }),
+  );
+  await waitFor(() =>
+    expect(accepted).toEqual({
+      core_origin: "",
+      scopes: [],
+      management: false,
+      native: true,
+    }),
+  );
+  expect(screen.queryByLabelText(catalog["ui.core_https_origin"])).toBeNull();
+});
+
+test("management revocation sends only the independent management request", async () => {
+  const requests: string[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string, init?: RequestInit) => {
+      if (init?.method === "DELETE") {
+        requests.push(url);
+        return new Response(null, { status: 204 });
+      }
+      if (url.endsWith("/settings/delivery"))
+        return new Response(JSON.stringify({ native_available: true }));
+      return new Response(
+        JSON.stringify({
+          devices: [
+            {
+              controller_id: "ctrl_phone",
+              device_id: "device",
+              device_name: "Owner phone",
+              scopes: ["mailboxes"],
+              created_at: "2026-10-01T00:00:00Z",
+            },
+          ],
+        }),
+      );
+    }),
+  );
+  mount(<ManagementDevices />);
+  fireEvent.click(
+    await screen.findByRole("button", { name: catalog["ui.revoke"] }),
+  );
+  expect(
+    screen.getByText(catalog["ui.revoke_management_confirm"]),
+  ).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: catalog["ui.revoke"] }));
+  await waitFor(() =>
+    expect(requests).toEqual(["/api/v1/management/devices/ctrl_phone"]),
+  );
+});

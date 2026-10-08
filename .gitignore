@@ -1,0 +1,21 @@
+# Local configuration and credentials
+/config.json
+.env
+/app-management.env
+.env.*
+!.env.example
+*.p8
+*.p12
+
+# Runtime state and generated artifacts
+/data/
+/data-*/
+/bin/
+/coverage.out
+*.test
+.DS_Store
+
+# Embedded frontend build output; keep the directory for Go-only builds.
+/internal/httpapi/webdist/*
+!/internal/httpapi/webdist/.gitkeep
+/web/node_modules/
