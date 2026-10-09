@@ -129,7 +129,7 @@ make build
 ./bin/mailwake
 ```
 
-The listen and storage environment settings are `MAILWAKE_LISTEN` (default `127.0.0.1:8080`, container `0.0.0.0:8080`) and `MAILWAKE_DATA_DIR` (default `data`, container `/data`). Optional `MAILWAKE_RELAY_URL` enables Mailwake App notifications; leave it empty to hide native push. Startup uses SQLite configuration. Configuration files and credential environment variables have been removed.
+The listen and storage environment settings are `MAILWAKE_LISTEN` (default `127.0.0.1:8080`, container `0.0.0.0:8080`) and `MAILWAKE_DATA_DIR` (default `data`, container `/data`). `MAILWAKE_RELAY_URL` defaults to the official production Relay (`https://notify.mailwake.oritx.com`) when unset or empty. Override it with `https://notify-sandbox.mailwake.oritx.com` for sandbox testing or your own Relay origin. Configure this process setting through Docker environment variables (the supplied Compose file reads it from the host environment or `.env`), then recreate the container; the Web console manages phone pairing. Startup uses SQLite configuration. Configuration files and credential environment variables have been removed.
 
 Stop Core before recovery commands, using the same data directory:
 

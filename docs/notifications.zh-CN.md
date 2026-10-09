@@ -9,7 +9,7 @@
 | 通道 | 参数 | 凭据 |
 | --- | --- | --- |
 | `bark` | `bark.endpoint`，默认 `https://api.day.app` | `bark.key` |
-| `native` | `MAILWAKE_RELAY_URL`；在通知设置中配对手机 | 本地生成并加密保存的 Core 身份 |
+| `native` | 默认使用官方生产 Relay；通过 `MAILWAKE_RELAY_URL` 覆盖；在通知设置中配对手机 | 本地生成并加密保存的 Core 身份 |
 | `pushover` | 无 | `pushover.token`、`pushover.user` |
 | `webhook` | HTTPS，可带查询参数 | `webhook.url`、`webhook.secret`（至少 32 个非空白字符） |
 

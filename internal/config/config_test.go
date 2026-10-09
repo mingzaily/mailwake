@@ -1,6 +1,42 @@
 package config
 
-import "testing"
+import (
+	"os"
+	"testing"
+)
+
+func TestRelayDefaultsToProduction(t *testing.T) {
+	for _, unset := range []bool{false, true} {
+		name := "empty"
+		if unset {
+			name = "unset"
+		}
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("MAILWAKE_RELAY_URL", "")
+			if unset {
+				if err := os.Unsetenv("MAILWAKE_RELAY_URL"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			c, err := Load()
+			if err != nil || c.RelayURL != "https://notify.mailwake.oritx.com" {
+				t.Fatal(c, err)
+			}
+		})
+	}
+}
+
+func TestRelayEnvironmentOverride(t *testing.T) {
+	for _, relay := range []string{"https://notify-sandbox.mailwake.oritx.com", "https://relay.example.com", "http://127.0.0.1:8787"} {
+		t.Run(relay, func(t *testing.T) {
+			t.Setenv("MAILWAKE_RELAY_URL", relay)
+			c, err := Load()
+			if err != nil || c.RelayURL != relay {
+				t.Fatal(c, err)
+			}
+		})
+	}
+}
 
 func TestDeploymentSettings(t *testing.T) {
 	t.Setenv("MAILWAKE_LISTEN", "")

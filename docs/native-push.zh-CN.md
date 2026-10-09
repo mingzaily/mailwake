@@ -4,7 +4,7 @@
 
 ## Mailwake App 原生推送
 
-通过 `MAILWAKE_RELAY_URL` 配置 Relay origin，生产使用 HTTPS，本机开发可用回环 HTTP。留空时隐藏原生推送功能。通知设置中的 Mailwake App 和“手机”区块可生成五分钟二维码并解除配对；同时最多三个等待配对；正在等待、已建立和已选设备待撤权清理共占十六台手机名额，已撤未选设备邀请释放名额。二维码是一次性凭证，只用本人手机扫描并核对 Core 短指纹。iOS App 已实现配对与通知扩展解密；生产 APNs 投递和设备展示分别验收。
+`MAILWAKE_RELAY_URL` 未设置或为空时，默认使用官方生产 Relay（`https://notify.mailwake.oritx.com`）。沙盒测试设置为 `https://notify-sandbox.mailwake.oritx.com`，自定义 Relay 填写对应 HTTPS origin，本机开发可用回环 HTTP。通知设置中的 Mailwake App 和“手机”区块可生成五分钟二维码并解除配对；同时最多三个等待配对；正在等待、已建立和已选设备待撤权清理共占十六台手机名额，已撤未选设备邀请释放名额。二维码是一次性凭证，只用本人手机扫描并核对 Core 短指纹。iOS App 已实现配对与通知扩展解密；生产 APNs 投递和设备展示分别验收。
 
 管理 API 为 POST `/api/v1/native/pairings`、GET `/api/v1/native/pairings/:id`、GET `/api/v1/native/devices`、DELETE `/api/v1/native/devices/:pairing_id`，复用管理员鉴权和 CSRF。创建响应的 URI 包含一次性 Token，其余管理响应省略 Token。Core 将等待配对所需 Token 加密保存，终态清除；先验证并持久化锁定设备，再向 Relay 提交正式配对 Token。日期使用 UTC RFC3339，URI 的 `exp` 和签名时间戳为整数 Unix 秒。
 

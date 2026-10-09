@@ -129,7 +129,7 @@ make build
 ./bin/mailwake
 ```
 
-监听与存储环境变量为 `MAILWAKE_LISTEN`（默认 `127.0.0.1:8080`，容器为 `0.0.0.0:8080`）与 `MAILWAKE_DATA_DIR`（默认 `data`，容器为 `/data`）。可选的 `MAILWAKE_RELAY_URL` 启用 Mailwake App 通知，留空时隐藏原生推送。业务配置从 SQLite 读取；配置文件和凭据环境变量已移除。
+监听与存储环境变量为 `MAILWAKE_LISTEN`（默认 `127.0.0.1:8080`，容器为 `0.0.0.0:8080`）与 `MAILWAKE_DATA_DIR`（默认 `data`，容器为 `/data`）。`MAILWAKE_RELAY_URL` 未设置或为空时，默认使用官方生产 Relay（`https://notify.mailwake.oritx.com`）。沙盒测试设置为 `https://notify-sandbox.mailwake.oritx.com`，自定义 Relay 填写对应 origin。该进程配置通过 Docker 环境变量注入（随附 Compose 文件从宿主机环境或 `.env` 读取），修改后重建容器；Web 控制台负责手机配对。业务配置从 SQLite 读取；配置文件和凭据环境变量已移除。
 
 停止 Core 后，在相同数据目录运行恢复命令：
 

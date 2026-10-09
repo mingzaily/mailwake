@@ -7,7 +7,7 @@
 管理员在 Web 的“手机”页面创建邀请（`POST /api/v1/device-invitations`），选择：
 
 - **App 管理**：填写手机能访问到的 Core HTTPS 地址，勾选 scope（`mailboxes`、`folders`、`channels`、`diagnostics`）。
-- **原生推送**：同时创建一个 Relay 配对（需要配置 `MAILWAKE_RELAY_URL`）。
+- **原生推送**：同时创建一个 Relay 配对（默认使用官方生产 Relay，`MAILWAKE_RELAY_URL` 可覆盖地址）。
 
 邀请 5 分钟有效，二维码为 `mailwake://connect?v=3&...`，只在创建响应中出现；管理邀请通过 `scopes` 参数携带逗号分隔的授权范围。App 展示 Core 指纹、地址与本次授权范围，用户确认后调用 `POST /api/v1/app/accept`，取得 `mwac_` 凭证（Core 只保存哈希）。邀请 token 一次性；同一台设备再次接受新邀请会替换它原来的授权。
 

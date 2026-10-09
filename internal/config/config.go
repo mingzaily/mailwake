@@ -19,14 +19,16 @@ type Config struct {
 }
 
 func Load() (Config, error) {
-	c := Config{Listen: "127.0.0.1:8080", DataDir: "data"}
+	c := Config{Listen: "127.0.0.1:8080", DataDir: "data", RelayURL: "https://notify.mailwake.oritx.com"}
 	if v := os.Getenv("MAILWAKE_LISTEN"); v != "" {
 		c.Listen = v
 	}
 	if v := os.Getenv("MAILWAKE_DATA_DIR"); v != "" {
 		c.DataDir = v
 	}
-	c.RelayURL = os.Getenv("MAILWAKE_RELAY_URL")
+	if v := os.Getenv("MAILWAKE_RELAY_URL"); v != "" {
+		c.RelayURL = v
+	}
 	var tlsErr error
 	c.LocalTestTLS, tlsErr = localtls.Load(os.Getenv("MAILWAKE_LOCAL_TEST_TLS"), os.Getenv("MAILWAKE_LOCAL_TEST_IMAP_CA_FILE"), os.Getenv("MAILWAKE_LOCAL_TEST_RELAY_CA_FILE"), os.Getenv("MAILWAKE_LOCAL_TEST_DELIVERY_CA_FILE"))
 	if tlsErr != nil {
