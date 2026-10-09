@@ -69,7 +69,7 @@ jobs:
             name="mailwake-${GITHUB_REF_NAME}-${os}-${arch}"
             GOOS=$os GOARCH=$arch CGO_ENABLED=0 go build -tags nomsgpack -trimpath \
               -ldflags="-s -w -X github.com/mingzaily/mailwake/internal/buildinfo.Version=${GITHUB_REF_NAME}" \
-              -o "dist/$name/mailwake" ./cmd/mailwake-selfhost
+              -o "dist/$name/mailwake" ./cmd/mailwake
             cp LICENSE COPYRIGHT README.md README.zh-CN.md compose.yaml compose.app-management.yaml app-management.env.example internal/httpapi/webdist/third-party-notices.txt "dist/$name/"
             cp -R docs "dist/$name/"
             mkdir -p "dist/$name/internal/appmanagement"

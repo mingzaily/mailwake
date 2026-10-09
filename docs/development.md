@@ -32,7 +32,7 @@ All locked dependency licenses are audited against MIT, ISC, Apache-2.0, BSD, OF
 Tests use local TLS IMAP servers, real SQLite databases and local HTTPS notification receivers. They cover folder monitoring and restart recovery, mailbox isolation, concurrent configuration updates, delivery retries, webhook signatures, authentication and log privacy. Real provider rules and device display require manual validation with your own accounts.
 
 ```text
-cmd/mailwake-selfhost/  configuration, assembly, startup and shutdown
+cmd/mailwake/          configuration, assembly, startup and shutdown
 internal/
   config/              listen address and data directory
   auth/                setup, passwords, sessions, rate limits and API tokens

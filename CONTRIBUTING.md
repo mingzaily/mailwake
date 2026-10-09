@@ -29,7 +29,7 @@ The binary is written to `bin/mailwake`. The `nomsgpack` build tag is used by th
 
 | Path | Responsibility |
 | --- | --- |
-| `cmd/mailwake-selfhost/` | Process startup, dependency assembly and shutdown |
+| `cmd/mailwake/` | Process startup, dependency assembly and shutdown |
 | `internal/config/` | Listen address and data directory |
 | `internal/auth/` | Setup, password hashes, sessions, failure limits and API tokens |
 | `internal/settings/` | Mailbox/delivery models, validation, merging, redacted views, per-mailbox encryption |

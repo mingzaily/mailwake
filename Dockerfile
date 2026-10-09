@@ -16,7 +16,7 @@ COPY . .
 COPY --from=web /src/internal/httpapi/webdist ./internal/httpapi/webdist
 RUN CGO_ENABLED=0 go build -tags nomsgpack -trimpath \
     -ldflags="-s -w -X github.com/mingzaily/mailwake/internal/buildinfo.Version=${VERSION}" \
-    -o /out/mailwake ./cmd/mailwake-selfhost
+    -o /out/mailwake ./cmd/mailwake
 
 FROM alpine:3.22
 ARG VERSION=devel

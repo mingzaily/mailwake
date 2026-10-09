@@ -6,7 +6,7 @@ web:
 	cd web && npm ci && npm run build
 
 build: web
-	CGO_ENABLED=0 go build -tags nomsgpack -trimpath -ldflags="$(LDFLAGS)" -o bin/mailwake ./cmd/mailwake-selfhost
+	CGO_ENABLED=0 go build -tags nomsgpack -trimpath -ldflags="$(LDFLAGS)" -o bin/mailwake ./cmd/mailwake
 
 check-build: build
 	$(MAKE) check-webdist
