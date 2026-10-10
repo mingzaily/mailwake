@@ -26,14 +26,16 @@ type Query struct {
 	Limit     int
 }
 type Page struct {
-	Entries []Entry `json:"entries"`
-	Next    uint64  `json:"next"`
+	Entries        []Entry `json:"entries"`
+	Next           uint64  `json:"next"`
+	ClearedThrough uint64  `json:"cleared_through"`
 }
 
 type ring struct {
-	mu      sync.Mutex
-	entries [Capacity]Entry
-	seq     uint64
+	mu             sync.Mutex
+	entries        [Capacity]Entry
+	seq            uint64
+	clearedThrough uint64
 }
 type handler struct {
 	output  slog.Handler
@@ -122,12 +124,14 @@ func (h *handler) read(q Query) Page {
 	if tail > Capacity {
 		start = tail - Capacity + 1
 	}
+	clearedThrough := h.ring.clearedThrough
+	start = max(start, clearedThrough+1)
 	snapshot := make([]Entry, 0, min(tail, Capacity))
 	for seq := start; seq <= tail; seq++ {
 		snapshot = append(snapshot, h.ring.entries[(seq-1)%Capacity])
 	}
 	h.ring.mu.Unlock()
-	page := Page{Entries: []Entry{}, Next: tail}
+	page := Page{Entries: []Entry{}, Next: tail, ClearedThrough: clearedThrough}
 	for _, entry := range snapshot {
 		level := slog.LevelInfo
 		if entry.Level == "warn" {
@@ -156,4 +160,17 @@ func Read(log *slog.Logger, q Query) Page {
 		return h.read(q)
 	}
 	return Page{Entries: []Entry{}}
+}
+
+// Clear empties the shared console ring while preserving monotonic sequence IDs.
+// stderr and external log collectors retain their own copies.
+func Clear(log *slog.Logger) uint64 {
+	if h, ok := log.Handler().(*handler); ok {
+		h.ring.mu.Lock()
+		defer h.ring.mu.Unlock()
+		h.ring.entries = [Capacity]Entry{}
+		h.ring.clearedThrough = h.ring.seq
+		return h.ring.clearedThrough
+	}
+	return 0
 }

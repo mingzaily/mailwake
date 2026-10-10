@@ -46,7 +46,7 @@ afterEach(() => {
 });
 function mockAPI(
   status: unknown = {},
-  logs: unknown = { entries: [], next: 0 },
+  logs: unknown = { entries: [], cleared_through: 0, next: 0 },
 ) {
   vi.stubGlobal(
     "fetch",
@@ -108,6 +108,7 @@ test("logs render rounded retry duration, mailbox labels and unknown IDs", async
   mockAPI(
     {},
     {
+      cleared_through: 0,
       next: 2,
       entries: [
         {
@@ -183,6 +184,7 @@ test("logs localize summaries and keep original messages in collapsed technical 
   mockAPI(
     {},
     {
+      cleared_through: 0,
       next: 1,
       entries: [
         {

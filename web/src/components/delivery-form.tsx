@@ -4,7 +4,7 @@ import { useForm } from "react-hook-form";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { previewOptions } from "@/lib/forms";
-import { useI18n } from "@/lib/i18n";
+import { languages, useI18n } from "@/lib/i18n";
 import type { DeliverySettings } from "@/lib/types";
 import { FieldGroup, FieldLegend, FieldSet } from "./ui/field";
 import {
@@ -291,8 +291,11 @@ function DeliveryFields({
             label={t("ui.notification_language")}
             {...register("language")}
           >
-            <option value="en">{t("ui.language_en")}</option>
-            <option value="zh-CN">{t("ui.language_zh-CN")}</option>
+            {languages.map(({ code, label }) => (
+              <option key={code} value={code} lang={code}>
+                {label}
+              </option>
+            ))}
           </SelectField>
         </div>
       </FieldGroup>

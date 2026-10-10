@@ -8,6 +8,7 @@ import {
 import { api, APIError, configureAPI, setCSRF } from "./lib/api";
 import {
   I18nContext,
+  isLanguage,
   loadCatalog,
   readPreference,
   savePreference,
@@ -158,7 +159,7 @@ function ConsolePage({
 function LocalizedConsole() {
   const [language, setLanguage] = useState<Language | undefined>(() => {
     const saved = readPreference("language");
-    return saved === "en" || saved === "zh-CN" ? saved : undefined;
+    return isLanguage(saved) ? saved : undefined;
   });
   const catalog = useQuery({
     queryKey: ["catalog", language],

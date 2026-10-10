@@ -10,6 +10,9 @@ import (
 )
 
 func logsRoute(api *gin.RouterGroup, log *slog.Logger) {
+	api.DELETE("/logs", func(c *gin.Context) {
+		c.JSON(200, gin.H{"cleared_through": logging.Clear(log)})
+	})
 	api.GET("/logs", func(c *gin.Context) {
 		q := logging.Query{Limit: 200, MailboxID: c.Query("mailbox_id")}
 		invalid := func() { respondError(c, 400, fault.New("logs_request_invalid")) }

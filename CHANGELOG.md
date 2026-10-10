@@ -2,6 +2,14 @@
 
 All notable changes to Mailwake Core are documented here. Versions follow [Semantic Versioning](https://semver.org); before 1.0.0, minor versions may change configuration.
 
+## [1.0.0-rc.7] - 2026-10-11
+
+- Add nine shared console and notification languages: English, Simplified Chinese, Traditional Chinese, Japanese, Korean, German, French, Spanish and Brazilian Portuguese.
+- Resolve browser and App language preferences with region and Chinese-script support while keeping notification language independent.
+- Add confirmed manual cleanup for finished delivery records and in-memory runtime logs, preserving active deliveries, mailbox progress and external logs.
+- Use compact language and theme menus consistently across login and settings.
+- Allow authorized Apps to read subscribed folder catalogs and Native notification recipients with the appropriate management scopes.
+
 ## [1.0.0-rc.6] - 2026-10-10
 
 - Copy the App connection link by clicking the pairing QR code, with a manual-copy fallback when clipboard access is unavailable.

@@ -1,6 +1,8 @@
 package settings
 
 import (
+	"github.com/mingzaily/mailwake/internal/fault"
+	"github.com/mingzaily/mailwake/internal/i18n"
 	"strings"
 	"testing"
 )
@@ -63,5 +65,26 @@ func TestNativeSelectionIsPreservedWhenOmittedAndRequiredWhenCleared(t *testing.
 	next, err = current.Merge(update)
 	if err != nil || next.NativePairingID != other {
 		t.Fatal("target change was not saved", err)
+	}
+}
+
+func TestDeliveryLanguageNormalization(t *testing.T) {
+	cases := map[string]string{"": "en", "zh-Hans": "zh-CN", "zh-TW": "zh-Hant", "fr-CA": "fr", "pt-PT": "pt-BR"}
+	for _, language := range i18n.Languages() {
+		cases[language.Code] = language.Code
+	}
+	for input, want := range cases {
+		t.Run(input, func(t *testing.T) {
+			update := DeliveryUpdate{Channel: "bark", Preview: "off", Language: input}
+			update.Bark.Key = ptr("key")
+			got, err := (Delivery{}).Merge(update)
+			if err != nil || got.Language != want {
+				t.Fatalf("got %q, %v; want %q", got.Language, err, want)
+			}
+		})
+	}
+	_, err := (Delivery{}).Merge(DeliveryUpdate{Channel: "bark", Preview: "off", Language: "it"})
+	if fault.From(err, "unknown_error").Code != "config_language_invalid" {
+		t.Fatalf("unsupported language: %v", err)
 	}
 }

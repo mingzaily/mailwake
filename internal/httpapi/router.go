@@ -132,6 +132,14 @@ func New(authService *auth.Service, runtime Runtime, store *storage.Store, log *
 	managementRoutes(api, runtime, store)
 	api.GET("/status", statusHandler(runtime, store))
 	api.GET("/deliveries", deliveriesHandler(store))
+	api.DELETE("/deliveries", func(c *gin.Context) {
+		deleted, err := store.ClearDeliveryHistory(c.Request.Context())
+		if err != nil {
+			databaseError(c)
+			return
+		}
+		c.JSON(200, gin.H{"deleted": deleted})
+	})
 	api.POST("/test-push", func(c *gin.Context) {
 		if err := runtime.TestSavedDelivery(c.Request.Context()); err != nil {
 			respondFault(c, err)

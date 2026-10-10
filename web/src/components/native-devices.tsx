@@ -1,3 +1,4 @@
+import { ConfirmActionDialog } from "@/components/confirm-action-dialog";
 import { useEffect, useId, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import QRCode from "qrcode";
@@ -651,7 +652,8 @@ function AuthorizedApps({
         )}
       </div>
       {confirm && (
-        <RevokeDialog
+        <ConfirmActionDialog
+          confirmLabel={t("ui.revoke")}
           title={t(
             confirm.kind === "management"
               ? "ui.revoke_management"
@@ -668,63 +670,6 @@ function AuthorizedApps({
         />
       )}
     </Panel>
-  );
-}
-
-function RevokeDialog({
-  title,
-  description,
-  busy,
-  error,
-  onConfirm,
-  onClose,
-}: {
-  title: string;
-  description: string;
-  busy: boolean;
-  error: unknown;
-  onConfirm: () => void;
-  onClose: () => void;
-}) {
-  const { t } = useI18n();
-  const dialog = useRef<HTMLDialogElement>(null);
-  const trigger = useRef(document.activeElement as HTMLElement | null);
-  const heading = useId();
-  const detail = useId();
-  useEffect(() => {
-    dialog.current?.showModal();
-    const element = trigger.current;
-    return () => element?.focus();
-  }, []);
-  return (
-    <dialog
-      ref={dialog}
-      aria-labelledby={heading}
-      aria-describedby={detail}
-      onClose={onClose}
-      onCancel={(event) => {
-        if (busy) event.preventDefault();
-      }}
-      className="m-auto w-[min(28rem,calc(100vw-2rem))] rounded-lg border bg-card p-6 text-card-foreground backdrop:bg-[var(--dialog-backdrop)]"
-    >
-      <div className="flex flex-col gap-5">
-        <h2 id={heading} className="text-lg font-semibold">
-          {title}
-        </h2>
-        <p id={detail} className="text-sm text-muted-foreground">
-          {description}
-        </p>
-        <ErrorNotice error={error} />
-        <div className="flex justify-end gap-3">
-          <Button variant="outline" disabled={busy} onClick={onClose}>
-            {t("ui.cancel")}
-          </Button>
-          <BusyButton variant="destructive" busy={busy} onClick={onConfirm}>
-            {t("ui.revoke")}
-          </BusyButton>
-        </div>
-      </div>
-    </dialog>
   );
 }
 

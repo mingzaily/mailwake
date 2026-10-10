@@ -1,3 +1,4 @@
+import { ClearHistoryButton } from "@/components/clear-history-button";
 import english from "../../../internal/i18n/locales/en.json";
 import { Badge } from "@/components/ui/badge";
 import { useEffect, useRef, useState } from "react";
@@ -89,12 +90,15 @@ function LogFeed({
   const [paused, setPaused] = useState(false);
   const [error, setError] = useState<unknown>();
   const after = useRef(0);
+  const request = useRef<AbortController | null>(null);
+  const [revision, setRevision] = useState(0);
   const viewport = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
   const [following, setFollowing] = useState(true);
   useEffect(() => {
     if (paused) return;
     const controller = new AbortController();
+    request.current = controller;
     let timer: ReturnType<typeof setTimeout>;
     let active = false;
     async function refresh() {
@@ -120,7 +124,12 @@ function LogFeed({
         if (controller.signal.aborted) return;
         after.current = page.next;
         setEntries((previous) =>
-          [...(restarted ? [] : previous), ...page.entries].slice(-2000),
+          [
+            ...(restarted
+              ? []
+              : previous.filter((entry) => entry.seq > page.cleared_through)),
+            ...page.entries,
+          ].slice(-2000),
         );
         setError(undefined);
       } catch (error) {
@@ -142,7 +151,7 @@ function LogFeed({
       clearTimeout(timer);
       document.removeEventListener("visibilitychange", visibility);
     };
-  }, [level, mailbox, paused]);
+  }, [level, mailbox, paused, revision]);
   useEffect(() => {
     if (follow.current && viewport.current)
       viewport.current.scrollTop = viewport.current.scrollHeight;
@@ -154,6 +163,16 @@ function LogFeed({
         title={t("ui.logs")}
         actions={
           <>
+            <ClearHistoryButton
+              kind="logs"
+              onCleared={() => {
+                request.current?.abort();
+                after.current = 0;
+                setEntries([]);
+                setError(undefined);
+                setRevision((value) => value + 1);
+              }}
+            />
             <Button
               variant="outline"
               size="sm"

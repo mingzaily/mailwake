@@ -10,6 +10,7 @@ if (
 const nativeDialogs = new Set([
   "components/folder-scan-dialog.tsx",
   "components/native-devices.tsx",
+  "components/confirm-action-dialog.tsx",
   "components/shell.tsx",
   "components/delivery-details.tsx",
 ]);
@@ -33,5 +34,5 @@ async function check(directory, prefix = "") {
 }
 await check(root);
 console.log(
-  "UI audit passed: NativeSelect primitive + 4 documented CSP dialog exceptions",
+  "UI audit passed: NativeSelect primitive + 5 documented CSP dialog exceptions",
 );

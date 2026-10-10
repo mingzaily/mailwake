@@ -152,3 +152,17 @@ func (s *Store) Prune(ctx context.Context, acceptedBefore, deadBefore time.Time)
 	_, err := s.db.ExecContext(ctx, "DELETE FROM outbox WHERE id IN (SELECT id FROM outbox WHERE state='dead' AND created_at<? LIMIT 1000)", deadBefore.UnixMilli())
 	return err
 }
+
+// ClearDeliveryHistory removes finished records across the full history. Active
+// dispatch, Relay status checks and pending activity updates retain their rows.
+func (s *Store) ClearDeliveryHistory(ctx context.Context) (int64, error) {
+	result, err := s.db.ExecContext(ctx, `DELETE FROM outbox
+ WHERE state IN ('accepted','dead')
+ AND NOT EXISTS (SELECT 1 FROM native_deliveries WHERE event_id=outbox.id
+   AND (next_check>0 OR state IN ('pending','queued','sending')))
+ AND NOT EXISTS (SELECT 1 FROM native_activities WHERE event_id=outbox.id AND state='pending')`)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}

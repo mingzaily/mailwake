@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from "vitest";
-import { format, loadCatalog } from "./i18n";
+import { format, loadCatalog, languages, isLanguage } from "./i18n";
 afterEach(() => vi.unstubAllGlobals());
 test("placeholder values are replaced once as literal text", () => {
   expect(
@@ -34,4 +34,27 @@ test("all static UI keys resolve in the single Go catalog", async () => {
     for (const match of source.matchAll(/["'](ui\.[\w-]+)["']/g))
       expect(catalog[match[1]], `${file}: ${match[1]}`).toBeTruthy();
   }
+});
+
+test.each(languages)(
+  "loads the $code catalog with its language",
+  async ({ code }) => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(JSON.stringify({ "ui.save": "translated" }), {
+            headers: { "Content-Language": code },
+          }),
+        ),
+    );
+    expect((await loadCatalog(code)).language).toBe(code);
+    expect(isLanguage(code)).toBe(true);
+  },
+);
+
+test("saved preferences accept supported catalog codes only", () => {
+  for (const value of [null, "", "it", "zh-TW", "__proto__"])
+    expect(isLanguage(value)).toBe(false);
 });

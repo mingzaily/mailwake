@@ -4,12 +4,28 @@
 
 ## 语言与错误码
 
-英文是默认语言。唯一文案来源是 `internal/i18n/locales/en.json` 和 `zh-CN.json`，供 API、管理界面和通知共用，并嵌入二进制。
+英文是默认语言。API、Web 控制台和通知渲染共用 `internal/i18n/locales/` 下的内嵌文案，`internal/i18n/languages.json` 定义语言代码和本地名称。
 
-- 页面按 `Accept-Language` 选择语言，可切换 English / 简体中文；浏览器只保存语言偏好，不保存 Token。
-- API 按 `Accept-Language` 权重协商语言，返回 `Content-Language` 和 `Vary: Accept-Language`，缺省回退 `en`。
-- 通道设置的 `language`（`en` 或 `zh-CN`）决定通知语言。
-- 日志和 CLI 使用英文。业务错误使用稳定的英文 `snake_case` 错误码与命名参数；存储只保存错误码和参数，展示时再翻译。
+| 代码 | 语言 |
+| --- | --- |
+| `en` | English |
+| `zh-CN` | 简体中文 |
+| `zh-Hant` | 繁體中文 |
+| `ja` | 日本語 |
+| `ko` | 한국어 |
+| `de` | Deutsch |
+| `fr` | Français |
+| `es` | Español |
+| `pt-BR` | Português (Brasil) |
+
+- 首次访问按浏览器的 `Accept-Language` 选择语言，切换后在本地保存规范代码。控制台语言与已保存的通知语言独立。
+- API（包括 App 管理接口）按 `Accept-Language` 权重协商，返回 `Content-Language` 和 `Vary: Accept-Language`。跳过不支持的偏好；缺省、非法或全部不支持时回退 `en`，权重 0 的语言不参与协商。
+- 地区别名映射到对应语言：`fr-CA` → `fr`，`es-MX` → `es`，`pt` / `pt-PT` → `pt-BR`。中文区分字形：`zh-Hans` / `zh-CN` / `zh-SG` → `zh-CN`；`zh-Hant` / `zh-TW` / `zh-HK` / `zh-MO` → `zh-Hant`。显式字形优先于地区，单独 `zh` 使用简体。
+- `GET /locales/default.json` 返回协商后的文案；`GET /locales/{规范代码}.json` 返回指定文案；未知文案路径返回 `locale_not_supported`。
+- 通道设置 `language` 独立控制 Core 生成的通知，支持上述规范代码及地区别名，保存时归一化；省略或空值使用 `en`，显式不支持的值返回 400 `config_language_invalid`。请求语言不会覆盖该设置。
+- Native 测试文案由 Relay 根据配对设备语言生成，Core 通知语言不会覆盖它。Relay 和 App 的语言支持由各自模块实现。
+- 控制台本地化标准文件夹角色及常见名称。API 保留原始 IMAP 路径、自定义名称和 `folder_roles`，App 使用自己的文案翻译角色。通知标题继续使用原始文件夹末级名称；用户输入、邮件主题、正文和验证码保持原值。
+- 日志和 CLI 使用英文。业务错误保持稳定的英文 `snake_case` 错误码与命名参数；存储保留代码和参数，展示层负责翻译。API 时间和数字保持原有机器可读格式，控制台按所选语言格式化时间。
 
 ```json
 {
@@ -105,7 +121,7 @@ PUT 成功返回脱敏视图并立即生效。邮箱连接配置更新先停止�
 内存环形缓冲保留最近 **2000** 条 Info/Warn/Error 日志，重启清空。after 是排除本身的非负序号；level 为 info/warn/error，包含指定级别及以上，默认 info；省略 mailbox_id 时包含全部邮箱和全局操作。limit 默认 200，范围 1–500。参数非法返回 400 `logs_request_invalid`。
 
 ```json
-{"entries":[{"seq":42,"time":"2026-09-29T00:00:00Z","level":"info","message":"Folder connection established","attrs":{"mailbox_id":"mbx_example","folder":"INBOX","mode":"idle","check":"realtime"}}],"next":42}
+{"entries":[{"seq":42,"time":"2026-09-29T00:00:00Z","level":"info","message":"Folder connection established","attrs":{"mailbox_id":"mbx_example","folder":"INBOX","mode":"idle","check":"realtime"}}],"next":42,"cleared_through":0}
 ```
 
 下一次请求把 next 作为 after。达到页大小时 next 为最后返回序号；遍历完快照时为快照最大序号，过滤结果为空也推进。淘汰的日志从当前保留记录继续；重启导致 next 小于 after 时，将游标重置为 0。条目按序号升序返回。
@@ -130,3 +146,9 @@ Core 使用签名 `POST /v1/pairing-tests`，正文 `{pairing_id,test_id}`；每
 仅 Relay `accepted` 对应 Core HTTP 204。APNs 拒绝、结果未知、`sending` 均返回本地化错误；Relay 限频映射为 Core HTTP 429 并保留 `Retry-After`。安全日志记录 Relay HTTP 状态与稳定错误码，省去响应正文、Token 和通知内容。Core 与 App 共享 Relay 现有每设备每分钟、每主体每日额度及 `(device_id,test_id)` 幂等。用户再次点击测试会创建新的测试 ID。
 
 正式邮件仍使用 `/v1/push` 并校验权益，事件 ID 或客户端测试标志均保持此规则。先部署支持配对测试接口的 Relay，再部署此版本 Core；Core 不回退到正式邮件接口。
+
+## 清除投递记录与运行日志
+
+- `DELETE /api/v1/deliveries` 返回 `200 {"deleted":N}`，永久清除全部历史中已结束的 `accepted` / `dead` 记录及关联 Native 记录。待投递/重试、Native 的 pending/queued/sending 状态、待执行的状态检查和活动更新会保留。清除失败记录后，其手动重试入口一并消失。邮箱检查点与配置保持原样。
+- `DELETE /api/v1/logs` 返回 `200 {"cleared_through":N}`，清除所有级别、所有邮箱共享的内存日志。序号继续递增，标准错误/容器日志和导出文件保留。`GET /api/v1/logs` 同时返回 `cleared_through`；客户端先移除缓存中 `seq <= cleared_through` 的条目，再追加响应中的日志。
+- 两个接口均要求管理员会话及 Origin/CSRF，或管理员 API Token。App 设备凭证无法执行这些操作。重复清除安全；操作完成后仍可产生新任务与新日志。

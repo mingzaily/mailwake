@@ -10,6 +10,7 @@ import (
 
 	"github.com/mingzaily/mailwake/internal/event"
 	"github.com/mingzaily/mailwake/internal/fault"
+	"github.com/mingzaily/mailwake/internal/i18n"
 	"github.com/mingzaily/mailwake/internal/mail"
 )
 
@@ -97,7 +98,7 @@ type DeliveryUpdate struct {
 }
 
 func (d Delivery) validate() error {
-	if d.Language != "en" && d.Language != "zh-CN" {
+	if !i18n.Supported(d.Language) {
 		return fault.New("config_language_invalid")
 	}
 	if d.RetryCount < 0 || d.RetryCount > 9 {
@@ -176,7 +177,9 @@ func (old Delivery) Merge(u DeliveryUpdate) (Delivery, error) {
 	}
 	d.Language = u.Language
 	if d.Language == "" {
-		d.Language = "en"
+		d.Language = i18n.Default
+	} else if locale, ok := i18n.Resolve(d.Language); ok {
+		d.Language = locale
 	}
 	if u.Bark.Endpoint != "" {
 		d.Bark.Endpoint = u.Bark.Endpoint

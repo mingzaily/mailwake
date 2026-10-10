@@ -36,7 +36,7 @@ func TestCatalogParityAndParameters(t *testing.T) {
 			}
 		}
 	}
-	if got := Message("fr", "unauthorized", nil); got != english["unauthorized"] {
+	if got := Message("zz", "unauthorized", nil); got != english["unauthorized"] {
 		t.Fatal(got)
 	}
 	if got := Message("zh-CN", "bark_http_error", map[string]string{"status": "503"}); got != "Bark 返回 HTTP 状态 503。" {
@@ -52,8 +52,11 @@ func TestCatalogParityAndParameters(t *testing.T) {
 
 func TestLanguageNegotiation(t *testing.T) {
 	for _, tc := range []struct{ header, want string }{
-		{"", "en"}, {"fr-FR", "en"}, {"en-US", "en"}, {"zh-CN", "zh-CN"}, {"zh", "zh-CN"},
+		{"", "en"}, {"fr-FR", "fr"}, {"en-US", "en"}, {"zh-CN", "zh-CN"}, {"zh", "zh-CN"},
 		{"zh-CN;q=0.2,en;q=0.9", "en"}, {"en;q=0.1,zh-CN;q=0.8", "zh-CN"}, {"zh-CN;q=0,en;q=1", "en"}, {"*", "en"}, {"broken!", "en"},
+		{"zh-Hans", "zh-CN"}, {"zh-SG", "zh-CN"}, {"zh-TW", "zh-Hant"}, {"zh-HK", "zh-Hant"}, {"zh-MO", "zh-Hant"}, {"zh-Hant-CN", "zh-Hant"}, {"zh-Hans-TW", "zh-CN"},
+		{"ja-JP", "ja"}, {"ko-KR", "ko"}, {"de-AT", "de"}, {"es-MX", "es"}, {"pt-PT", "pt-BR"}, {"pt", "pt-BR"},
+		{"it-IT,fr-CA;q=0.8", "fr"}, {"ja;q=0,de;q=0.5", "de"}, {"it-IT", "en"}, {"fr;q=0", "en"},
 	} {
 		if got := Match(tc.header); got != tc.want {
 			t.Errorf("%q: got %s, want %s", tc.header, got, tc.want)
@@ -118,14 +121,27 @@ func TestGoMessageKeysExist(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for _, locale := range []string{"en", "zh-CN"} {
-		data, err := Catalog(locale)
+	for _, locale := range Languages() {
+		data, err := Catalog(locale.Code)
 		if err != nil {
 			t.Fatal(err)
 		}
 		var decoded map[string]string
 		if err := json.Unmarshal(data, &decoded); err != nil {
 			t.Fatal(err)
+		}
+	}
+}
+
+func TestLanguageResolution(t *testing.T) {
+	for _, item := range Languages() {
+		if code, ok := Resolve(item.Code); !ok || code != item.Code || !Supported(code) {
+			t.Errorf("catalog %q does not resolve: %q %v", item.Code, code, ok)
+		}
+	}
+	for _, invalid := range []string{"", "und", "zz", "it", "*", "../../en", "en!"} {
+		if code, ok := Resolve(invalid); ok {
+			t.Errorf("accepted %q as %q", invalid, code)
 		}
 	}
 }

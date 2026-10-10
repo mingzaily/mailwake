@@ -25,3 +25,38 @@ test.each([
     expect(folderLabel(name, {}, t)).toBe(expected);
   },
 );
+
+test.each([
+  ["en", "Inbox"],
+  ["zh-CN", "收件箱"],
+  ["zh-Hant", "收件匣"],
+  ["ja", "受信トレイ"],
+  ["ko", "받은편지함"],
+  ["de", "Posteingang"],
+  ["fr", "Boîte de réception"],
+  ["es", "Bandeja de entrada"],
+  ["pt-BR", "Caixa de entrada"],
+])(
+  "standard roles use the %s catalog and preserve custom paths",
+  async (code, inbox) => {
+    const { readFileSync } = await import("node:fs");
+    const catalog: Record<string, string> = JSON.parse(
+      readFileSync(`../internal/i18n/locales/${code}.json`, "utf8"),
+    );
+    const translate = (key: string) => catalog[key];
+    expect(folderLabel("INBOX", {}, translate)).toBe(inbox);
+    expect(
+      folderLabel(
+        "[Provider]/special",
+        { "[Provider]/special": "inbox" },
+        translate,
+      ),
+    ).toBe(inbox);
+    expect(folderLabel("其他文件夹/JP区域", {}, translate)).toBe(
+      "其他文件夹/JP区域",
+    );
+    expect(folderLabel("Projects/Drafts", {}, translate)).toBe(
+      "Projects/Drafts",
+    );
+  },
+);

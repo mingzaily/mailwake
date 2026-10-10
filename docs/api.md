@@ -4,12 +4,28 @@
 
 ## Languages and error codes
 
-English is the default. The only message catalogs are `internal/i18n/locales/en.json` and `zh-CN.json`, shared by the API, the management interface and notifications, and embedded in the binary.
+English is the default. The API, Web console and notification renderers share the embedded catalogs in `internal/i18n/locales/`. `internal/i18n/languages.json` defines these canonical codes and native names:
 
-- The page picks its language from `Accept-Language` and can switch between English and Simplified Chinese; only the language preference is stored in the browser, never the token.
-- The API negotiates the language from `Accept-Language` weights, returns `Content-Language` and `Vary: Accept-Language`, and falls back to `en`.
-- `language` in delivery settings (`en` or `zh-CN`) sets the notification language.
-- Logs and CLI output are in English. Business errors use stable English `snake_case` codes with named parameters; storage keeps codes and parameters, and messages are translated when displayed.
+| Code | Language |
+| --- | --- |
+| `en` | English |
+| `zh-CN` | 简体中文 |
+| `zh-Hant` | 繁體中文 |
+| `ja` | 日本語 |
+| `ko` | 한국어 |
+| `de` | Deutsch |
+| `fr` | Français |
+| `es` | Español |
+| `pt-BR` | Português (Brasil) |
+
+- On first visit, the console uses the browser’s `Accept-Language`. Its selector stores the chosen canonical code locally. Switching the console language leaves saved notification settings unchanged.
+- API requests, including App management requests, negotiate `Accept-Language` by quality weights. Responses include `Content-Language` and `Vary: Accept-Language`. Unsupported preferences are skipped; missing, invalid or entirely unsupported preferences fall back to `en`. A language with weight 0 is excluded from negotiation.
+- Regional variants map to their supported language: `fr-CA` → `fr`, `es-MX` → `es`, `pt` / `pt-PT` → `pt-BR`. Chinese script is respected: `zh-Hans` / `zh-CN` / `zh-SG` → `zh-CN`; `zh-Hant` / `zh-TW` / `zh-HK` / `zh-MO` → `zh-Hant`. An explicit script takes precedence over region; plain `zh` uses Simplified Chinese.
+- `GET /locales/default.json` serves the negotiated catalog; `GET /locales/{canonical-code}.json` serves that catalog explicitly. Unknown catalog paths return `locale_not_supported`.
+- Delivery settings `language` controls Core-rendered notifications independently of the request or console language. It accepts the canonical codes and supported regional variants, persists the canonical code, and defaults to `en` when omitted or empty. An unsupported explicit value returns 400 `config_language_invalid`.
+- Relay generates Native test notification text using the paired device’s language. The Core notification language does not override that language. Relay and App language support is implemented in their respective modules.
+- Standard folder roles and common folder names are localized in the console. Raw IMAP paths, custom names and `folder_roles` remain unchanged in APIs; Apps localize these roles with their own catalogs. Notification titles continue to use the original leaf folder name. User-entered names, email subjects, message bodies and verification codes remain literal.
+- Logs and CLI output use English. Business errors retain stable English `snake_case` codes and named parameters; storage keeps codes and parameters, and display layers translate messages. Dates and numbers in API responses keep their existing machine-readable formats; the console formats timestamps using its chosen locale.
 
 ```json
 {
@@ -105,7 +121,7 @@ Use `docker compose logs -f core` (or `docker logs <container>`) for JSON stderr
 The in-memory ring keeps the newest **2000** Info/Warn/Error entries and clears on restart. `after` is an exclusive non-negative sequence; `level` selects that level and above (`info` default); omitted `mailbox_id` includes all mailboxes and global operations. `limit` defaults to 200, range 1–500. Invalid parameters return 400 `logs_request_invalid`.
 
 ```json
-{"entries":[{"seq":42,"time":"2026-09-29T00:00:00Z","level":"info","message":"Folder connection established","attrs":{"mailbox_id":"mbx_example","folder":"INBOX","mode":"idle","check":"realtime"}}],"next":42}
+{"entries":[{"seq":42,"time":"2026-09-29T00:00:00Z","level":"info","message":"Folder connection established","attrs":{"mailbox_id":"mbx_example","folder":"INBOX","mode":"idle","check":"realtime"}}],"next":42,"cleared_through":0}
 ```
 
 Use `next` as the next request’s `after`. At the page limit it is the last returned sequence; after scanning the snapshot it advances to the snapshot tail, including when filters match nothing. Evicted entries are skipped. If restart returns `next < after`, reset the cursor to 0. Entries are ordered by sequence.
@@ -130,3 +146,9 @@ Core uses signed `POST /v1/pairing-tests` with `{pairing_id,test_id}` (a fresh U
 Only Relay `accepted` produces Core HTTP 204. APNs rejection, unknown outcomes and `sending` return a localized error; Relay rate limiting returns Core HTTP 429 with `Retry-After`. Safe logs include the Relay HTTP status and stable error code, excluding response bodies, tokens and notification contents. Core and App share the existing Relay per-device minute and per-subject daily quotas and `(device_id,test_id)` idempotency. A user starting another test creates a new test ID.
 
 Formal mail uses `/v1/push` and remains entitlement-gated regardless of event ID or client test flags. Deploy the Relay pairing-test route before this Core version; the Core does not fall back to paid mail delivery.
+
+## Clear delivery history and runtime logs
+
+- `DELETE /api/v1/deliveries` returns `200 {"deleted":N}`. It permanently removes finished records (`accepted` / `dead`) across the full history, including their associated Native records. Pending deliveries/retries, Native records still pending/queued/sending or scheduled for status checks, and pending Native activity updates are retained. Clearing failures removes their manual retry option. Mailbox checkpoints and configuration are preserved.
+- `DELETE /api/v1/logs` returns `200 {"cleared_through":N}` and clears the shared in-memory ring for all levels and mailboxes. Sequence numbers continue increasing; stderr/container logs and exported files remain. `GET /api/v1/logs` also returns `cleared_through`; clients discard cached entries with `seq <= cleared_through` before appending the returned entries.
+- Both endpoints require administrator session + Origin/CSRF, or an administrator API token. App device credentials do not grant these operations. Repeated clearing is safe; new work and log entries may appear after the operation.

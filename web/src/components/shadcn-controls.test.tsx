@@ -56,7 +56,7 @@ test("language menu works with keyboard and keeps the existing preference callba
   trigger.focus();
   fireEvent.keyDown(trigger, { key: "ArrowDown" });
   const chinese = await screen.findByRole("menuitemradio", {
-    name: catalog["ui.language_zh-CN"],
+    name: "简体中文",
   });
   fireEvent.click(chinese);
   expect(setLanguage).toHaveBeenCalledWith("zh-CN");
@@ -122,20 +122,41 @@ test("confirmation moves focus to cancel and returns it to its trigger", () => {
   );
 });
 
-test("appearance settings expose language and theme choices directly", () => {
+test("appearance settings select language and theme through compact menus", async () => {
   const setLanguage = vi.fn();
   mount(<AppearanceControls />, setLanguage);
-  fireEvent.click(
-    screen.getByRole("radio", { name: catalog["ui.language_zh-CN"] }),
-  );
+  fireEvent.keyDown(screen.getByRole("button", { name: /Language:/ }), {
+    key: "ArrowDown",
+  });
+  const chinese = await screen.findByRole("menuitemradio", {
+    name: "简体中文",
+  });
+  expect(screen.getAllByRole("menuitemradio")).toHaveLength(9);
+  fireEvent.click(chinese);
   expect(setLanguage).toHaveBeenCalledWith("zh-CN");
+  await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+  screen.getByRole("button", { name: /Theme:/ }).focus();
+  fireEvent.keyDown(screen.getByRole("button", { name: /Theme:/ }), {
+    key: "ArrowDown",
+  });
   fireEvent.click(
-    screen.getByRole("radio", { name: catalog["ui.theme_dark"] }),
+    await screen.findByRole("menuitemradio", {
+      name: catalog["ui.theme_dark"],
+    }),
   );
-  expect(localStorage.getItem("mailwake.theme")).toBe("dark");
+  await waitFor(() =>
+    expect(localStorage.getItem("mailwake.theme")).toBe("dark"),
+  );
   expect(document.documentElement.dataset.theme).toBe("dark");
+  await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+  screen.getByRole("button", { name: /Theme:/ }).focus();
+  fireEvent.keyDown(screen.getByRole("button", { name: /Theme:/ }), {
+    key: "ArrowDown",
+  });
   fireEvent.click(
-    screen.getByRole("radio", { name: catalog["ui.theme_light"] }),
+    await screen.findByRole("menuitemradio", {
+      name: catalog["ui.theme_light"],
+    }),
   );
 });
 

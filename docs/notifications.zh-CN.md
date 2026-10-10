@@ -13,7 +13,7 @@
 | `pushover` | 无 | `pushover.token`、`pushover.user` |
 | `webhook` | HTTPS，可带查询参数 | `webhook.url`、`webhook.secret`（至少 32 个非空白字符） |
 
-Webhook URL 的路径或查询参数可能包含凭据，因此整个 URL 只写。`preview` 仅支持 `off` 或 `subject`；`retry_count` 为 0–9，默认 0；`language` 为 `en` 或 `zh-CN`，默认英文。`subject` 下 Bark/Pushover 正文只显示主题；Webhook 保留结构化的 sender 与 subject，message 只显示主题。`off` 或主题为空时，正文为“收到新邮件”/“New mail”。标题保持 `{显示名称} · {文件夹}`，Bark group 使用同一个截断后的标题；测试通知文案保持原值。API 输入 `sender_subject` 返回 400 `config_preview_invalid`。第三方通道从 `subject` 切换为 `off` 时，同一事务清理所有待处理及失败记录的发件人与主题；后续入队也遵循已保存的预览策略。原生通道始终记录发件人与主题，并保留第三方预览偏好。
+Webhook URL 的路径或查询参数可能包含凭据，因此整个 URL 只写。`preview` 仅支持 `off` 或 `subject`；`retry_count` 为 0–9，默认 0；`language` 支持 [9 种语言及其地区别名](api.zh-CN.md#语言与错误码)，默认英文。`subject` 下 Bark/Pushover 正文只显示主题；Webhook 保留结构化的 sender 与 subject，message 只显示主题。`off` 或主题为空时，正文使用所选通知语言的“收到新邮件”文案。标题保持 `{显示名称} · {文件夹}`，Bark group 使用同一个截断后的标题；测试通知文案保持原值。API 输入 `sender_subject` 返回 400 `config_preview_invalid`。第三方通道从 `subject` 切换为 `off` 时，同一事务清理所有待处理及失败记录的发件人与主题；后续入队也遵循已保存的预览策略。原生通道始终记录发件人与主题，并保留第三方预览偏好。
 
 Bark 的邮件通知和测试通知均按 Bark App 的历史保存设置保留记录。
 

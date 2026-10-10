@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/mingzaily/mailwake/internal/delivery"
+	"github.com/mingzaily/mailwake/internal/event"
+	"github.com/mingzaily/mailwake/internal/i18n"
 	"github.com/mingzaily/mailwake/internal/mail"
 	"github.com/mingzaily/mailwake/internal/settings"
 )
@@ -42,5 +44,29 @@ func TestSavedMailboxTestUsesStoredSource(t *testing.T) {
 	}
 	if constructed != before {
 		t.Fatal("saved test replaced the published source")
+	}
+}
+
+func TestNotificationLanguagesPersistAndRender(t *testing.T) {
+	m, _, _ := managerFixture(t, nil)
+	for _, locale := range i18n.Languages() {
+		t.Run(locale.Code, func(t *testing.T) {
+			revision := m.DeliveryView()["revision"].(int64)
+			input := settings.DeliveryUpdate{Revision: &revision, Channel: "bark", Preview: "off", Language: locale.Code}
+			input.Bark.Key = ptr("fixture-key")
+			if err := m.UpdateDelivery(t.Context(), input); err != nil {
+				t.Fatal(err)
+			}
+			saved, err := m.settings.LoadDelivery(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if saved.Language != locale.Code || m.DeliveryView()["language"] != locale.Code {
+				t.Fatal("notification language was not persisted", saved.Language)
+			}
+			if got := delivery.Render(saved.Language, event.Notification{}).Body; got != i18n.Message(locale.Code, "notification.new_mail", nil) {
+				t.Fatal(got)
+			}
+		})
 	}
 }

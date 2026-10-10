@@ -11,7 +11,8 @@ import (
 )
 
 func TestRenderFollowsStoredPreview(t *testing.T) {
-	for _, locale := range []string{"en", "zh-CN"} {
+	for _, item := range i18n.Languages() {
+		locale := item.Code
 		plain := Render(locale, event.Notification{Account: "工作邮箱", MailboxID: "mbx_work", Folder: "客户"})
 		if plain.Title != "工作邮箱 · 客户" || plain.Body != i18n.Message(locale, "notification.new_mail", nil) {
 			t.Fatalf("%s without preview: %+v", locale, plain)
@@ -52,9 +53,10 @@ func TestParseRetryAfterInvalidAndOverflow(t *testing.T) {
 	}
 }
 
-func TestMailboxLabelIsPreservedInBothLanguages(t *testing.T) {
+func TestMailboxLabelIsPreservedInEveryLanguage(t *testing.T) {
 	label := strings.Repeat("邮", 64)
-	for _, language := range []string{"en", "zh-CN"} {
+	for _, item := range i18n.Languages() {
+		language := item.Code
 		got := Render(language, event.Notification{MailboxID: "mbx_example", Account: label, Folder: "INBOX"})
 		if got.Title != label+" · INBOX" {
 			t.Fatal("display name was truncated or replaced", got.Title)
@@ -63,7 +65,7 @@ func TestMailboxLabelIsPreservedInBothLanguages(t *testing.T) {
 }
 
 func TestReminderTextAndSenderExclusion(t *testing.T) {
-	for language, want := range map[string]string{"en": "New mail", "zh-CN": "收到新邮件"} {
+	for language, want := range map[string]string{"en": "New mail", "zh-CN": "收到新邮件", "zh-Hant": "收到新郵件", "ja": "新着メール", "ko": "새 메일", "de": "Neue E-Mail", "fr": "Nouveau message", "es": "Correo nuevo", "pt-BR": "Novo e-mail"} {
 		for _, n := range []event.Notification{{}, {Sender: "hidden@example.test"}} {
 			if got := Render(language, n).Body; got != want {
 				t.Fatalf("reminder = %q", got)
@@ -74,7 +76,8 @@ func TestReminderTextAndSenderExclusion(t *testing.T) {
 
 func TestRenderUsesLeafFolderName(t *testing.T) {
 	for _, folder := range []string{"其他文件夹/CN区域", "Parent/Child/CN区域", "CN区域"} {
-		for _, locale := range []string{"en", "zh-CN"} {
+		for _, item := range i18n.Languages() {
+			locale := item.Code
 			n := event.Notification{Account: "工作邮箱", Folder: folder}
 			if got := Render(locale, n).Title; got != "工作邮箱 · CN区域" {
 				t.Fatalf("%s: %q", folder, got)

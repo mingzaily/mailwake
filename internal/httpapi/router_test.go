@@ -55,7 +55,7 @@ func TestLocalizedAPIAndDiagnosticCodes(t *testing.T) {
 	}
 	authService, grant := testAdministrator(t, store)
 	router := New(authService, newTestRuntime("webhook", monitor, source), store, logger)
-	for _, locale := range []string{"en", "zh-CN", "fr-FR"} {
+	for _, locale := range []string{"en", "zh-CN", "zh-Hant", "ja", "ko", "de", "fr", "es", "pt-BR", "fr-FR", "zh-Hans", "zh-TW", "it-IT"} {
 		t.Run(locale, func(t *testing.T) {
 			call := func(method, path string, auth bool) *httptest.ResponseRecorder {
 				req := httptest.NewRequest(method, path, nil)
@@ -67,10 +67,15 @@ func TestLocalizedAPIAndDiagnosticCodes(t *testing.T) {
 				router.ServeHTTP(w, req)
 				return w
 			}
-			wantLocale := locale
-			if locale == "fr-FR" {
-				wantLocale = "en"
+			wantLocale := i18n.Match(locale)
+			for _, path := range []string{"/locales/default.json", "/locales/" + wantLocale + ".json"} {
+				response := call("GET", path, false)
+				var catalog map[string]string
+				if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &catalog) != nil || catalog["ui.save"] != i18n.Message(wantLocale, "ui.save", nil) || response.Header().Get("Content-Language") != wantLocale || !strings.Contains(response.Header().Get("Vary"), "Accept-Language") {
+					t.Fatalf("catalog %s: %d %s", path, response.Code, response.Body.String())
+				}
 			}
+
 			for _, tc := range []struct {
 				method, path, code string
 				status             int

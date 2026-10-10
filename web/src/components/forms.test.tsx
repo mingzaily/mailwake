@@ -297,14 +297,14 @@ test("connection results expand folder names and disappear when the endpoint cha
   );
   mount(<MailboxEditor mailbox={box} onSaved={() => {}} />);
   fireEvent.click(screen.getByRole("button", { name: "Test connection" }));
-  const summary = await screen.findByText("Found 2 folders");
+  const summary = await screen.findByText("Folders found: 2");
   const details = summary.closest("details")!;
   expect(details.open).toBe(true);
   fireEvent.click(summary);
   expect(details.open).toBe(false);
   expect(screen.getByText("Archive")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Gmail" }));
-  expect(screen.queryByText("Found 2 folders")).toBeNull();
+  expect(screen.queryByText("Folders found: 2")).toBeNull();
 });
 
 test("setup finishes after mailbox and folder selection without a notification step", async () => {
