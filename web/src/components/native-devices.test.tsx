@@ -73,6 +73,36 @@ test("pairing dialog renders CSP-compatible SVG, fingerprint and one-time warnin
     catalog["ui.pairing_waiting"],
   );
 });
+test.each([true, false])(
+  "pairing link copy handles clipboard access %s",
+  async (allowed) => {
+    dialogSupport();
+    const data = created();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(JSON.stringify(data))),
+    );
+    const write = vi.spyOn(navigator.clipboard, "writeText");
+    if (allowed) write.mockResolvedValue();
+    else write.mockRejectedValue(new Error("Clipboard denied"));
+    mount(<PairingDialog created={data} onClose={() => {}} />);
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: catalog["ui.copy_connection_link"],
+      }),
+    );
+    if (allowed) {
+      await screen.findByRole("button", { name: catalog["ui.copied"] });
+      expect(write).toHaveBeenCalledWith(data.uri);
+    } else {
+      const input = await screen.findByRole("textbox", {
+        name: catalog["ui.copy_connection_link"],
+      });
+      expect((input as HTMLInputElement).value).toBe(data.uri);
+      expect((input as HTMLInputElement).readOnly).toBe(true);
+    }
+  },
+);
 test.each(["active", "expired", "failed"] as const)(
   "pairing dialog displays %s and clears QR",
   async (status) => {
@@ -98,6 +128,11 @@ test.each(["active", "expired", "failed"] as const)(
       ),
     );
     expect(screen.queryByAltText(catalog["ui.pairing_qr"])).toBeNull();
+    expect(
+      screen.queryByRole("button", {
+        name: catalog["ui.copy_connection_link"],
+      }),
+    ).toBeNull();
     if (status === "active")
       expect(screen.getByRole("status").textContent).toContain("My iPhone");
   },

@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import QRCode from "qrcode";
-import { CircleHelp } from "lucide-react";
+import { CircleHelp, X } from "lucide-react";
 import { Badge } from "./ui/badge";
 import {
   Tooltip,
@@ -62,6 +62,8 @@ export function PairingDialog({
   const [now, setNow] = useState(() => Date.now());
   const [image, setImage] = useState("");
   const [qrError, setQRError] = useState<unknown>();
+  const [copied, setCopied] = useState(false);
+  const [manualCopy, setManualCopy] = useState(false);
   const query = useQuery({
     queryKey: [
       created.managementOnly ? "management-invitation" : "native-pairing",
@@ -123,16 +125,26 @@ export function PairingDialog({
       void client.invalidateQueries({ queryKey: ["management-devices"] });
     }
   }, [current.status, client]);
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(created.uri!);
+      setCopied(true);
+      setManualCopy(false);
+    } catch {
+      setCopied(false);
+      setManualCopy(true);
+    }
+  }
   return (
     <dialog
       ref={dialog}
-      className="m-auto max-h-[calc(100dvh-2rem)] w-[min(28rem,calc(100vw-2rem))] overflow-hidden rounded-lg border bg-card p-0 text-card-foreground backdrop:bg-[var(--dialog-backdrop)]"
+      className="relative m-auto max-h-[calc(100dvh-2rem)] w-[min(25rem,calc(100vw-2rem))] overflow-hidden rounded-lg border bg-card p-0 text-card-foreground backdrop:bg-[var(--dialog-backdrop)]"
       aria-labelledby={title}
       aria-describedby={description}
       onClose={onClose}
     >
       <div className="flex max-h-[calc(100dvh-2rem)] flex-col">
-        <header className="shrink-0 border-b p-6">
+        <header className="flex shrink-0 flex-col items-center gap-2 px-6 pt-6 text-center">
           <h2
             ref={heading}
             tabIndex={-1}
@@ -141,51 +153,86 @@ export function PairingDialog({
           >
             {t("ui.pair_phone")}
           </h2>
+          <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+            <p role="status">
+              {t(`ui.pairing_${status}`)}
+              {status === "active" && current.device_name
+                ? ` · ${current.device_name}`
+                : ""}
+            </p>
+            {status === "waiting" && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span className="tabular-nums">
+                  {t("ui.pairing_seconds", { seconds: String(remaining) })}
+                </span>
+              </>
+            )}
+          </div>
+          <button
+            type="button"
+            aria-label={t("ui.close")}
+            className="absolute right-3 top-3 flex size-8 items-center justify-center rounded-sm text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={() => dialog.current?.close()}
+          >
+            <X className="size-4" aria-hidden="true" />
+          </button>
         </header>
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain p-6">
-          <Alert>
-            <AlertDescription id={description}>
-              {t("ui.pairing_warning")}
-            </AlertDescription>
-          </Alert>
+        <div className="flex min-h-0 flex-1 flex-col items-center gap-5 overflow-y-auto overscroll-contain px-6 pb-7 pt-0 text-center">
           <ErrorNotice error={query.error ?? qrError} />
           {status === "waiting" && image && (
-            <img
-              className="mx-auto block h-auto w-full max-w-[280px]"
-              src={image}
-              alt={t("ui.pairing_qr")}
-              width={280}
-              height={280}
-            />
+            <div className="flex w-full flex-col items-center gap-0">
+              <button
+                type="button"
+                className="block w-full max-w-[280px] cursor-copy rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label={t(copied ? "ui.copied" : "ui.copy_connection_link")}
+                title={t("ui.copy_connection_link")}
+                onClick={() => void copyLink()}
+              >
+                <img
+                  className="block h-auto w-full"
+                  src={image}
+                  alt={t("ui.pairing_qr")}
+                  width={280}
+                  height={280}
+                />
+              </button>
+              <p aria-live="polite" className="text-xs text-muted-foreground">
+                {t(copied ? "ui.copied" : "ui.copy_connection_link_hint")}
+              </p>
+              {manualCopy && (
+                <>
+                  <Input
+                    aria-label={t("ui.copy_connection_link")}
+                    readOnly
+                    value={created.uri}
+                    onFocus={(event) => event.currentTarget.select()}
+                  />
+                  <p
+                    role="status"
+                    className="mt-2 text-sm text-muted-foreground"
+                  >
+                    {t("ui.copy_connection_link_manually")}
+                  </p>
+                </>
+              )}
+            </div>
           )}
-          <p className="text-xs text-muted-foreground">
-            {t("ui.core_fingerprint")}{" "}
-            <strong className="font-mono text-[13px] tabular-nums">
-              {created.fingerprint}
-            </strong>
-          </p>
-          <p role="status">
-            {t(`ui.pairing_${status}`)}
-            {status === "active" && current.device_name
-              ? ` · ${current.device_name}`
-              : ""}
-          </p>
-          {status === "waiting" && (
-            <p className="font-mono text-[13px] tabular-nums">
-              {t("ui.pairing_seconds", { seconds: String(remaining) })}
+          <div className="flex flex-col items-center gap-3 text-xs leading-relaxed text-muted-foreground">
+            <p id={description}>{t("ui.pairing_warning")}</p>
+            <p className="flex flex-wrap justify-center gap-x-2">
+              <span>{t("ui.core_fingerprint")}</span>
+              <span className="font-mono tabular-nums">
+                {created.fingerprint}
+              </span>
             </p>
-          )}
+          </div>
           {current.error_code && (
             <Alert variant="destructive">
               <AlertDescription>{t(current.error_code)}</AlertDescription>
             </Alert>
           )}
         </div>
-        <footer className="flex shrink-0 justify-end border-t p-4">
-          <Button variant="outline" onClick={() => dialog.current?.close()}>
-            {t("ui.close")}
-          </Button>
-        </footer>
       </div>
     </dialog>
   );
