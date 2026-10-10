@@ -2,6 +2,16 @@
 
 All notable changes to Mailwake Core are documented here. Versions follow [Semantic Versioning](https://semver.org); before 1.0.0, minor versions may change configuration.
 
+## [1.0.0-rc.5] - 2026-10-10
+
+- Separate push configuration saving from explicit notification tests across all channels.
+- Send Native tests through Relay's free pairing-test endpoint, with shared device test quotas and actionable APNs errors. Deploy Relay support before upgrading Core.
+- Select one paired App as the notification recipient; existing delivery retries retain their original target.
+- Refine App authorization with independent management and push permissions, default push and mail-content selections, and pairing completion feedback.
+- Add delivery detail dialogs and resizable, single-line delivery tables.
+- Default newly selected folders to five-minute checks while preserving saved subscriptions.
+- Simplify deployment documentation around the standard Compose file.
+
 ## [1.0.0-rc.4] - 2026-10-10
 
 - Refine sidebar navigation with breadcrumbs, a GitHub link, a default avatar and a desktop sidebar toggle; keep connection budgets on mailbox pages.

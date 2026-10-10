@@ -64,7 +64,7 @@ export function FolderSelection({
                         onCheckedChange={(checked) =>
                           onChange(
                             checked === true
-                              ? [...folders, { name, check: "realtime" }]
+                              ? [...folders, { name, check: "5m" }]
                               : folders.filter(
                                   (folder) => folder.name !== name,
                                 ),
@@ -83,7 +83,7 @@ export function FolderSelection({
                     <NativeSelect
                       className="min-w-36"
                       aria-label={`${label} ${t("ui.check")}`}
-                      value={selected?.check ?? "realtime"}
+                      value={selected?.check ?? "5m"}
                       disabled={!selected}
                       onChange={(event) =>
                         onChange(

@@ -34,9 +34,9 @@ docker compose logs core
 3. Add a mailbox and select the folders to monitor.
 4. Open notification settings, configure a channel and send a test notification.
 
-The commands above build the current `main` source. **v1.0.0-rc.4** is the current release candidate for 1.0.0. The default port binds to localhost, and data persists in a Docker volume. For remote access, HTTPS, backups and upgrades, follow the [deployment guide](docs/deployment.md).
+The commands above build the current `main` source. **v1.0.0-rc.5** is the current release candidate for 1.0.0. The default port binds to localhost, and data persists in a Docker volume. For remote access, HTTPS, backups and upgrades, follow the [deployment guide](docs/deployment.md).
 
-Prefer a prebuilt package? [Download macOS/Linux binaries](https://github.com/mingzaily/mailwake/releases/tag/v1.0.0-rc.4) or use the container image `ghcr.io/mingzaily/mailwake:v1.0.0-rc.4` (amd64 and arm64). The `main` branch tracks ongoing development. Changes are recorded in [CHANGELOG.md](CHANGELOG.md).
+Prefer a prebuilt package? [Download macOS/Linux binaries](https://github.com/mingzaily/mailwake/releases/tag/v1.0.0-rc.5) or use the container image `ghcr.io/mingzaily/mailwake:v1.0.0-rc.5` (amd64 and arm64). The `main` branch tracks ongoing development. Changes are recorded in [CHANGELOG.md](CHANGELOG.md).
 
 ## A look inside
 
