@@ -23,7 +23,7 @@ docker compose logs core
 
 可选的 [compose.1panel.yaml](../compose.1panel.yaml) 使用 root 用户和 `./data:/data` 挂载。将它复制到独立的 1Panel 编排目录，命名为 `docker-compose.yml`。外部网络 `1panel-network` 需要已存在。默认 Compose 继续使用非 root 用户和命名卷。
 
-示例使用镜像 `v1.0.0-rc.2`。测试沙盒 App 时，在该编排的 `.env` 中设置 `MAILWAKE_RELAY_URL=https://notify-sandbox.mailwake.oritx.com`；留空时使用生产 Relay。
+示例使用镜像 `v1.0.0-rc.3`。测试沙盒 App 时，在该编排的 `.env` 中设置 `MAILWAKE_RELAY_URL=https://notify-sandbox.mailwake.oritx.com`；留空时使用生产 Relay。
 
 ```sh
 docker compose up -d

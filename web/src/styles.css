@@ -66,12 +66,12 @@
 }
 :root[data-theme="light"] {
   color-scheme: light;
-  --bg: #f5f6f9;
+  --bg: #f8f9fb;
   --panel: #fff;
   --panel-2: #f0f2f7;
   --hover: #eceff6;
   --line: #dde1ea;
-  --line-soft: #e8ebf1;
+  --line-soft: #edf0f4;
   --text: #11141b;
   --muted: #5a6175;
   --faint: #697187;

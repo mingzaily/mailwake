@@ -286,7 +286,7 @@ func (m *Manager) Notices() map[string]*fault.Error {
 	}
 	return notices
 }
-func probeMailbox(ctx context.Context, source mail.Source) ([]string, error) {
+func probeMailbox(ctx context.Context, source mail.Source) (*mail.FolderDiscovery, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	folders, err := source.Folders(ctx)
@@ -446,7 +446,7 @@ func (m *Manager) DeleteMailbox(ctx context.Context, id string) error {
 	m.log.Info("Mailbox deleted", "mailbox_id", id)
 	return nil
 }
-func (m *Manager) TestMailbox(ctx context.Context, id string, input settings.MailboxUpdate) ([]string, error) {
+func (m *Manager) TestMailbox(ctx context.Context, id string, input settings.MailboxUpdate) (*mail.FolderDiscovery, error) {
 	if err := m.beginDiscovery(); err != nil {
 		return nil, err
 	}
@@ -475,7 +475,7 @@ func (m *Manager) TestMailbox(ctx context.Context, id string, input settings.Mai
 	}
 	return probeMailbox(ctx, budget.Wrap(m.newSource(next)))
 }
-func (m *Manager) Folders(ctx context.Context, id string) ([]string, error) {
+func (m *Manager) Folders(ctx context.Context, id string) (*mail.FolderDiscovery, error) {
 	if err := m.beginDiscovery(); err != nil {
 		return nil, err
 	}

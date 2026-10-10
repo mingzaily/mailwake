@@ -4,6 +4,8 @@
 
 ## Management interface
 
+Initial setup has three steps: create the administrator, add a mailbox, and select folders. Finishing or skipping setup opens Notifications. App settings appears above Notifications in the sidebar and manages phone connections and management permissions; notification channels remain independent, so App management can be used with Bark delivery.
+
 The React + TypeScript console uses shadcn/ui, Tailwind v4 and hash routes. The sidebar groups mailbox shortcuts under Mailboxes. Its footer shows the current mailbox name and connection budget on that mailbox’s monitoring and settings pages; other pages, including the mailbox list and creation form, hide the budget. Each mailbox opens its monitoring status, with a separate Mailbox settings route and a fixed-height Scan folders dialog with scan, selection and confirmation steps; long lists scroll inside the dialog while its header and actions stay visible; pages cover overview, mailbox connections and folder checks, notification settings, the latest 50 deliveries, runtime logs, administrator settings, API tokens and redacted diagnostics. Deletion and token revocation require inline confirmation.
 
 English and Simplified Chinese share the backend catalogs. The first load follows Accept-Language; language and theme can be changed in Settings. The theme follows the system by default, with explicit light and dark choices. The sidebar becomes a keyboard-accessible drawer on narrow screens (360px and up). Overview refreshes every five seconds and pauses when hidden. Logs refresh incrementally every three seconds, support pause/filter/export, and stop following when you scroll upward. Exports contain folder names.
@@ -44,3 +46,7 @@ Destructive actions retain inline confirmation because AlertDialog shares the sa
 - Native `type="checkbox"`, `space-y-*` and numbered background color classes such as `bg-green-500`.
 
 These checks complement TypeScript, ESLint and component tests. Verify production overlays against the built Core’s CSP when changing their dependencies or behavior.
+
+Folder discovery localizes standard roles reported by IMAP; custom folders keep their names and subscriptions retain original paths. App notification tests require an active push pairing and link to App settings. Settings forms use a centered, limited-width layout. Logs show localized summaries with raw attributes under technical details. Diagnostics displays the software version, build commit and platform together, with an explicit label for missing commit metadata.
+
+The sidebar footer shows the signed-in administrator with an account menu. Preferences offer language and appearance choices directly. The first notification configuration uses the current console language; saved notification language remains independent.

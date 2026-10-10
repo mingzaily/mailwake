@@ -35,6 +35,18 @@ func (s *Service) Ready(ctx context.Context) (bool, error) {
 	a, err := s.store.Administrator(ctx)
 	return a != nil, err
 }
+
+// Username returns the configured administrator's display identity.
+func (s *Service) Username(ctx context.Context) (string, error) {
+	a, err := s.store.Administrator(ctx)
+	if err != nil {
+		return "", err
+	}
+	if a == nil {
+		return "", fault.New("setup_required")
+	}
+	return a.Username, nil
+}
 func (s *Service) Prepare(ctx context.Context) (string, error) {
 	const alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
 	var chars [12]byte

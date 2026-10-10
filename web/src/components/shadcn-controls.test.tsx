@@ -1,3 +1,5 @@
+import { AccountMenu } from "./account-menu";
+import { SidebarProvider } from "./ui/sidebar";
 import { afterEach, expect, test, vi } from "vitest";
 import {
   cleanup,
@@ -119,3 +121,44 @@ test("confirmation moves focus to cancel and returns it to its trigger", () => {
     screen.getByRole("button", { name: "Delete" }),
   );
 });
+
+test("appearance settings expose language and theme choices directly", () => {
+  const setLanguage = vi.fn();
+  mount(<AppearanceControls />, setLanguage);
+  fireEvent.click(
+    screen.getByRole("radio", { name: catalog["ui.language_zh-CN"] }),
+  );
+  expect(setLanguage).toHaveBeenCalledWith("zh-CN");
+  fireEvent.click(
+    screen.getByRole("radio", { name: catalog["ui.theme_dark"] }),
+  );
+  expect(localStorage.getItem("mailwake.theme")).toBe("dark");
+  expect(document.documentElement.dataset.theme).toBe("dark");
+  fireEvent.click(
+    screen.getByRole("radio", { name: catalog["ui.theme_light"] }),
+  );
+});
+
+test.each([false, true])(
+  "account menu shows the signed-in name and supports logout inside drawer: %s",
+  async (drawer) => {
+    const logout = vi.fn();
+    const menu = (
+      <SidebarProvider>
+        <AccountMenu username="review-admin" logout={logout} />
+      </SidebarProvider>
+    );
+    mount(drawer ? <dialog open>{menu}</dialog> : menu);
+    expect(screen.getByText("review-admin")).toBeTruthy();
+    fireEvent.keyDown(
+      screen.getByRole("button", { name: catalog["ui.account_menu"] }),
+      { key: "ArrowDown" },
+    );
+    const action = await screen.findByRole("menuitem", {
+      name: catalog["ui.logout"],
+    });
+    expect(!!action.closest("dialog")).toBe(drawer);
+    fireEvent.click(action);
+    expect(logout).toHaveBeenCalledOnce();
+  },
+);

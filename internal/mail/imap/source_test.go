@@ -115,7 +115,7 @@ func TestBaselineCatchupIdleAndEpochReset(t *testing.T) {
 	defer cancel()
 	appendMail(t, user, "old mail")
 	folders, err := s.Folders(ctx)
-	if err != nil || len(folders) != 1 || folders[0] != "Clients" {
+	if err != nil || len(folders.Folders) != 1 || folders.Folders[0] != "Clients" {
 		t.Fatalf("发现文件夹: %v %v", folders, err)
 	}
 	opened, err := s.Open(ctx, "Clients")

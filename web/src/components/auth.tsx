@@ -56,7 +56,7 @@ export function AuthForm({
     <form onSubmit={handleSubmit(submit)} noValidate>
       {setup && (
         <p className="text-muted-foreground mb-5">
-          {t("ui.setup_step", { step: 1, total: 4 })}
+          {t("ui.setup_step", { step: 1, total: 3 })}
         </p>
       )}
       <FieldGroup>

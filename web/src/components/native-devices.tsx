@@ -447,46 +447,60 @@ export function ManagementDevices() {
     }
   }
   return (
-    <Panel title={t("ui.management_devices")}>
-      <div className="flex flex-col gap-4 p-4 md:p-5">
-        <ErrorNotice error={error ?? devices.error} />
-        <FieldGroup>
-          <Field orientation="horizontal">
-            <Checkbox
-              id={managementID}
-              checked={management}
-              onCheckedChange={(value) => setManagement(value === true)}
-            />
-            <FieldLabel htmlFor={managementID}>
-              {t("ui.allow_app_management")}
-            </FieldLabel>
-          </Field>
-          <Field orientation="horizontal">
-            <Checkbox
-              id={nativeID}
-              checked={native}
-              disabled={!settings.data?.native_available}
-              onCheckedChange={(value) => setNative(value === true)}
-            />
-            <FieldLabel htmlFor={nativeID}>
-              {t("ui.enable_native_push")}
-            </FieldLabel>
-          </Field>
-          {management && (
-            <>
-              <TextField
-                label={t("ui.core_https_origin")}
-                hint={t("ui.app_management_endpoint_hint")}
-                type="url"
-                value={origin}
-                onChange={(event) => setOrigin(event.target.value)}
-              />
-              <FieldSet>
-                <FieldLegend>{t("ui.management_scopes")}</FieldLegend>
-                <FieldGroup>
-                  {["channels", "content", "diagnostics", "folders", "mailboxes"].map(
-                    (scope) => (
-                      <Field key={scope} orientation="horizontal">
+    <>
+      <Panel title={t("ui.connect_phone")}>
+        <div className="flex flex-col gap-6 p-5 md:p-6">
+          <ErrorNotice error={error ?? devices.error} />
+          <FieldGroup>
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field orientation="horizontal">
+                <Checkbox
+                  id={managementID}
+                  checked={management}
+                  onCheckedChange={(value) => setManagement(value === true)}
+                />
+                <FieldLabel htmlFor={managementID}>
+                  {t("ui.allow_app_management")}
+                </FieldLabel>
+              </Field>
+              <Field orientation="horizontal">
+                <Checkbox
+                  id={nativeID}
+                  checked={native}
+                  disabled={!settings.data?.native_available}
+                  onCheckedChange={(value) => setNative(value === true)}
+                />
+                <FieldLabel htmlFor={nativeID}>
+                  {t("ui.enable_native_push")}
+                </FieldLabel>
+              </Field>
+            </div>
+            {management && (
+              <>
+                <TextField
+                  label={t("ui.core_https_origin")}
+                  hint={t("ui.app_management_endpoint_hint")}
+                  type="url"
+                  value={origin}
+                  onChange={(event) => setOrigin(event.target.value)}
+                />
+                <FieldSet>
+                  <FieldLegend>{t("ui.management_scopes")}</FieldLegend>
+                  <FieldGroup className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    {[
+                      "mailboxes",
+                      "folders",
+                      "channels",
+                      "diagnostics",
+                      "content",
+                    ].map((scope) => (
+                      <Field
+                        key={scope}
+                        orientation="horizontal"
+                        className={
+                          scope === "content" ? "sm:col-span-2" : undefined
+                        }
+                      >
                         <Checkbox
                           id={`${managementID}-${scope}`}
                           checked={scopes.includes(scope)}
@@ -502,74 +516,83 @@ export function ManagementDevices() {
                           {t(`ui.scope_${scope}`)}
                         </FieldLabel>
                       </Field>
-                    ),
-                  )}
-                </FieldGroup>
-              </FieldSet>
-            </>
+                    ))}
+                  </FieldGroup>
+                </FieldSet>
+              </>
+            )}
+          </FieldGroup>
+          <p className="text-sm text-muted-foreground">
+            {t("ui.app_management_pro_hint")}
+          </p>
+          <BusyButton
+            ref={trigger}
+            className="self-start"
+            busy={busy === "create"}
+            disabled={
+              !!busy ||
+              !!pairing ||
+              (!management && !native) ||
+              (management && (!origin || scopes.length === 0))
+            }
+            onClick={() => void create()}
+          >
+            {t("ui.add_phone")}
+          </BusyButton>
+        </div>
+      </Panel>
+      <Panel title={t("ui.management_devices")}>
+        <div className="p-5 md:p-6">
+          {!devices.data ? (
+            <p>{t("ui.loading")}</p>
+          ) : devices.data.devices.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              {t("ui.no_management_devices")}
+            </p>
+          ) : (
+            <ul className="flex list-none flex-col gap-4 p-0">
+              {devices.data.devices.map((device) => (
+                <li
+                  key={device.controller_id}
+                  className="flex flex-wrap items-center justify-between gap-3"
+                >
+                  <div>
+                    <strong>
+                      {device.device_name || t("ui.phone_unnamed")}
+                    </strong>
+                    <p className="text-sm text-muted-foreground">
+                      {device.scopes
+                        .map((scope) => t(`ui.scope_${scope}`))
+                        .join(" · ")}{" "}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {t("ui.last_used")}{" "}
+                      {device.last_used_at ? (
+                        <Time value={device.last_used_at} />
+                      ) : (
+                        t("ui.never")
+                      )}
+                    </p>
+                  </div>
+                  <InlineConfirm
+                    label={t("ui.revoke")}
+                    question={t("ui.revoke_management_confirm")}
+                    confirm={t("ui.revoke")}
+                    busy={busy === device.controller_id}
+                    onConfirm={() => revoke(device.controller_id)}
+                  />
+                </li>
+              ))}
+            </ul>
           )}
-        </FieldGroup>
-        <p className="text-sm text-muted-foreground">
-          {t("ui.app_management_pro_hint")}
-        </p>
-        <BusyButton
-          ref={trigger}
-          busy={busy === "create"}
-          disabled={
-            !!busy ||
-            !!pairing ||
-            (!management && !native) ||
-            (management && (!origin || scopes.length === 0))
-          }
-          onClick={() => void create()}
-        >
-          {t("ui.add_phone")}
-        </BusyButton>
-        {!devices.data ? (
-          <p>{t("ui.loading")}</p>
-        ) : devices.data.devices.length === 0 ? (
-          <EmptyState message={t("ui.no_management_devices")} />
-        ) : (
-          <ul className="flex list-none flex-col gap-4 p-0">
-            {devices.data.devices.map((device) => (
-              <li
-                key={device.controller_id}
-                className="flex flex-wrap items-center justify-between gap-3"
-              >
-                <div>
-                  <strong>{device.device_name || t("ui.phone_unnamed")}</strong>
-                  <p className="text-sm text-muted-foreground">
-                    {device.scopes
-                      .map((scope) => t(`ui.scope_${scope}`))
-                      .join(" · ")}{" "}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {t("ui.last_used")}{" "}
-                    {device.last_used_at ? (
-                      <Time value={device.last_used_at} />
-                    ) : (
-                      t("ui.never")
-                    )}
-                  </p>
-                </div>
-                <InlineConfirm
-                  label={t("ui.revoke")}
-                  question={t("ui.revoke_management_confirm")}
-                  confirm={t("ui.revoke")}
-                  busy={busy === device.controller_id}
-                  onConfirm={() => revoke(device.controller_id)}
-                />
-              </li>
-            ))}
-          </ul>
-        )}
-        {pairing && (
-          <PairingDialog
-            created={pairing}
-            onClose={() => setPairing(undefined)}
-          />
-        )}
-      </div>
-    </Panel>
+          {pairing && (
+            <PairingDialog
+              created={pairing}
+              onClose={() => setPairing(undefined)}
+            />
+          )}
+        </div>
+      </Panel>
+    </>
   );
 }

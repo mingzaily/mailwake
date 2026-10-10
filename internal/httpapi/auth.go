@@ -152,7 +152,12 @@ func sessionRoutes(api *gin.RouterGroup, service *auth.Service) {
 			respondError(c, 401, fault.New("unauthorized"))
 			return
 		}
-		c.JSON(200, gin.H{"authenticated": true, "csrf_token": s.CSRF})
+		username, err := service.Username(c.Request.Context())
+		if err != nil {
+			respondFault(c, err)
+			return
+		}
+		c.JSON(200, gin.H{"authenticated": true, "csrf_token": s.CSRF, "username": username})
 	})
 	api.DELETE("/session", func(c *gin.Context) {
 		v, exists := c.Get("session")

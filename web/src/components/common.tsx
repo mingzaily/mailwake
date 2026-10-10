@@ -26,23 +26,29 @@ export function Panel({
   actions,
   children,
 }: {
-  title: ReactNode;
+  title?: ReactNode;
   actions?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <Card className="min-w-0 gap-0 overflow-hidden py-0">
-      <CardHeader className="flex flex-row items-center gap-3 px-4 py-3">
-        <CardTitle className="text-sm">
-          <h2>{title}</h2>
-        </CardTitle>
-        {actions && (
-          <CardAction className="ml-auto flex flex-wrap items-center gap-2 self-center">
-            {actions}
-          </CardAction>
-        )}
-      </CardHeader>
-      <Separator />
+      {(title || actions) && (
+        <>
+          <CardHeader className="flex flex-row items-center gap-3 px-4 py-3">
+            {title && (
+              <CardTitle className="text-sm">
+                <h2>{title}</h2>
+              </CardTitle>
+            )}
+            {actions && (
+              <CardAction className="ml-auto flex flex-wrap items-center gap-2 self-center">
+                {actions}
+              </CardAction>
+            )}
+          </CardHeader>
+          <Separator className="bg-border-subtle" />
+        </>
+      )}
       {children}
     </Card>
   );

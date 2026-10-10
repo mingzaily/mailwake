@@ -111,3 +111,8 @@ PUT 成功返回脱敏视图并立即生效。邮箱连接配置更新先停止�
 下一次请求把 next 作为 after。达到页大小时 next 为最后返回序号；遍历完快照时为快照最大序号，过滤结果为空也推进。淘汰的日志从当前保留记录继续；重启导致 next 小于 after 时，将游标重置为 0。条目按序号升序返回。
 
 日志包含邮箱/Folder 生命周期、基线与入队数量、投递尝试、配置变更和管理员操作，全局事件的 mailbox_id 为空。attrs 仅输出这些标量字段：mailbox_id、folder、mode、check、code、event_id、channel、attempt、duration_ms、http_status、next_attempt、backoff_seconds、count、revision、token_id、version、listen。http_status=0 表示未收到 HTTP 响应；token_id 为公开记录 ID，区别于 Token 完整值。密码、Token/会话值、设置码、发件人、主题、正文和凭据 URL 均省略；设置码那一行只输出到控制台。日志包含 Folder 名称，匿名诊断导出继续省略日志和名称。
+
+
+文件夹扫描与管理员邮箱测试返回原始路径数组 `folders`，并可附带 `folder_roles`：路径到 `inbox`、`drafts`、`sent`、`trash`、`junk`、`archive`、`all` 或 `flagged` 的映射。用途来自 IMAP SPECIAL-USE 属性，INBOX 按协议名称识别。未标记的自定义文件夹保留原名；界面翻译不改变订阅路径。App 邮箱测试继续仅返回连接状态。
+
+`GET /api/v1/session` 在 Cookie 会话响应中返回 `username`，Token 鉴权响应保持原有结构。

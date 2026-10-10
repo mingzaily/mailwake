@@ -40,7 +40,9 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          build-args: VERSION=${{ github.ref_name }}
+          build-args: |
+            VERSION=${{ github.ref_name }}
+            REVISION=${{ github.sha }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
@@ -68,7 +70,7 @@ jobs:
             os=${target%/*}; arch=${target#*/}
             name="mailwake-${GITHUB_REF_NAME}-${os}-${arch}"
             GOOS=$os GOARCH=$arch CGO_ENABLED=0 go build -tags nomsgpack -trimpath \
-              -ldflags="-s -w -X github.com/mingzaily/mailwake/internal/buildinfo.Version=${GITHUB_REF_NAME}" \
+              -ldflags="-s -w -X github.com/mingzaily/mailwake/internal/buildinfo.Version=${GITHUB_REF_NAME} -X github.com/mingzaily/mailwake/internal/buildinfo.Revision=${GITHUB_SHA}" \
               -o "dist/$name/mailwake" ./cmd/mailwake
             cp LICENSE COPYRIGHT README.md README.zh-CN.md compose.yaml compose.1panel.yaml compose.app-management.yaml app-management.env.example internal/httpapi/webdist/third-party-notices.txt "dist/$name/"
             cp -R docs "dist/$name/"

@@ -21,7 +21,9 @@ import (
 
 type multiSource struct{ opened, closed atomic.Int32 }
 
-func (*multiSource) Folders(context.Context) ([]string, error) { return []string{"INBOX"}, nil }
+func (*multiSource) Folders(context.Context) (*mail.FolderDiscovery, error) {
+	return &mail.FolderDiscovery{Folders: []string{"INBOX"}}, nil
+}
 func (s *multiSource) Open(context.Context, string) (mail.Session, error) {
 	s.opened.Add(1)
 	return multiSession{s}, nil
@@ -44,13 +46,13 @@ type gatedMailbox struct {
 	started, release chan struct{}
 }
 
-func (s gatedMailbox) Folders(ctx context.Context) ([]string, error) {
+func (s gatedMailbox) Folders(ctx context.Context) (*mail.FolderDiscovery, error) {
 	close(s.started)
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case <-s.release:
-		return []string{"INBOX"}, nil
+		return &mail.FolderDiscovery{Folders: []string{"INBOX"}}, nil
 	}
 }
 
@@ -364,7 +366,9 @@ func TestMailboxPersistenceFailureRestoresOnlyItsWatcher(t *testing.T) {
 
 type codeRequestSource struct{ requests chan bool }
 
-func (s codeRequestSource) Folders(context.Context) ([]string, error) { return []string{"INBOX"}, nil }
+func (s codeRequestSource) Folders(context.Context) (*mail.FolderDiscovery, error) {
+	return &mail.FolderDiscovery{Folders: []string{"INBOX"}}, nil
+}
 func (s codeRequestSource) Open(context.Context, string) (mail.Session, error) {
 	return codeRequestSession{s}, nil
 }

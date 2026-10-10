@@ -124,5 +124,5 @@ func run(log *slog.Logger) error {
 
 // Setup codes are console-only and never enter the management log buffer.
 func writeSetupCode(output io.Writer, code string) {
-	slog.New(slog.NewJSONHandler(output, nil)).Warn("Mailwake Core is not set up. Open the web page and enter the setup code: " + code)
+	slog.New(slog.NewJSONHandler(output, nil)).Warn("Mailwake is not set up. Open the web page and enter the setup code: " + code)
 }

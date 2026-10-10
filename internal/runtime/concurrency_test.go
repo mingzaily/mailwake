@@ -23,7 +23,7 @@ type slowSource struct {
 	failure bool
 }
 
-func (s slowSource) Folders(ctx context.Context) ([]string, error) {
+func (s slowSource) Folders(ctx context.Context) (*mail.FolderDiscovery, error) {
 	close(s.started)
 	select {
 	case <-s.release:
@@ -33,7 +33,7 @@ func (s slowSource) Folders(ctx context.Context) ([]string, error) {
 	if s.failure {
 		return nil, errors.New("test failed")
 	}
-	return []string{"INBOX"}, nil
+	return &mail.FolderDiscovery{Folders: []string{"INBOX"}}, nil
 }
 func responsiveStatus(t *testing.T, s *singleMailboxService) {
 	t.Helper()

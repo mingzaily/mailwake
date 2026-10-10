@@ -22,8 +22,8 @@ import (
 
 type failingSource struct{ err error }
 
-func (s failingSource) Folders(context.Context) ([]string, error)          { return nil, s.err }
-func (s failingSource) Open(context.Context, string) (mail.Session, error) { return nil, s.err }
+func (s failingSource) Folders(context.Context) (*mail.FolderDiscovery, error) { return nil, s.err }
+func (s failingSource) Open(context.Context, string) (mail.Session, error)     { return nil, s.err }
 
 func TestLocalizedAPIAndDiagnosticCodes(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -136,8 +136,8 @@ func TestLocalizedAPIAndDiagnosticCodes(t *testing.T) {
 
 type folderSource struct{}
 
-func (folderSource) Folders(context.Context) ([]string, error) {
-	return []string{"Clients"}, nil
+func (folderSource) Folders(context.Context) (*mail.FolderDiscovery, error) {
+	return &mail.FolderDiscovery{Folders: []string{"Clients", "INBOX"}, FolderRoles: map[string]string{"INBOX": "inbox"}}, nil
 }
 func (folderSource) Open(context.Context, string) (mail.Session, error) {
 	panic("本测试只发现文件夹")
@@ -157,6 +157,15 @@ func TestAuthenticationAndDurableTestPush(t *testing.T) {
 	token := strings.Repeat("secret", 8)
 	authService, grant := testAdministrator(t, s)
 	router := New(authService, newTestRuntime("bark", monitor, source), s, log)
+	discoveryRequest := httptest.NewRequest("GET", "/api/v1/mailboxes/mbx_test/folders", nil)
+	authorizeSession(discoveryRequest, grant)
+	discoveryResponse := httptest.NewRecorder()
+	router.ServeHTTP(discoveryResponse, discoveryRequest)
+	var discovery mail.FolderDiscovery
+	if discoveryResponse.Code != 200 || json.Unmarshal(discoveryResponse.Body.Bytes(), &discovery) != nil || len(discovery.Folders) != 2 || discovery.Folders[0] != "Clients" || discovery.FolderRoles["INBOX"] != "inbox" {
+		t.Fatalf("folder paths and roles: %s", discoveryResponse.Body.String())
+	}
+
 	for _, route := range []struct{ method, path string }{{"GET", "/api/v1/status"}, {"GET", "/api/v1/mailboxes/mbx_test/folders"}, {"GET", "/api/v1/deliveries"}, {"POST", "/api/v1/test-push"}, {"POST", "/api/v1/deliveries/id/retry"}} {
 		request := httptest.NewRequest(route.method, route.path, nil)
 		recorder := httptest.NewRecorder()

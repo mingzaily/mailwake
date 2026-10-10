@@ -9,6 +9,7 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { I18nContext } from "@/lib/i18n";
 import { AuthForm } from "./auth";
+import { SetupWizard } from "./setup";
 import { MailboxEditor } from "./mailbox-form";
 import { SubscriptionsEditor } from "./subscriptions-form";
 import { Settings } from "@/pages/settings";
@@ -213,7 +214,7 @@ test("a proxy HTML error preserves login input and explains how to reconnect", a
   });
   fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
   await screen.findByText(
-    "Unable to connect to Core. Check your network or reverse proxy.",
+    "Unable to connect to Mailwake. Check your network or reverse proxy.",
   );
   expect((screen.getByLabelText("Username") as HTMLInputElement).value).toBe(
     "retained-user",
@@ -221,4 +222,104 @@ test("a proxy HTML error preserves login input and explains how to reconnect", a
   expect((screen.getByLabelText("Password") as HTMLInputElement).value).toBe(
     "retained-password",
   );
+});
+
+test.each([
+  ["QQ Mail", "imap.qq.com"],
+  ["163 Mail", "imap.163.com"],
+  ["Yahoo", "imap.mail.yahoo.com"],
+  ["Gmail", "imap.gmail.com"],
+])(
+  "%s shortcut preserves mailbox details and saves the selected IMAP endpoint",
+  async (provider, host) => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(response({ ...box, host, port: 993 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const saved = vi.fn();
+    mount(<MailboxEditor mailbox={{ ...box, port: 1993 }} onSaved={saved} />);
+    fireEvent.click(screen.getByRole("button", { name: provider }));
+    expect(fetchMock).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(saved).toHaveBeenCalled());
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      revision: box.revision,
+      label: box.label,
+      host,
+      port: 993,
+      username: box.username,
+      connection_limit: box.connection_limit,
+    });
+  },
+);
+
+test("IMAP shortcut keeps entered credentials and allows a custom endpoint", () => {
+  mount(<MailboxEditor onSaved={() => {}} />);
+  const input = (key: keyof typeof catalog) =>
+    screen.getByLabelText(catalog[key]) as HTMLInputElement;
+  fireEvent.change(input("ui.mailbox_username"), {
+    target: { value: "user@example.com" },
+  });
+  fireEvent.change(input("ui.mailbox_password"), {
+    target: { value: "synthetic-app-password" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Gmail" }));
+  fireEvent.change(input("ui.imap_host"), {
+    target: { value: "mail.example.com" },
+  });
+  fireEvent.change(input("ui.imap_port"), { target: { value: "1993" } });
+  expect(input("ui.imap_host").value).toBe("mail.example.com");
+  expect(input("ui.imap_port").value).toBe("1993");
+  expect(input("ui.mailbox_username").value).toBe("user@example.com");
+  expect(input("ui.mailbox_password").value).toBe("synthetic-app-password");
+});
+
+test("connection results collapse folder names and disappear when the endpoint changes", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(response({ folders: ["INBOX", "Archive"] })),
+  );
+  mount(<MailboxEditor mailbox={box} onSaved={() => {}} />);
+  fireEvent.click(screen.getByRole("button", { name: "Test connection" }));
+  const summary = await screen.findByText("Found 2 folders");
+  const details = summary.closest("details")!;
+  expect(details.open).toBe(false);
+  fireEvent.click(summary);
+  expect(details.open).toBe(true);
+  expect(screen.getByText("Archive")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Gmail" }));
+  expect(screen.queryByText("Found 2 folders")).toBeNull();
+});
+
+test("setup finishes after mailbox and folder selection without a notification step", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      if (url.endsWith("/mailboxes/test"))
+        return response({ folders: ["INBOX"] });
+      if (url.endsWith("/subscriptions"))
+        return response({ revision: 1, folders: [] });
+      return response(box);
+    }),
+  );
+  const done = vi.fn();
+  mount(<SetupWizard done={done} />);
+  expect(screen.getByText("Step 2 / 3")).toBeTruthy();
+  expect(screen.queryByText(catalog["ui.setup_notifications"])).toBeNull();
+  for (const [label, value] of [
+    ["Display name", "Personal"],
+    [catalog["ui.mailbox_username"], "user@example.com"],
+    [catalog["ui.mailbox_password"], "synthetic-password"],
+  ]) {
+    fireEvent.change(screen.getByLabelText(label), { target: { value } });
+  }
+  fireEvent.click(screen.getByRole("button", { name: "QQ Mail" }));
+  fireEvent.click(screen.getByRole("button", { name: catalog["ui.continue"] }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: catalog["ui.save"] }),
+  );
+  expect(await screen.findByText("Step 3 / 3")).toBeTruthy();
+  fireEvent.click(await screen.findByRole("checkbox", { name: "Inbox" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save and finish" }));
+  await waitFor(() => expect(done).toHaveBeenCalledOnce());
 });

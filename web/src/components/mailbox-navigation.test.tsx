@@ -46,7 +46,7 @@ function mockAPI(failSave = false) {
       const data = path.endsWith("/subscriptions")
         ? options.method === "PUT" && failSave
           ? { error: { code: "subscriptions_conflict", message: "配置已更新" } }
-          : { revision: 1, folders: [{ name: "INBOX", check: "realtime" }] }
+          : { revision: 1, folders: [{ name: "收件箱", check: "realtime" }] }
         : path.endsWith("/folders")
           ? { folders: ["INBOX", "Bank"] }
           : path.endsWith("/status")
@@ -163,7 +163,7 @@ test("scan dialog scans folders, preserves edits on conflict, and cancels withou
   ).toEqual({
     revision: 1,
     folders: [
-      { name: "INBOX", check: "realtime" },
+      { name: "收件箱", check: "realtime" },
       { name: "Bank", check: "15m" },
     ],
   });
@@ -202,7 +202,7 @@ test("saving scan selections closes the dialog and invalidates monitoring status
   expect(within(dialog).getByText("第 1 / 3 步")).toBeTruthy();
   expect(within(dialog).queryByRole("checkbox")).toBeNull();
   fireEvent.click(within(dialog).getByRole("button", { name: "开始扫描" }));
-  await within(dialog).findByRole("checkbox", { name: "INBOX" });
+  await within(dialog).findByRole("checkbox", { name: "收件箱 (INBOX)" });
   fireEvent.click(within(dialog).getByRole("button", { name: "下一步" }));
   fireEvent.click(
     await within(dialog).findByRole("button", { name: "确认保存" }),
@@ -233,7 +233,7 @@ test("failed scans stay on step one and retry advances to selection", async () =
     />,
   );
   fireEvent.click(screen.getByRole("button", { name: "开始扫描" }));
-  await screen.findByText("无法连接 Core，请检查网络或反向代理");
+  await screen.findByText("无法连接 Mailwake，请检查网络或反向代理");
   expect(screen.getByText("第 1 / 3 步")).toBeTruthy();
   expect(screen.queryByRole("checkbox")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "开始扫描" }));
@@ -283,7 +283,7 @@ test("selection enforces the budget and empty confirmation explains stopping all
     screen.getByRole("button", { name: "下一步" }).hasAttribute("disabled"),
   ).toBe(true);
   fireEvent.click(screen.getByRole("checkbox", { name: "Bank" }));
-  fireEvent.click(screen.getByRole("checkbox", { name: "INBOX" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "收件箱" }));
   fireEvent.click(screen.getByRole("button", { name: "下一步" }));
   expect(screen.getByText("保存后将停止监听此邮箱的所有文件夹。")).toBeTruthy();
 });
@@ -311,7 +311,7 @@ test("scan opens on its title and saving blocks Escape and close", async () => {
     within(dialog).getByRole("heading", { name: "扫描文件夹" }),
   );
   fireEvent.click(screen.getByRole("button", { name: "开始扫描" }));
-  await screen.findByRole("checkbox", { name: "INBOX" });
+  await screen.findByRole("checkbox", { name: "收件箱 (INBOX)" });
   fireEvent.click(screen.getByRole("button", { name: "下一步" }));
   fireEvent.click(screen.getByRole("button", { name: "确认保存" }));
   await waitFor(() =>

@@ -1,3 +1,4 @@
+import { AccountMenu } from "./account-menu";
 import { useRef, useState, type ReactNode } from "react";
 import {
   Activity,
@@ -9,6 +10,7 @@ import {
   Menu,
   Settings,
   ShieldCheck,
+  Smartphone,
   X,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
@@ -44,6 +46,7 @@ import { ErrorNotice } from "./common";
 const pages = [
   { id: "overview", icon: Gauge },
   { id: "mailboxes", icon: Mail },
+  { id: "app_settings", icon: Smartphone },
   { id: "notifications", icon: Bell },
   { id: "deliveries", icon: Activity },
   { id: "logs", icon: FileText },
@@ -56,9 +59,6 @@ export function Brand() {
     <div className="flex items-center gap-2.5 font-semibold">
       <Mail aria-hidden="true" className="size-6 text-primary" />
       <b translate="no">{t("ui.brand")}</b>
-      <small className="ml-auto font-mono text-xs font-normal text-muted-foreground">
-        {t("ui.core")}
-      </small>
     </div>
   );
 }
@@ -138,8 +138,10 @@ export function Shell({
   mailboxId,
   children,
   logout,
+  username,
 }: {
   page: string;
+  username?: string;
   mailboxId?: string;
   children: ReactNode;
   logout: () => void;
@@ -223,9 +225,7 @@ export function Shell({
             <Budget folders={folders} limit={selected.connection_limit} />
           </div>
         )}
-        <Button variant="ghost" onClick={logout}>
-          {t("ui.logout")}
-        </Button>
+        <AccountMenu username={username} logout={logout} />
       </SidebarFooter>
     </>
   );

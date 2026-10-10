@@ -17,14 +17,14 @@ import {
 } from "./native-devices";
 import { DeliveryEditor } from "./delivery-form";
 import type { ReactNode } from "react";
-function mount(element: ReactNode) {
+function mount(element: ReactNode, language: "en" | "zh-CN" = "en") {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <QueryClientProvider client={client}>
       <I18nContext.Provider
-        value={{ language: "en", catalog, setLanguage: () => {} }}
+        value={{ language, catalog, setLanguage: () => {} }}
       >
         {element}
       </I18nContext.Provider>
@@ -122,6 +122,11 @@ test("channel switches retain preview and hide native when unavailable", async (
   fireEvent.change(channel, { target: { value: "native" } });
   expect(screen.queryByRole("radio")).toBeNull();
   expect(screen.getByText(catalog["ui.native_encrypted"])).toBeTruthy();
+  expect(
+    screen
+      .getByRole("link", { name: catalog["ui.app_pairing_link"] })
+      .getAttribute("href"),
+  ).toBe("#/app_settings");
   fireEvent.change(channel, { target: { value: "webhook" } });
   expect(
     (
@@ -333,3 +338,99 @@ test("management revocation sends only the independent management request", asyn
     expect(requests).toEqual(["/api/v1/management/devices/ctrl_phone"]),
   );
 });
+
+test.each(["waiting", "revoked", "active"])(
+  "native test requires an active push pairing: %s",
+  async (status) => {
+    const fetcher = vi.fn(
+      async (path: string) =>
+        new Response(
+          JSON.stringify(
+            path.endsWith("/native/devices")
+              ? { devices: [{ ...created(), status }] }
+              : {
+                  revision: 1,
+                  channel: "native",
+                  preview: "off",
+                  language: "en",
+                  retry_count: 0,
+                  native_available: true,
+                  bark: { endpoint: "", key: { configured: false } },
+                  pushover: {
+                    token: { configured: false },
+                    user: { configured: false },
+                  },
+                  webhook: {
+                    url: { configured: false },
+                    secret: { configured: false },
+                  },
+                },
+          ),
+        ),
+    );
+    vi.stubGlobal("fetch", fetcher);
+    mount(<DeliveryEditor />);
+    const button = await screen.findByRole("button", {
+      name: catalog["ui.test_notification"],
+    });
+    if (status === "active") {
+      await waitFor(() => expect(button.hasAttribute("disabled")).toBe(false));
+      fireEvent.click(button);
+      await waitFor(() =>
+        expect(
+          fetcher.mock.calls.some(([path]) => path.endsWith("/delivery/test")),
+        ).toBe(true),
+      );
+    } else {
+      await screen.findByText(catalog["ui.pair_before_test"]);
+      expect(button.hasAttribute("disabled")).toBe(true);
+      expect(
+        screen
+          .getByRole("button", { name: catalog["ui.save"] })
+          .hasAttribute("disabled"),
+      ).toBe(false);
+      expect(
+        fetcher.mock.calls.some(([path]) => path.endsWith("/delivery/test")),
+      ).toBe(false);
+    }
+  },
+);
+
+test.each([
+  ["", "zh-CN"],
+  ["bark", "en"],
+])(
+  "notification language uses the site default and preserves a saved choice: %s",
+  async (channel, expected) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              revision: 0,
+              channel,
+              language: "en",
+              retry_count: 0,
+              preview: "off",
+              native_available: false,
+              bark: { key: { configured: true } },
+              pushover: {
+                token: { configured: false },
+                user: { configured: false },
+              },
+              webhook: {
+                url: { configured: false },
+                secret: { configured: false },
+              },
+            }),
+          ),
+      ),
+    );
+    mount(<DeliveryEditor />, "zh-CN");
+    const select = await screen.findByLabelText(
+      catalog["ui.notification_language"],
+    );
+    expect((select as HTMLSelectElement).value).toBe(expected);
+  },
+);

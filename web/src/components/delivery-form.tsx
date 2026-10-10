@@ -1,3 +1,4 @@
+import type { NativePairing } from "./native-devices";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -76,7 +77,7 @@ function DeliveryFields({
   reload: () => void;
   onSaved?: () => void;
 }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const toast = useToast();
   const client = useQueryClient();
   const [error, setError] = useState<unknown>();
@@ -91,7 +92,7 @@ function DeliveryFields({
       channel: initial.channel || "bark",
       preview: initial.preview || "off",
       retry_count: initial.retry_count,
-      language: initial.language || "en",
+      language: initial.channel ? initial.language : language,
       endpoint: initial.bark.endpoint || "https://api.day.app",
       bark_key: "",
       pushover_token: "",
@@ -101,8 +102,18 @@ function DeliveryFields({
     },
   });
   const channel = watch("channel");
+  const devices = useQuery({
+    queryKey: ["native-devices"],
+    queryFn: () => api<{ devices: NativePairing[] }>("/native/devices"),
+    enabled: channel === "native" && initial.native_available,
+    refetchInterval: channel === "native" ? 3000 : false,
+  });
+  const canTest =
+    channel !== "native" ||
+    !!devices.data?.devices.some((device) => device.status === "active");
   async function submit(values: Values, test = false) {
     setError(undefined);
+    if (test && !canTest) return;
     if (test) setTesting(true);
     try {
       await api(`/settings/delivery${test ? "/test" : ""}`, {
@@ -147,7 +158,7 @@ function DeliveryFields({
   );
   return (
     <form
-      className="max-w-[760px] flex flex-col gap-4"
+      className="flex w-full flex-col gap-4"
       noValidate
       onSubmit={handleSubmit((values) => submit(values))}
     >
@@ -189,7 +200,21 @@ function DeliveryFields({
           </>
         )}
         {channel === "native" ? (
-          <p className="text-muted-foreground">{t("ui.native_encrypted")}</p>
+          <div className="flex flex-col gap-2">
+            <p className="text-muted-foreground">{t("ui.native_encrypted")}</p>
+            <ErrorNotice error={devices.error} />
+            {!devices.isPending && !devices.error && !canTest && (
+              <p className="text-sm text-muted-foreground">
+                {t("ui.pair_before_test")}
+              </p>
+            )}
+            <a
+              className="text-sm text-primary underline underline-offset-4"
+              href="#/app_settings"
+            >
+              {t("ui.app_pairing_link")}
+            </a>
+          </div>
         ) : (
           <FieldSet>
             <FieldLegend>{t("ui.preview")}</FieldLegend>
@@ -242,7 +267,7 @@ function DeliveryFields({
           type="button"
           variant="outline"
           busy={testing}
-          disabled={isSubmitting}
+          disabled={isSubmitting || !canTest}
           onClick={() => void handleSubmit((values) => submit(values, true))()}
         >
           {t("ui.test_notification")}

@@ -5,29 +5,25 @@ import { AppearanceControls } from "./appearance-controls";
 import { Brand } from "./shell";
 import { MailboxEditor } from "./mailbox-form";
 import { SubscriptionsEditor } from "./subscriptions-form";
-import { DeliveryEditor } from "./delivery-form";
 import { Button } from "./ui/button";
 import { Panel } from "./common";
 export function SetupWizard({ done }: { done: () => void }) {
   const { t } = useI18n();
   const [step, setStep] = useState(0);
   const [mailbox, setMailbox] = useState<Mailbox>();
+  const [roles, setRoles] = useState<Record<string, string>>({});
   const [folders, setFolders] = useState<string[]>([]);
-  const titles = [
-    "ui.setup_mailbox",
-    "ui.setup_folders",
-    "ui.setup_notifications",
-  ];
+  const titles = ["ui.setup_mailbox", "ui.setup_folders"];
   return (
-    <main className="flex min-h-svh items-center justify-center p-6 md:p-10">
-      <div className="flex w-full max-w-sm flex-col gap-6">
+    <main className="flex min-h-svh items-start justify-center p-4 sm:p-6 md:p-10">
+      <div className="flex w-full max-w-[960px] flex-col gap-6">
         <Brand />
         <AppearanceControls compact />
         <h1 className="text-2xl font-semibold tracking-tight">
           {t("ui.setup")}
         </h1>
         <p className="text-muted-foreground" role="status">
-          {t("ui.setup_step", { step: step + 2, total: 4 })}
+          {t("ui.setup_step", { step: step + 2, total: 3 })}
         </p>
         <div
           className="flex flex-wrap gap-2"
@@ -47,7 +43,8 @@ export function SetupWizard({ done }: { done: () => void }) {
           <div className="p-4 md:p-5">
             {step === 0 && (
               <MailboxEditor
-                onSaved={(mailbox, folders) => {
+                onSaved={(mailbox, folders, roles) => {
+                  setRoles(roles ?? {});
                   setMailbox(mailbox);
                   setFolders(folders);
                   setStep(1);
@@ -58,24 +55,16 @@ export function SetupWizard({ done }: { done: () => void }) {
               <SubscriptionsEditor
                 mailbox={mailbox}
                 discovered={folders}
-                onSaved={() => setStep(2)}
+                roles={roles}
+                onSaved={done}
               />
             )}
-            {step === 2 && <DeliveryEditor onSaved={done} />}
           </div>
         </Panel>
         <div className="flex flex-wrap items-center gap-3">
-          <Button
-            variant="ghost"
-            onClick={() => (step < 2 ? setStep(2) : done())}
-          >
+          <Button variant="ghost" onClick={done}>
             {t("ui.skip_step")}
           </Button>
-          {step === 2 && (
-            <Button variant="outline" onClick={done}>
-              {t("ui.finish_later")}
-            </Button>
-          )}
         </div>
       </div>
     </main>

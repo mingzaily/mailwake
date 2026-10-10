@@ -12,7 +12,7 @@ export function Deliveries() {
         description={t("ui.deliveries_description")}
       />
       <ErrorNotice error={query.error} />
-      <Panel title={t("ui.recent_deliveries")}>
+      <Panel>
         <DeliveryTable deliveries={query.data?.deliveries ?? []} />
       </Panel>
     </>

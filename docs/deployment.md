@@ -23,7 +23,7 @@ The first build downloads base images, Go modules and npm dependencies. Core use
 
 Use [compose.1panel.yaml](../compose.1panel.yaml) for the optional root-user deployment with `./data:/data`. Copy it into a dedicated 1Panel Compose directory as `docker-compose.yml`. The external `1panel-network` must already exist. The default Compose remains non-root with a named volume.
 
-The example uses the `v1.0.0-rc.2` image. For sandbox App testing, add `MAILWAKE_RELAY_URL=https://notify-sandbox.mailwake.oritx.com` to the project's `.env`; an empty value selects the production Relay.
+The example uses the `v1.0.0-rc.3` image. For sandbox App testing, add `MAILWAKE_RELAY_URL=https://notify-sandbox.mailwake.oritx.com` to the project's `.env`; an empty value selects the production Relay.
 
 ```sh
 docker compose up -d

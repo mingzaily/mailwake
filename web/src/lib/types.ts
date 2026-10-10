@@ -96,3 +96,8 @@ export type Diagnostics = {
     arch: string;
   };
 };
+
+export type FolderDiscovery = {
+  folders: string[];
+  folder_roles?: Record<string, string>;
+};

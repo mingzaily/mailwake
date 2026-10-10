@@ -2,6 +2,15 @@
 
 All notable changes to Mailwake Core are documented here. Versions follow [Semantic Versioning](https://semver.org); before 1.0.0, minor versions may change configuration.
 
+## [1.0.0-rc.3] - 2026-10-10
+
+- Simplify initial setup to three steps and add IMAP quick-fill presets for QQ, 163, Yahoo and Gmail.
+- Localize standard mailbox folders using IMAP special-use metadata while preserving original subscription paths.
+- Separate App management from notification settings and guide users to pair a phone before testing App notifications.
+- Refine console layouts, account navigation, appearance controls, API token timestamps and diagnostic information.
+- Default new notification configurations to the console language and localize runtime log summaries.
+- Include the source commit in release binaries and container diagnostics.
+
 ## [1.0.0-rc.2] - 2026-10-10
 
 - Add an optional 1Panel Compose example using root and a host data directory; retain the default non-root deployment.

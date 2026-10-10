@@ -193,7 +193,7 @@ export function DeliveryTable({ deliveries }: { deliveries: Delivery[] }) {
                 {item.attempts}
               </TableCell>
               <TableCell>
-                <div className="truncate" title={item.last_error?.message}>
+                <div className="whitespace-normal break-words">
                   {item.last_error?.message ?? "—"}
                 </div>
               </TableCell>

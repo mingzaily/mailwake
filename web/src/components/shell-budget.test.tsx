@@ -116,7 +116,7 @@ test.each([
     for (const footer of footers) {
       expect(within(footer).queryByText("连接额度")).toBeNull();
       expect(
-        within(footer).getByRole("button", { name: "退出登录", hidden: true }),
+        within(footer).getByRole("button", { name: "账户菜单", hidden: true }),
       ).toBeTruthy();
     }
   },

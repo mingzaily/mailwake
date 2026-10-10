@@ -132,18 +132,19 @@ test("logs render rounded retry duration, mailbox labels and unknown IDs", async
   expect((await screen.findByTitle("mbx_work")).textContent).toBe("工作邮箱");
   expect(screen.getByText("mbx_deleted")).toBeTruthy();
 });
-test("setup shows step 1 of 4 and only the short password hint", () => {
+test("setup shows step 1 of 3 and only the short password hint", () => {
   mount(<AuthForm setup onSuccess={() => {}} />);
-  expect(screen.getByText("第 1 / 4 步")).toBeTruthy();
+  expect(screen.getByText("第 1 / 3 步")).toBeTruthy();
   expect(screen.getByText("至少 12 个字符")).toBeTruthy();
   expect(screen.queryByText(/1024/)).toBeNull();
 });
-test("skipping mailbox setup advances from step 2 to step 4", async () => {
+test("skipping mailbox setup exits the three-step wizard", async () => {
   mockAPI();
-  mount(<SetupWizard done={() => {}} />);
-  expect(screen.getByText("第 2 / 4 步")).toBeTruthy();
+  const done = vi.fn();
+  mount(<SetupWizard done={done} />);
+  expect(screen.getByText("第 2 / 3 步")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "暂时跳过" }));
-  expect(await screen.findByText("第 4 / 4 步")).toBeTruthy();
+  expect(done).toHaveBeenCalledOnce();
 });
 test("an oversized UTF-8 password shows the limit only after validation", async () => {
   const fetchMock = vi.fn();
@@ -176,4 +177,28 @@ test("login landmarks separate account entry from appearance preferences", () =>
   expect(within(main).queryByRole("combobox")).toBeNull();
   expect(screen.getByRole("button", { name: /^语言:/ })).toBeTruthy();
   expect(screen.getByRole("button", { name: /^主题:/ })).toBeTruthy();
+});
+
+test("logs localize summaries and keep original messages in collapsed technical details", async () => {
+  mockAPI(
+    {},
+    {
+      next: 1,
+      entries: [
+        {
+          seq: 1,
+          time: "2026-10-10T01:00:00Z",
+          level: "info",
+          message: "Administrator login succeeded",
+          attrs: { revision: 2 },
+        },
+      ],
+    },
+  );
+  mount(<Logs />);
+  expect(await screen.findByText("管理员登录成功")).toBeTruthy();
+  const details = screen.getByText("技术详情").closest("details")!;
+  expect(details.open).toBe(false);
+  expect(details.textContent).toContain("Administrator login succeeded");
+  expect(details.textContent).toContain('"revision": 2');
 });

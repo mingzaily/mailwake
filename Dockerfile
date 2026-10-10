@@ -9,13 +9,14 @@ RUN npm run build
 
 FROM golang:1.25.14-alpine AS build
 ARG VERSION=devel
+ARG REVISION
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=web /src/internal/httpapi/webdist ./internal/httpapi/webdist
 RUN CGO_ENABLED=0 go build -tags nomsgpack -trimpath \
-    -ldflags="-s -w -X github.com/mingzaily/mailwake/internal/buildinfo.Version=${VERSION}" \
+    -ldflags="-s -w -X github.com/mingzaily/mailwake/internal/buildinfo.Version=${VERSION} -X github.com/mingzaily/mailwake/internal/buildinfo.Revision=${REVISION}" \
     -o /out/mailwake ./cmd/mailwake
 
 FROM alpine:3.22

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, APIError } from "@/lib/api";
@@ -8,7 +8,6 @@ import { AppearanceControls } from "@/components/appearance-controls";
 import type { Token } from "@/lib/types";
 import {
   BusyButton,
-  EmptyState,
   ErrorNotice,
   InlineConfirm,
   PageHeading,
@@ -18,7 +17,13 @@ import {
   useToast,
 } from "@/components/common";
 import { Button } from "@/components/ui/button";
-import { FieldGroup } from "@/components/ui/field";
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -30,13 +35,13 @@ import {
 export function Settings() {
   const { t } = useI18n();
   return (
-    <>
+    <div className="mx-auto flex w-full max-w-[960px] flex-col gap-5">
       <PageHeading
         title={t("ui.settings")}
         description={t("ui.settings_description")}
       />
       <Panel title={t("ui.preferences")}>
-        <div className="p-4 md:p-5 max-w-[760px]">
+        <div className="p-5 md:p-6">
           <AppearanceControls />
         </div>
       </Panel>
@@ -50,7 +55,7 @@ export function Settings() {
           <Tokens />
         </div>
       </Panel>
-    </>
+    </div>
   );
 }
 function PasswordForm() {
@@ -88,7 +93,7 @@ function PasswordForm() {
   }
   return (
     <form
-      className="max-w-[760px] flex flex-col gap-4"
+      className="w-full flex flex-col gap-4"
       noValidate
       onSubmit={handleSubmit(submit)}
     >
@@ -116,13 +121,14 @@ function PasswordForm() {
           })}
         />
       </FieldGroup>
-      <BusyButton type="submit" busy={isSubmitting}>
+      <BusyButton className="self-start" type="submit" busy={isSubmitting}>
         {t("ui.change_password")}
       </BusyButton>
     </form>
   );
 }
 function Tokens() {
+  const nameID = useId();
   const { t } = useI18n();
   const toast = useToast();
   const client = useQueryClient();
@@ -176,7 +182,7 @@ function Tokens() {
   }
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-muted-foreground">{t("ui.tokens_hint")}</p>
+      <p className="text-sm text-muted-foreground">{t("ui.tokens_hint")}</p>
       <ErrorNotice error={error ?? query.error} />
       {secret ? (
         <div className="flex flex-col gap-4">
@@ -196,20 +202,35 @@ function Tokens() {
         </div>
       ) : (
         <form
-          className="max-w-[760px] flex flex-col gap-4"
+          className="w-full max-w-xl"
           noValidate
           onSubmit={handleSubmit(create)}
         >
-          <TextField
-            label={t("ui.token_name")}
-            placeholder={t("ui.token_name_example")}
-            autoComplete="off"
-            error={errors.name?.message}
-            {...register("name", { required: t("ui.required") })}
-          />
-          <BusyButton type="submit" busy={isSubmitting}>
-            {t("ui.create_token")}
-          </BusyButton>
+          <Field data-invalid={!!errors.name}>
+            <FieldLabel htmlFor={nameID}>{t("ui.token_name")}</FieldLabel>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Input
+                id={nameID}
+                placeholder={t("ui.token_name_example")}
+                autoComplete="off"
+                aria-invalid={!!errors.name}
+                aria-describedby={errors.name ? `${nameID}-error` : undefined}
+                {...register("name", { required: t("ui.required") })}
+              />
+              <BusyButton
+                className="self-start"
+                type="submit"
+                busy={isSubmitting}
+              >
+                {t("ui.create_token")}
+              </BusyButton>
+            </div>
+            {errors.name && (
+              <FieldError id={`${nameID}-error`}>
+                {errors.name.message}
+              </FieldError>
+            )}
+          </Field>
         </form>
       )}
       {query.data?.tokens.length ? (
@@ -217,35 +238,46 @@ function Tokens() {
           <TableHeader>
             <TableRow>
               <TableHead>{t("ui.token_name")}</TableHead>
-              <TableHead>{t("ui.time")}</TableHead>
-              <TableHead>{t("ui.revoke")}</TableHead>
+              <TableHead>{t("ui.created_at")}</TableHead>
+              <TableHead>{t("ui.last_used_at")}</TableHead>
+              <TableHead className="text-center">{t("ui.actions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {query.data.tokens.map((token) => (
               <TableRow key={token.id}>
-                <TableCell>{token.name}</TableCell>
-                <TableCell>
-                  <Time value={token.created_at} />
-                  <div className="text-muted-foreground text-xs">
-                    <Time value={token.last_used_at} />
-                  </div>
+                <TableCell className="max-w-64 whitespace-normal break-words">
+                  {token.name}
                 </TableCell>
                 <TableCell>
-                  <InlineConfirm
-                    label={t("ui.revoke")}
-                    question={t("ui.revoke_question", { name: token.name })}
-                    confirm={t("ui.confirm_revoke")}
-                    busy={busy === token.id}
-                    onConfirm={() => revoke(token.id)}
-                  />
+                  <Time value={token.created_at} />
+                </TableCell>
+                <TableCell>
+                  {token.last_used_at ? (
+                    <Time value={token.last_used_at} />
+                  ) : (
+                    <span className="text-muted-foreground">
+                      {t("ui.never")}
+                    </span>
+                  )}
+                </TableCell>
+                <TableCell className="text-center">
+                  <div className="inline-flex text-left">
+                    <InlineConfirm
+                      label={t("ui.revoke")}
+                      question={t("ui.revoke_question", { name: token.name })}
+                      confirm={t("ui.confirm_revoke")}
+                      busy={busy === token.id}
+                      onConfirm={() => revoke(token.id)}
+                    />
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       ) : (
-        <EmptyState message={t("ui.no_tokens")} />
+        <p className="text-sm text-muted-foreground">{t("ui.no_tokens")}</p>
       )}
     </div>
   );

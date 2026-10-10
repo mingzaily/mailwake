@@ -47,7 +47,7 @@ func TestIdentificationBeforeFolderCommands(t *testing.T) {
 					session.Close()
 				} else {
 					folders, err := source.Folders(t.Context())
-					if err != nil || !slices.Equal(folders, []string{"Clients"}) {
+					if err != nil || !slices.Equal(folders.Folders, []string{"Clients"}) {
 						t.Fatalf("folders = %v, error = %v", folders, err)
 					}
 				}

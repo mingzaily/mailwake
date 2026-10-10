@@ -32,7 +32,7 @@ type scheduledSource struct {
 func newScheduledSource() *scheduledSource {
 	return &scheduledSource{realtime: map[string]int{}, stopped: map[string]int{}, arrivals: map[string]int{}, polls: make(chan scheduledPoll, 100)}
 }
-func (s *scheduledSource) Folders(context.Context) ([]string, error) { return nil, nil }
+func (s *scheduledSource) Folders(context.Context) (*mail.FolderDiscovery, error) { return nil, nil }
 func (s *scheduledSource) Open(_ context.Context, name string) (mail.Session, error) {
 	s.mu.Lock()
 	s.realtime[name]++
