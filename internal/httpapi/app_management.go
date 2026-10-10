@@ -22,6 +22,8 @@ type appRoute struct {
 }
 
 var appRoutes = map[string]appRoute{
+	"GET /folder-mailboxes":              {"folders", false},
+	"GET /native/devices":                {"channels", false},
 	"POST /content":                      {"content", false},
 	"GET /mailboxes":                     {"mailboxes", false},
 	"POST /mailboxes":                    {"mailboxes", true},
@@ -145,6 +147,28 @@ func appManagementRoutes(r *gin.Engine, admin *gin.RouterGroup, runtime Runtime,
 			return
 		}
 		c.JSON(200, result)
+	})
+	app.GET("/folder-mailboxes", func(c *gin.Context) {
+		items := []gin.H{}
+		for _, mailbox := range runtime.Mailboxes() {
+			items = append(items, gin.H{"id": mailbox["id"], "label": mailbox["label"],
+				"revision": mailbox["revision"], "connection_limit": mailbox["connection_limit"]})
+		}
+		c.JSON(200, gin.H{"mailboxes": items})
+	})
+	app.GET("/native/devices", func(c *gin.Context) {
+		devices, err := store.NativeDevices(c.Request.Context())
+		if err != nil {
+			databaseError(c)
+			return
+		}
+		items := []gin.H{}
+		for _, device := range devices {
+			if device.State == "active" {
+				items = append(items, gin.H{"id": device.ID, "device_name": device.DeviceName, "device_id": device.DeviceID})
+			}
+		}
+		c.JSON(200, gin.H{"devices": items})
 	})
 	mailboxRoutes(app, runtime)
 	settingsRoutes(app, runtime)

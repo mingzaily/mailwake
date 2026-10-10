@@ -34,3 +34,8 @@ Platform 轮换签发密钥时：先把新 kid 加入信任并重启 Core，Plat
 owner 单独授予 `content`，范围为此 Core 当前全部已订阅 Folder。`POST /api/v1/app/content` 使用同一 controller 凭证，但商业资格来自独立 purpose=`native_push` 和 `X-Mailwake-Native-Qualification`。配置读权限保持原范围；同一信任配置验证两类用途和 device/Core/environment/subject/有效期。请求实现位于 `internal/httpapi/app_management.go`，签名引用实现在 `internal/native/message_reference.go`；公开的合成测试向量位于 `internal/appmanagement/testdata/`。
 
 管理员通过 `GET /api/v1/device-invitations/{id}` 查询管理授权状态，返回 `id`、`status`、`device_name`、`expires_at`，状态为 `waiting`、`active`、`expired`、`revoked`。仅管理邀请的二维码据此结束等待；Native 配对继续使用 Native 状态接口。状态响应只含展示信息。
+
+## 订阅目录与 Native 接收设备
+
+- `GET /api/v1/app/folder-mailboxes` 使用 `folders` scope，免费返回 `{mailboxes:[{id,label,revision,connection_limit}]}`。它为单独订阅授权提供目录，不返回邮箱登录与凭据信息；邮箱配置接口继续要求 `mailboxes`。
+- `GET /api/v1/app/native/devices` 使用 `channels` scope，免费返回 `{devices:[{id,device_id,device_name}]}`，仅包含当前有效配对。保存 Native 通知配置时使用所选 `id` 作为 `native_pairing_id`；更新配置继续要求有效 AppManagement 资格。

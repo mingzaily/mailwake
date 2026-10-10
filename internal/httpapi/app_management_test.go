@@ -42,7 +42,7 @@ type appFixture struct {
 	service *appmanagement.Service
 }
 
-func newAppFixture(t *testing.T) appFixture {
+func newAppFixture(t *testing.T, runtimes ...Runtime) appFixture {
 	t.Helper()
 	dir := t.TempDir()
 	store, err := storage.Open(t.Context(), dir)
@@ -67,7 +67,11 @@ func newAppFixture(t *testing.T) appFixture {
 		t.Fatal(err)
 	}
 	authService, grant := testAdministrator(t, store)
-	router := New(authService, appRuntime{newTestRuntime("bark", nil, nil), service}, store, log)
+	base := Runtime(newTestRuntime("bark", nil, nil))
+	if len(runtimes) > 0 {
+		base = runtimes[0]
+	}
+	router := New(authService, appRuntime{base, service}, store, log)
 	return appFixture{router, grant, identity.ID, issuer, service}
 }
 
@@ -280,5 +284,86 @@ func TestContentRequiresOwnerScopeAndNativeQualification(t *testing.T) {
 	f.do(t, "DELETE", "/api/v1/app/controller", nil, headers)
 	if w := f.do(t, "POST", "/api/v1/app/content", map[string]any{}, headers); w.Code != 401 {
 		t.Fatal(w.Code, w.Body.String())
+	}
+}
+
+type folderDirectoryRuntime struct{ Runtime }
+
+func (folderDirectoryRuntime) Mailboxes() []map[string]any {
+	return []map[string]any{{"id": "mail", "label": "Work", "revision": int64(2), "connection_limit": 5,
+		"host": "imap.private.test", "username": "owner@private.test", "password": map[string]bool{"configured": true}}}
+}
+func TestFolderOnlyControllerCanReadMailboxDirectoryWithoutMailboxAccess(t *testing.T) {
+	f := newAppFixture(t, folderDirectoryRuntime{newTestRuntime("bark", nil, nil)})
+	credential, _ := f.invite(t, []string{"folders"})
+	bearer := map[string]string{"Authorization": "Bearer " + credential}
+	w := f.do(t, "GET", "/api/v1/app/folder-mailboxes", nil, bearer)
+	if w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	var directory struct {
+		Mailboxes []map[string]any `json:"mailboxes"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &directory); err != nil {
+		t.Fatal(err)
+	}
+	if len(directory.Mailboxes) != 1 {
+		t.Fatal(directory)
+	}
+	mailbox := directory.Mailboxes[0]
+	if mailbox["id"] != "mail" || mailbox["label"] != "Work" || mailbox["connection_limit"] != float64(5) {
+		t.Fatal(mailbox)
+	}
+	for _, field := range []string{"host", "username", "password"} {
+		if _, exists := mailbox[field]; exists {
+			t.Fatal("mailbox login exposed", field)
+		}
+	}
+	for _, path := range []string{"/api/v1/app/mailboxes", "/api/v1/app/native/devices"} {
+		if w := f.do(t, "GET", path, nil, bearer); w.Code != 403 {
+			t.Fatal(path, w.Code)
+		}
+	}
+	other, _ := f.invite(t, []string{"diagnostics"})
+	if w := f.do(t, "GET", "/api/v1/app/folder-mailboxes", nil, map[string]string{"Authorization": "Bearer " + other}); w.Code != 403 {
+		t.Fatal(w.Code)
+	}
+}
+
+func TestChannelControllerCanListReceivingDevicesWithoutCommercialQualification(t *testing.T) {
+	f := newAppFixture(t)
+	for _, id := range []string{"active-phone", "revoked-phone"} {
+		pairing := storage.NativePairing{ID: id, DeviceID: id, DeviceName: "iPhone", TokenHash: id, CreatedAt: time.Now().Unix(), ExpiresAt: time.Now().Add(time.Hour).Unix()}
+		if err := f.service.Store.CreateNativePairing(t.Context(), pairing); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.service.Store.SelectNativeDevice(t.Context(), pairing); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.service.Store.FinishNativePairing(t.Context(), id, "active", ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := f.service.Store.RevokeNativePairing(t.Context(), "revoked-phone"); err != nil {
+		t.Fatal(err)
+	}
+	credential, _ := f.invite(t, []string{"channels"})
+	w := f.do(t, "GET", "/api/v1/app/native/devices", nil, map[string]string{"Authorization": "Bearer " + credential})
+	if w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	var response struct {
+		Devices []map[string]any `json:"devices"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if len(response.Devices) != 1 || response.Devices[0]["id"] != "active-phone" || response.Devices[0]["device_name"] != "iPhone" {
+		t.Fatal(response)
+	}
+	for _, field := range []string{"token_hash", "encrypted_token", "signing_key", "encryption_key"} {
+		if _, exists := response.Devices[0][field]; exists {
+			t.Fatal("pairing secret exposed", field)
+		}
 	}
 }
