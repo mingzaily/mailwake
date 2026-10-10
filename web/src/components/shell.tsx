@@ -6,8 +6,9 @@ import {
   CircleHelp,
   FileText,
   Gauge,
+  CodeXml,
+  PanelLeft,
   Mail,
-  Menu,
   Settings,
   ShieldCheck,
   Smartphone,
@@ -29,8 +30,17 @@ import {
   SidebarMenuSub,
   SidebarMenuSubItem,
   SidebarMenuSubButton,
-  SidebarSeparator,
 } from "./ui/sidebar";
+import {
+  Breadcrumb,
+  BreadcrumbList,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "./ui/breadcrumb";
+import { Separator } from "./ui/separator";
+import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
 import {
   Popover,
@@ -150,14 +160,11 @@ export function Shell({
   const boxes = useMailboxes();
   const status = useStatus();
   const dialog = useRef<HTMLDialogElement>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const selected =
     page === "mailboxes"
       ? boxes.data?.mailboxes.find((box) => box.id === mailboxId)
       : undefined;
-  const folders =
-    status.data?.folders
-      .filter((folder) => folder.mailbox_id === selected?.id)
-      .map((folder) => ({ name: folder.folder, check: folder.check })) ?? [];
   const rail = (
     <>
       <SidebarHeader className="p-4">
@@ -165,7 +172,7 @@ export function Shell({
       </SidebarHeader>
       <SidebarContent className="px-3 py-2">
         <nav aria-label={t("ui.navigation")}>
-          <SidebarMenu className="gap-2">
+          <SidebarMenu className="gap-1">
             {pages.map(({ id, icon: Icon }) => (
               <SidebarMenuItem key={id}>
                 <SidebarMenuButton
@@ -215,16 +222,21 @@ export function Shell({
           </SidebarMenu>
         </nav>
       </SidebarContent>
-      <SidebarSeparator className="mx-4 data-[orientation=horizontal]:w-auto" />
-      <SidebarFooter className="gap-4 p-4">
-        {selected && (
-          <div className="flex min-w-0 flex-col gap-2">
-            <p className="truncate text-xs font-medium" title={selected.label}>
-              {selected.label}
-            </p>
-            <Budget folders={folders} limit={selected.connection_limit} />
-          </div>
-        )}
+      <SidebarFooter className="gap-1 px-3 pt-2 pb-3">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild>
+              <a
+                href="https://github.com/mingzaily/mailwake"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <CodeXml aria-hidden="true" />
+                <span>{t("ui.github_repository")}</span>
+              </a>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
         <AccountMenu username={username} logout={logout} />
       </SidebarFooter>
     </>
@@ -243,7 +255,10 @@ export function Shell({
       </a>
       <Sidebar
         collapsible="none"
-        className="sticky top-0 hidden h-svh shrink-0 border-r md:flex"
+        className={cn(
+          "sticky top-0 hidden h-svh shrink-0 border-r",
+          sidebarOpen && "md:flex",
+        )}
       >
         {rail}
       </Sidebar>
@@ -278,9 +293,60 @@ export function Shell({
             aria-label={t("ui.menu")}
             onClick={() => dialog.current?.showModal()}
           >
-            <Menu aria-hidden="true" />
+            <PanelLeft aria-hidden="true" />
           </Button>
-          <div className="hidden flex-1 items-center gap-4 text-xs text-muted-foreground min-[900px]:flex">
+          <Button
+            className="hidden md:inline-flex"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={t("ui.toggle_sidebar")}
+            aria-expanded={sidebarOpen}
+            onClick={() => setSidebarOpen((open) => !open)}
+          >
+            <PanelLeft aria-hidden="true" />
+          </Button>
+          <Separator
+            orientation="vertical"
+            className="data-[orientation=vertical]:h-4"
+          />
+          <Breadcrumb
+            aria-label={t("ui.breadcrumb")}
+            className="min-w-0 flex-1"
+          >
+            <BreadcrumbList className="flex-nowrap">
+              <BreadcrumbItem className="shrink-0">
+                <BreadcrumbLink href="#/overview">
+                  {t("ui.brand")}
+                </BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem className="min-w-0">
+                {selected || (page === "mailboxes" && mailboxId === "new") ? (
+                  <BreadcrumbLink href="#/mailboxes">
+                    {t("ui.mailboxes")}
+                  </BreadcrumbLink>
+                ) : (
+                  <BreadcrumbPage className="truncate">
+                    {t(`ui.${page}`)}
+                  </BreadcrumbPage>
+                )}
+              </BreadcrumbItem>
+              {(selected || (page === "mailboxes" && mailboxId === "new")) && (
+                <>
+                  <BreadcrumbSeparator />
+                  <BreadcrumbItem className="min-w-0">
+                    <BreadcrumbPage
+                      className="truncate"
+                      title={selected?.label}
+                    >
+                      {selected?.label ?? t("ui.add_mailbox")}
+                    </BreadcrumbPage>
+                  </BreadcrumbItem>
+                </>
+              )}
+            </BreadcrumbList>
+          </Breadcrumb>
+          <div className="hidden shrink-0 items-center gap-4 text-sm font-normal text-muted-foreground min-[1100px]:flex">
             {[
               [t("ui.mailboxes"), boxes.data?.mailboxes.length],
               [
@@ -296,19 +362,16 @@ export function Shell({
             ].map(([label, count]) => (
               <span key={label} title={String(label)}>
                 <span>{label} </span>
-                <b className="font-mono font-medium text-foreground tabular-nums">
+                <span className="text-foreground tabular-nums">
                   {count ?? "—"}
-                </b>
+                </span>
               </span>
             ))}
           </div>
-          <span className="text-muted-foreground text-xs">
-            {t(`ui.${page}`)}
-          </span>
         </header>
         <main
           id="main-content"
-          className="mx-auto grid w-full max-w-[1440px] content-start gap-5 px-4 pt-6 pb-9 md:px-7 md:pb-12"
+          className="mx-auto grid w-full max-w-[1440px] grid-cols-1 content-start gap-5 px-4 pt-6 pb-9 md:px-7 md:pb-12"
           tabIndex={-1}
         >
           <ErrorNotice

@@ -1,5 +1,7 @@
 import { useRef, useState } from "react";
-import { ChevronsUpDown, LogOut, Settings, UserRound } from "lucide-react";
+import { ChevronsUpDown, LogOut, Settings } from "lucide-react";
+// Avatar from the shadcn sidebar-08 example (web/SHADCN-LICENSE).
+import defaultAvatar from "@/assets/default-avatar.jpg";
 import { useI18n } from "@/lib/i18n";
 import { SidebarMenu, SidebarMenuItem, SidebarMenuButton } from "./ui/sidebar";
 import {
@@ -37,11 +39,15 @@ export function AccountMenu({
               size="lg"
               aria-label={t("ui.account_menu")}
             >
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-sidebar-accent">
-                <UserRound aria-hidden="true" className="size-5" />
-              </span>
-              <span className="grid min-w-0 flex-1 gap-0.5 text-left">
-                <span className="truncate font-semibold" title={username}>
+              <img
+                src={defaultAvatar}
+                alt=""
+                width={32}
+                height={32}
+                className="size-8 shrink-0 rounded-lg object-cover"
+              />
+              <span className="grid min-w-0 flex-1 gap-0.5 text-left leading-tight">
+                <span className="truncate font-medium" title={username}>
                   {username ?? t("ui.administrator")}
                 </span>
                 <span className="text-xs text-muted-foreground">

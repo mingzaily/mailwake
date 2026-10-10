@@ -55,7 +55,7 @@ export function Mailboxes({ id, view }: { id?: string; view?: string }) {
           title={t("ui.add_mailbox")}
           actions={<a href="#/mailboxes">{t("ui.back_mailboxes")}</a>}
         />
-        <Panel title={t("ui.mailbox")}>
+        <Panel>
           <div className="p-4 md:p-5">
             <MailboxEditor
               onSaved={(mailbox) => navigate(`mailboxes/${mailbox.id}`)}
@@ -84,9 +84,9 @@ export function Mailboxes({ id, view }: { id?: string; view?: string }) {
         }
       />
       <ErrorNotice error={error} />
-      <Panel title={t("ui.mailboxes")}>
+      <Panel>
         {boxes.data?.mailboxes.length ? (
-          <Table>
+          <Table className="[&_th]:h-12 [&_th]:px-5 [&_td]:px-5 [&_td]:py-4">
             <TableHeader>
               <TableRow>
                 {["label", "imap_host", "imap_port", "connection_limit"].map(
@@ -94,9 +94,7 @@ export function Mailboxes({ id, view }: { id?: string; view?: string }) {
                     <TableHead key={key}>{t(`ui.${key}`)}</TableHead>
                   ),
                 )}
-                <TableHead>
-                  <span className="sr-only">{t("ui.delete")}</span>
-                </TableHead>
+                <TableHead className="text-center">{t("ui.actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -114,7 +112,7 @@ export function Mailboxes({ id, view }: { id?: string; view?: string }) {
                   <TableCell className="font-mono text-[13px] tabular-nums">
                     {mailbox.connections_in_use} / {mailbox.connection_limit}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="text-center">
                     <InlineConfirm
                       label={t("ui.delete")}
                       question={t("ui.delete_question", {
@@ -185,7 +183,7 @@ function MailboxDetails({ id, settings }: { id: string; settings: boolean }) {
           {t("ui.mailbox_settings")}
         </a>
       </nav>
-      <ErrorNotice error={query.error ?? status.error} reload={reload} />
+      <ErrorNotice error={query.error} reload={reload} />
       {settings ? (
         <>
           {mailbox.label === mailbox.username &&
@@ -194,7 +192,7 @@ function MailboxDetails({ id, settings }: { id: string; settings: boolean }) {
                 <AlertDescription>{t("ui.rename_hint")}</AlertDescription>
               </Alert>
             )}
-          <Panel title={t("ui.mailbox_settings")}>
+          <Panel>
             <div className="p-4 md:p-5">
               <MailboxEditor
                 key={mailbox.revision}
@@ -210,7 +208,7 @@ function MailboxDetails({ id, settings }: { id: string; settings: boolean }) {
           </Panel>
         </>
       ) : (
-        <Panel title={t("ui.mailbox_status")}>
+        <Panel>
           <div className="p-4 md:p-5">
             <Budget
               folders={folders.map((folder) => ({
@@ -223,7 +221,7 @@ function MailboxDetails({ id, settings }: { id: string; settings: boolean }) {
           {status.isPending ? (
             <div className="p-4 md:p-5">{t("ui.loading")}</div>
           ) : folders.length ? (
-            <FolderTable folders={folders} />
+            <FolderTable folders={folders} showMailbox={false} />
           ) : (
             <EmptyState message={t("ui.scan_folders_hint")} />
           )}

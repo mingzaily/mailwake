@@ -1,6 +1,16 @@
-import { folderLabel } from "@/lib/folders";
+import { FolderName } from "./folder-name";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
+import { ChevronDown } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "./ui/dropdown-menu";
 import { Badge } from "./ui/badge";
 import { useId, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -26,10 +36,28 @@ import {
 import { BusyButton, ErrorNotice, TextField, useToast } from "./common";
 
 const imapPresets = [
-  { label: "ui.provider_qq", host: "imap.qq.com" },
-  { label: "ui.provider_163", host: "imap.163.com" },
-  { label: "ui.provider_yahoo", host: "imap.mail.yahoo.com" },
-  { label: "ui.provider_gmail", host: "imap.gmail.com" },
+  { group: "common", label: "ui.provider_qq", host: "imap.qq.com" },
+  { group: "common", label: "ui.provider_163", host: "imap.163.com" },
+  { group: "common", label: "ui.provider_126", host: "imap.126.com" },
+  { group: "personal", label: "ui.provider_yeah", host: "imap.yeah.net" },
+  { group: "common", label: "ui.provider_icloud", host: "imap.mail.me.com" },
+  {
+    group: "personal",
+    label: "ui.provider_yahoo",
+    host: "imap.mail.yahoo.com",
+  },
+  { group: "common", label: "ui.provider_gmail", host: "imap.gmail.com" },
+  {
+    group: "business",
+    label: "ui.provider_exmail",
+    host: "imap.exmail.qq.com",
+  },
+  { group: "personal", label: "ui.provider_aliyun", host: "imap.aliyun.com" },
+  {
+    group: "business",
+    label: "ui.provider_alibaba_business",
+    host: "imap.qiye.aliyun.com",
+  },
 ];
 
 export function MailboxEditor({
@@ -86,6 +114,14 @@ export function MailboxEditor({
         },
   });
   const values = watch();
+  const selectedPreset = imapPresets.find(
+    (preset) =>
+      preset.host === values.host.trim().toLowerCase() && values.port === 993,
+  );
+  function applyPreset(host: string) {
+    setValue("host", host, { shouldDirty: true, shouldValidate: true });
+    setValue("port", 993, { shouldDirty: true, shouldValidate: true });
+  }
   const overBudget =
     connectionUsage(subscriptions) > values.connection_limit - 1;
   const signature = JSON.stringify(mailboxPayload(values));
@@ -190,27 +226,57 @@ export function MailboxEditor({
               aria-label={t("ui.imap_quick_fill")}
               className="flex flex-wrap gap-2"
             >
-              {imapPresets.map((preset) => (
-                <Button
-                  key={preset.host}
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={busy || isSubmitting}
-                  onClick={() => {
-                    setValue("host", preset.host, {
-                      shouldDirty: true,
-                      shouldValidate: true,
-                    });
-                    setValue("port", 993, {
-                      shouldDirty: true,
-                      shouldValidate: true,
-                    });
-                  }}
-                >
-                  {t(preset.label)}
-                </Button>
-              ))}
+              {imapPresets
+                .filter((preset) => preset.group === "common")
+                .map((preset) => (
+                  <Button
+                    key={preset.host}
+                    type="button"
+                    variant="preset"
+                    size="xs"
+                    aria-pressed={selectedPreset === preset}
+                    disabled={busy || isSubmitting}
+                    onClick={() => applyPreset(preset.host)}
+                  >
+                    {t(preset.label)}
+                  </Button>
+                ))}
+              <DropdownMenu modal={false}>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="preset"
+                    size="xs"
+                    disabled={busy || isSubmitting}
+                  >
+                    {selectedPreset && selectedPreset.group !== "common"
+                      ? t(selectedPreset.label)
+                      : t("ui.more_mail_providers")}
+                    <ChevronDown />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  {["personal", "business"].map((group, index) => (
+                    <DropdownMenuGroup key={group}>
+                      {index > 0 && <DropdownMenuSeparator />}
+                      <DropdownMenuLabel>
+                        {t(`ui.mail_providers_${group}`)}
+                      </DropdownMenuLabel>
+                      {imapPresets
+                        .filter((preset) => preset.group === group)
+                        .map((preset) => (
+                          <DropdownMenuItem
+                            key={preset.host}
+                            disabled={busy || isSubmitting}
+                            onSelect={() => applyPreset(preset.host)}
+                          >
+                            {t(preset.label)}
+                          </DropdownMenuItem>
+                        ))}
+                    </DropdownMenuGroup>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
           <TextField
@@ -235,7 +301,7 @@ export function MailboxEditor({
             label={t("ui.mailbox_password")}
             type="password"
             autoComplete="new-password"
-            hint={
+            placeholder={
               mailbox?.password.configured ? t("ui.credential_kept") : undefined
             }
             error={message("password")}
@@ -294,14 +360,14 @@ export function MailboxEditor({
         )}
       </div>
       {tested?.signature === signature && (
-        <details className="text-sm text-muted-foreground">
+        <details open className="text-sm text-muted-foreground">
           <summary className="cursor-pointer rounded-sm focus-visible:outline-2 focus-visible:outline-ring">
             {t("ui.discovered_folder_count", { count: tested.folders.length })}
           </summary>
           <ul className="mt-3 grid max-h-40 grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2">
             {tested.folders.map((folder) => (
               <li key={folder} className="break-all" title={folder}>
-                {folderLabel(folder, tested.roles ?? {}, t)}
+                <FolderName name={folder} roles={tested.roles} />
               </li>
             ))}
           </ul>

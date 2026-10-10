@@ -10,7 +10,7 @@ export function Notifications() {
         title={t("ui.notifications")}
         description={t("ui.notifications_description")}
       />
-      <Panel title={t("ui.channel")}>
+      <Panel>
         <div className="p-4 md:p-5">
           <DeliveryEditor />
         </div>

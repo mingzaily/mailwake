@@ -83,22 +83,7 @@ function mount(page: string, mailboxId?: string) {
 afterEach(cleanup);
 
 test.each([
-  ["work", "工作邮箱", "1 / 9"],
-  ["personal", "个人邮箱", "2 / 4"],
-])(
-  "both sidebars label the current mailbox budget: %s",
-  (id, label, budget) => {
-    const footers = mount("mailboxes", id);
-    expect(footers).toHaveLength(2);
-    for (const footer of footers) {
-      expect(within(footer).getByText(label)).toBeTruthy();
-      expect(within(footer).getByText("连接额度")).toBeTruthy();
-      expect(within(footer).getByText(budget)).toBeTruthy();
-    }
-  },
-);
-
-test.each([
+  ["mailboxes", "work"],
   ["overview", undefined],
   ["notifications", undefined],
   ["deliveries", "personal"],
@@ -109,7 +94,7 @@ test.each([
   ["mailboxes", "new"],
   ["mailboxes", "missing"],
 ])(
-  "both sidebars hide budgets without a current mailbox: %s / %s",
+  "both sidebars keep connection budgets in page content: %s / %s",
   (page, id) => {
     const footers = mount(page, id);
     expect(footers).toHaveLength(2);
@@ -123,8 +108,14 @@ test.each([
 );
 
 test("budget help opens a popover explaining the provider limit", () => {
-  const [footer] = mount("mailboxes", "work");
-  const trigger = within(footer).getByRole("button", {
+  render(
+    <I18nContext.Provider
+      value={{ language: "zh-CN", catalog, setLanguage: () => {} }}
+    >
+      <Budget folders={[]} limit={10} />
+    </I18nContext.Provider>,
+  );
+  const trigger = screen.getByRole("button", {
     name: "连接额度说明",
     hidden: true,
   });
@@ -151,4 +142,29 @@ test("budget help renders inside a native dialog so it stays visible", () => {
   fireEvent.click(screen.getByRole("button", { name: "连接额度说明" }));
   const help = screen.getByText(/邮件服务商会限制/);
   expect(screen.getByTestId("scan-dialog").contains(help)).toBe(true);
+});
+
+test("mailbox breadcrumbs link back to the mailbox list", () => {
+  mount("mailboxes", "work");
+  const breadcrumb = screen.getByRole("navigation", { name: "当前位置" });
+  expect(
+    within(breadcrumb).getByRole("link", { name: "邮箱" }).getAttribute("href"),
+  ).toBe("#/mailboxes");
+  expect(
+    within(breadcrumb).getByText("工作邮箱").getAttribute("aria-current"),
+  ).toBe("page");
+});
+
+test("GitHub is available above the account menu in both sidebars", () => {
+  const footers = mount("settings");
+  for (const footer of footers) {
+    const link = within(footer).getByRole("link", {
+      name: "GitHub",
+      hidden: true,
+    });
+    expect(link.getAttribute("href")).toBe(
+      "https://github.com/mingzaily/mailwake",
+    );
+    expect(link.getAttribute("rel")).toBe("noopener noreferrer");
+  }
 });

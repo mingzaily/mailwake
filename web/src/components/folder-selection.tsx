@@ -1,3 +1,4 @@
+import { FolderName } from "./folder-name";
 import { folderLabel } from "@/lib/folders";
 import { useId } from "react";
 import { Checkbox } from "./ui/checkbox";
@@ -33,10 +34,6 @@ export function FolderSelection({
   const names = [
     ...new Set([...available, ...folders.map((folder) => folder.name)]),
   ].sort((a, b) => a.localeCompare(b));
-  const labels = names.map((name) => folderLabel(name, roles, t));
-  const labelCounts = new Map<string, number>();
-  for (const label of labels)
-    labelCounts.set(label, (labelCounts.get(label) ?? 0) + 1);
   const selectedFolders = new Map(
     folders.map((folder) => [folder.name, folder]),
   );
@@ -53,11 +50,9 @@ export function FolderSelection({
           </TableHeader>
           <TableBody>
             {names.map((name, index) => {
-              const translated = labels[index];
+              const translated = folderLabel(name, roles, t);
               const label =
-                translated !== name && labelCounts.get(translated)! > 1
-                  ? `${translated} (${name})`
-                  : translated;
+                translated === name ? name : `${translated} (${name})`;
               const selected = selectedFolders.get(name);
               return (
                 <TableRow key={name}>
@@ -80,7 +75,7 @@ export function FolderSelection({
                         htmlFor={`${id}-${index}`}
                         className="min-w-0 break-all"
                       >
-                        <span title={name}>{label}</span>
+                        <FolderName name={name} roles={roles} />
                       </FieldLabel>
                     </Field>
                   </TableCell>

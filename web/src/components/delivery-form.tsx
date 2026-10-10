@@ -148,7 +148,8 @@ function DeliveryFields({
       label={t(`ui.${name}`)}
       type="password"
       autoComplete="new-password"
-      hint={configured ? t("ui.credential_kept") : t("ui.credential_private")}
+      placeholder={configured ? t("ui.credential_kept") : undefined}
+      hint={configured ? undefined : t("ui.credential_private")}
       error={errors[name]?.message}
       {...register(name, {
         validate: (value) =>

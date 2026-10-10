@@ -71,3 +71,17 @@ func TestReminderTextAndSenderExclusion(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderUsesLeafFolderName(t *testing.T) {
+	for _, folder := range []string{"其他文件夹/CN区域", "Parent/Child/CN区域", "CN区域"} {
+		for _, locale := range []string{"en", "zh-CN"} {
+			n := event.Notification{Account: "工作邮箱", Folder: folder}
+			if got := Render(locale, n).Title; got != "工作邮箱 · CN区域" {
+				t.Fatalf("%s: %q", folder, got)
+			}
+			if n.Folder != folder {
+				t.Fatal("notification must retain its original folder path")
+			}
+		}
+	}
+}

@@ -2,6 +2,16 @@
 
 All notable changes to Mailwake Core are documented here. Versions follow [Semantic Versioning](https://semver.org); before 1.0.0, minor versions may change configuration.
 
+## [1.0.0-rc.4] - 2026-10-10
+
+- Refine sidebar navigation with breadcrumbs, a GitHub link, a default avatar and a desktop sidebar toggle; keep connection budgets on mailbox pages.
+- Simplify panel headings, increase mailbox table spacing and align operation columns.
+- Expand IMAP quick-fill presets to ten providers, with compact common shortcuts and a grouped menu for additional providers.
+- Show configured-credential hints inside inputs and expand discovered folders by default.
+- Localize common folder names even when servers omit special-use metadata, retaining original names beside translated labels.
+- Use the final slash-separated folder segment in rendered notification titles while preserving full paths in structured payloads.
+- Show shared monitoring connection errors once in the console shell.
+
 ## [1.0.0-rc.3] - 2026-10-10
 
 - Simplify initial setup to three steps and add IMAP quick-fill presets for QQ, 163, Yahoo and Gmail.

@@ -1,3 +1,4 @@
+import { FolderName } from "./folder-name";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -32,15 +33,21 @@ export function State({ value }: { value: string }) {
     </Badge>
   );
 }
-export function FolderTable({ folders }: { folders: FolderStatus[] }) {
+export function FolderTable({
+  folders,
+  showMailbox = true,
+}: {
+  folders: FolderStatus[];
+  showMailbox?: boolean;
+}) {
   const { t } = useI18n();
   if (!folders.length) return <EmptyState message={t("ui.mailbox_missing")} />;
   return (
-    <Table>
+    <Table className="[&_th]:h-12 [&_th]:px-5 [&_td]:px-5 [&_td]:py-4">
       <TableHeader>
         <TableRow>
           {[
-            "mailbox",
+            ...(showMailbox ? ["mailbox"] : []),
             "folder",
             "state",
             "check",
@@ -55,12 +62,16 @@ export function FolderTable({ folders }: { folders: FolderStatus[] }) {
       <TableBody>
         {folders.map((folder) => (
           <TableRow key={`${folder.mailbox_id}/${folder.folder}`}>
+            {showMailbox && (
+              <TableCell>
+                <a href={`#/mailboxes/${folder.mailbox_id}`}>
+                  {folder.mailbox_label}
+                </a>
+              </TableCell>
+            )}
             <TableCell>
-              <a href={`#/mailboxes/${folder.mailbox_id}`}>
-                {folder.mailbox_label}
-              </a>
+              <FolderName name={folder.folder} />
             </TableCell>
-            <TableCell>{folder.folder}</TableCell>
             <TableCell>
               <State value={folder.state} />
             </TableCell>

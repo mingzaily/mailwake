@@ -110,7 +110,9 @@ test("mailbox opens a dedicated monitoring page with a separate settings link", 
   mockAPI();
   mount(<Mailboxes id={mailbox.id} />);
   await screen.findByRole("heading", { name: "工作邮箱" });
-  expect(screen.getByRole("heading", { name: "监听状态" })).toBeTruthy();
+  expect(
+    screen.getByRole("link", { name: "监听状态" }).getAttribute("aria-current"),
+  ).toBe("page");
   expect(
     screen.getByRole("link", { name: "邮箱设置" }).getAttribute("href"),
   ).toBe("#/mailboxes/mbx_work/settings");

@@ -1,6 +1,8 @@
 package delivery
 
 import (
+	"strings"
+
 	"github.com/mingzaily/mailwake/internal/event"
 	"github.com/mingzaily/mailwake/internal/i18n"
 )
@@ -16,8 +18,9 @@ func Render(language string, n event.Notification) Message {
 	if n.Test {
 		return Message{Title: i18n.Message(language, "notification.test_title", nil), Body: i18n.Message(language, "notification.test_body", nil)}
 	}
+	folder := n.Folder[strings.LastIndex(n.Folder, "/")+1:]
 	m := Message{
-		Title: i18n.Message(language, "notification.title", map[string]string{"account": n.Account, "folder": Clip(n.Folder, 150)}),
+		Title: i18n.Message(language, "notification.title", map[string]string{"account": n.Account, "folder": Clip(folder, 150)}),
 		Body:  i18n.Message(language, "notification.new_mail", nil),
 	}
 	if n.Subject != "" {

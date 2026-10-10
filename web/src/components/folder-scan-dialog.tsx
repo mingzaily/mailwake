@@ -1,4 +1,4 @@
-import { folderLabel } from "@/lib/folders";
+import { FolderName } from "./folder-name";
 import type { FolderDiscovery } from "@/lib/types";
 import { useEffect, useId, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
@@ -263,7 +263,7 @@ export function FolderScanDialog({
                           {folders.map((folder) => (
                             <TableRow key={folder.name}>
                               <TableCell title={folder.name}>
-                                {folderLabel(folder.name, roles, t)}
+                                <FolderName name={folder.name} roles={roles} />
                               </TableCell>
                               <TableCell>
                                 {t(`ui.check_${folder.check}`)}

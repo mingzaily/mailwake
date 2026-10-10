@@ -227,6 +227,12 @@ test("a proxy HTML error preserves login input and explains how to reconnect", a
 test.each([
   ["QQ Mail", "imap.qq.com"],
   ["163 Mail", "imap.163.com"],
+  ["126 Mail", "imap.126.com"],
+  ["Yeah Mail", "imap.yeah.net"],
+  ["iCloud", "imap.mail.me.com"],
+  ["Tencent Exmail", "imap.exmail.qq.com"],
+  ["Alibaba Personal Mail", "imap.aliyun.com"],
+  ["Alibaba Business Mail", "imap.qiye.aliyun.com"],
   ["Yahoo", "imap.mail.yahoo.com"],
   ["Gmail", "imap.gmail.com"],
 ])(
@@ -238,7 +244,17 @@ test.each([
     vi.stubGlobal("fetch", fetchMock);
     const saved = vi.fn();
     mount(<MailboxEditor mailbox={{ ...box, port: 1993 }} onSaved={saved} />);
-    fireEvent.click(screen.getByRole("button", { name: provider }));
+    const shortcut = screen.queryByRole("button", { name: provider });
+    if (shortcut) {
+      fireEvent.click(shortcut);
+      expect(shortcut.getAttribute("aria-pressed")).toBe("true");
+    } else {
+      fireEvent.keyDown(
+        screen.getByRole("button", { name: "More mail providers" }),
+        { key: "ArrowDown" },
+      );
+      fireEvent.click(await screen.findByRole("menuitem", { name: provider }));
+    }
     expect(fetchMock).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(saved).toHaveBeenCalled());
@@ -274,7 +290,7 @@ test("IMAP shortcut keeps entered credentials and allows a custom endpoint", () 
   expect(input("ui.mailbox_password").value).toBe("synthetic-app-password");
 });
 
-test("connection results collapse folder names and disappear when the endpoint changes", async () => {
+test("connection results expand folder names and disappear when the endpoint changes", async () => {
   vi.stubGlobal(
     "fetch",
     vi.fn().mockResolvedValue(response({ folders: ["INBOX", "Archive"] })),
@@ -283,9 +299,9 @@ test("connection results collapse folder names and disappear when the endpoint c
   fireEvent.click(screen.getByRole("button", { name: "Test connection" }));
   const summary = await screen.findByText("Found 2 folders");
   const details = summary.closest("details")!;
-  expect(details.open).toBe(false);
-  fireEvent.click(summary);
   expect(details.open).toBe(true);
+  fireEvent.click(summary);
+  expect(details.open).toBe(false);
   expect(screen.getByText("Archive")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Gmail" }));
   expect(screen.queryByText("Found 2 folders")).toBeNull();
@@ -319,7 +335,9 @@ test("setup finishes after mailbox and folder selection without a notification s
     await screen.findByRole("button", { name: catalog["ui.save"] }),
   );
   expect(await screen.findByText("Step 3 / 3")).toBeTruthy();
-  fireEvent.click(await screen.findByRole("checkbox", { name: "Inbox" }));
+  fireEvent.click(
+    await screen.findByRole("checkbox", { name: "Inbox (INBOX)" }),
+  );
   fireEvent.click(screen.getByRole("button", { name: "Save and finish" }));
   await waitFor(() => expect(done).toHaveBeenCalledOnce());
 });
