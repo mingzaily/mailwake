@@ -2,6 +2,12 @@
 
 All notable changes to Mailwake Core are documented here. Versions follow [Semantic Versioning](https://semver.org); before 1.0.0, minor versions may change configuration.
 
+## [1.0.0-rc.2] - 2026-10-10
+
+- Add an optional 1Panel Compose example using root and a host data directory; retain the default non-root deployment.
+- Report actionable startup errors for data directory permissions, read-only filesystems, storage initialization and HTTP listener failures.
+- Use Mailwake consistently in the console loading screen and browser title.
+
 ## [1.0.0] - Unreleased
 
 First public release.

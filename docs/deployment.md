@@ -23,7 +23,7 @@ The first build downloads base images, Go modules and npm dependencies. Core use
 
 Use [compose.1panel.yaml](../compose.1panel.yaml) for the optional root-user deployment with `./data:/data`. Copy it into a dedicated 1Panel Compose directory as `docker-compose.yml`. The external `1panel-network` must already exist. The default Compose remains non-root with a named volume.
 
-The example uses the published `v1.0.0-rc.1` image. For sandbox App testing, add `MAILWAKE_RELAY_URL=https://notify-sandbox.mailwake.oritx.com` to the project's `.env`; an empty value selects the production Relay.
+The example uses the `v1.0.0-rc.2` image. For sandbox App testing, add `MAILWAKE_RELAY_URL=https://notify-sandbox.mailwake.oritx.com` to the project's `.env`; an empty value selects the production Relay.
 
 ```sh
 docker compose up -d
@@ -34,7 +34,7 @@ Open `http://SERVER_IP:8080`. For a 1Panel reverse proxy on the same network, us
 
 This variant runs as UID/GID `0:0`, retaining a read-only container filesystem, dropped capabilities, and `no-new-privileges`. New bind-mounted directories created by Docker are normally root-owned. Existing data files must belong to the selected runtime user; when changing users, stop Core and adjust ownership of its dedicated data directory. Keep the database and `secret.key` together.
 
-For startup failures, `data_directory_permission_denied` identifies filesystem permission errors, `data_directory_read_only` identifies a read-only mount, and `storage_open_failed` identifies other storage initialization failures. These diagnostics are available in builds containing this change; `v1.0.0-rc.1` reports some of these errors as `request_failed`.
+For startup failures, `data_directory_permission_denied` identifies filesystem permission errors, `data_directory_read_only` identifies a read-only mount, and `storage_open_failed` identifies other storage initialization failures. These diagnostics are available starting with `v1.0.0-rc.2`; `v1.0.0-rc.1` reports some of these errors as `request_failed`.
 
 ## 2. Set up your administrator and mailbox
 

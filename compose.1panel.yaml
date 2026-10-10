@@ -6,7 +6,7 @@ networks:
 
 services:
     mailwake:
-        image: ghcr.io/mingzaily/mailwake:v1.0.0-rc.1
+        image: ghcr.io/mingzaily/mailwake:v1.0.0-rc.2
         user: "0:0"
         networks:
             - 1panel-network

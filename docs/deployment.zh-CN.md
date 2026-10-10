@@ -23,7 +23,7 @@ docker compose logs core
 
 可选的 [compose.1panel.yaml](../compose.1panel.yaml) 使用 root 用户和 `./data:/data` 挂载。将它复制到独立的 1Panel 编排目录，命名为 `docker-compose.yml`。外部网络 `1panel-network` 需要已存在。默认 Compose 继续使用非 root 用户和命名卷。
 
-示例使用已发布镜像 `v1.0.0-rc.1`。测试沙盒 App 时，在该编排的 `.env` 中设置 `MAILWAKE_RELAY_URL=https://notify-sandbox.mailwake.oritx.com`；留空时使用生产 Relay。
+示例使用镜像 `v1.0.0-rc.2`。测试沙盒 App 时，在该编排的 `.env` 中设置 `MAILWAKE_RELAY_URL=https://notify-sandbox.mailwake.oritx.com`；留空时使用生产 Relay。
 
 ```sh
 docker compose up -d
@@ -34,7 +34,7 @@ docker compose logs --tail=50 -f mailwake
 
 此方案使用 UID/GID `0:0`，保留容器根文件系统只读、移除 capabilities 和 `no-new-privileges` 配置。Docker 自动创建的挂载目录通常属于 root。已有数据文件须属于所选运行用户；切换用户时先停止 Core，再调整专用数据目录的所有者。数据库与 `secret.key` 须一并保留。
 
-启动错误中，`data_directory_permission_denied` 表示文件系统权限不足，`data_directory_read_only` 表示只读挂载，`storage_open_failed` 表示其他存储初始化失败。这些诊断随包含本次变更的构建生效；`v1.0.0-rc.1` 对其中部分错误仍显示 `request_failed`。
+启动错误中，`data_directory_permission_denied` 表示文件系统权限不足，`data_directory_read_only` 表示只读挂载，`storage_open_failed` 表示其他存储初始化失败。这些诊断从 `v1.0.0-rc.2` 起生效；`v1.0.0-rc.1` 对其中部分错误仍显示 `request_failed`。
 
 ## 2. 创建管理员与连接邮箱
 
