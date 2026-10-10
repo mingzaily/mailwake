@@ -34,9 +34,9 @@ docker compose logs core
 3. 添加邮箱，选择需要监听的文件夹。
 4. 进入通知设置，配置渠道并发送测试通知。
 
-上述命令从当前 `main` 源码构建。当前发布版本为 **v1.0.0-rc.5**，即 1.0.0 的候选版本。默认端口仅绑定本机，数据保存在 Docker 持久卷。远程访问、HTTPS、备份和升级步骤见[部署指南](docs/deployment.zh-CN.md)。
+上述命令从当前 `main` 源码构建。当前发布版本为 **v1.0.0-rc.6**，即 1.0.0 的候选版本。默认端口仅绑定本机，数据保存在 Docker 持久卷。远程访问、HTTPS、备份和升级步骤见[部署指南](docs/deployment.zh-CN.md)。
 
-希望直接使用构建好的版本？可[下载 macOS/Linux 二进制](https://github.com/mingzaily/mailwake/releases/tag/v1.0.0-rc.5)，或使用容器镜像 `ghcr.io/mingzaily/mailwake:v1.0.0-rc.5`（amd64、arm64）。`main` 分支持续开发，版本变更见 [CHANGELOG.md](CHANGELOG.md)。
+希望直接使用构建好的版本？可[下载 macOS/Linux 二进制](https://github.com/mingzaily/mailwake/releases/tag/v1.0.0-rc.6)，或使用容器镜像 `ghcr.io/mingzaily/mailwake:v1.0.0-rc.6`（amd64、arm64）。`main` 分支持续开发，版本变更见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 界面预览
 

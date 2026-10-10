@@ -2,6 +2,12 @@
 
 All notable changes to Mailwake Core are documented here. Versions follow [Semantic Versioning](https://semver.org); before 1.0.0, minor versions may change configuration.
 
+## [1.0.0-rc.6] - 2026-10-10
+
+- Copy the App connection link by clicking the pairing QR code, with a manual-copy fallback when clipboard access is unavailable.
+- Refine the pairing dialog with centered status and countdown, balanced spacing, and compact fingerprint information.
+- Hide the QR code and copy action when pairing completes or expires.
+
 ## [1.0.0-rc.5] - 2026-10-10
 
 - Separate push configuration saving from explicit notification tests across all channels.
