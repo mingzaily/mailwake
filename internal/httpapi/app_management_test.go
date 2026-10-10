@@ -110,12 +110,25 @@ func (f appFixture) invite(t *testing.T, scopes []string) (credential, deviceID 
 	if !slices.Equal(strings.Split(query.Get("scopes"), ","), expectedScopes) {
 		t.Fatal("invitation scopes", query.Get("scopes"), expectedScopes)
 	}
+	statusPath := "/api/v1/device-invitations/" + invitation.ID
+	if response := f.do(t, "GET", statusPath, nil, map[string]string{}); response.Code != 401 {
+		t.Fatal("invitation status requires authentication", response.Code)
+	}
+	response := f.do(t, "GET", statusPath, nil, nil)
+	var status appmanagement.InvitationStatus
+	if err := json.Unmarshal(response.Body.Bytes(), &status); err != nil || response.Code != 200 || status.Status != "waiting" {
+		t.Fatal("waiting invitation", response.Code, response.Body.String())
+	}
 	device, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	spki, _ := x509.MarshalPKIXPublicKey(&device.PublicKey)
 	accept := map[string]any{"invitation_id": query.Get("inv"), "token": query.Get("t"), "signing_key": b64.EncodeToString(spki), "device_name": "Phone"}
 	w = f.do(t, "POST", "/api/v1/app/accept", accept, map[string]string{})
 	if w.Code != 200 {
 		t.Fatal(w.Code, w.Body.String())
+	}
+	response = f.do(t, "GET", statusPath, nil, nil)
+	if err := json.Unmarshal(response.Body.Bytes(), &status); err != nil || response.Code != 200 || status.Status != "active" || status.DeviceName != "Phone" {
+		t.Fatal("accepted invitation", response.Code, response.Body.String())
 	}
 	var result appmanagement.Credential
 	json.Unmarshal(w.Body.Bytes(), &result)

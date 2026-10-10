@@ -45,3 +45,23 @@ func TestChannelValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestNativeSelectionIsPreservedWhenOmittedAndRequiredWhenCleared(t *testing.T) {
+	current := Delivery{Channel: "native", Preview: "off", Language: "en", NativePairingID: "selected"}
+	update := DeliveryUpdate{Channel: "native", Preview: "off", Language: "en"}
+	next, err := current.Merge(update)
+	if err != nil || next.NativePairingID != "selected" {
+		t.Fatal(next, err)
+	}
+	empty := ""
+	update.NativePairingID = &empty
+	if _, err := current.Merge(update); err == nil {
+		t.Fatal("empty native target accepted")
+	}
+	other := "other"
+	update.NativePairingID = &other
+	next, err = current.Merge(update)
+	if err != nil || next.NativePairingID != other {
+		t.Fatal("target change was not saved", err)
+	}
+}

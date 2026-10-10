@@ -1,5 +1,5 @@
 import type { NativePairing } from "./native-devices";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -16,6 +16,7 @@ import {
 } from "./common";
 
 type Values = {
+  native_pairing_id?: string;
   channel: string;
   preview: "off" | "subject";
   retry_count: number;
@@ -30,6 +31,7 @@ type Values = {
 export function deliveryPayload(values: Values, revision: number) {
   return {
     revision,
+    native_pairing_id: values.native_pairing_id || "",
     channel: values.channel,
     preview: values.preview,
     retry_count: values.retry_count,
@@ -84,11 +86,13 @@ function DeliveryFields({
   const [testing, setTesting] = useState(false);
   const {
     register,
+    setValue,
     watch,
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<Values>({
     defaultValues: {
+      native_pairing_id: initial.native_pairing_id || "",
       channel: initial.channel || "bark",
       preview: initial.preview || "off",
       retry_count: initial.retry_count,
@@ -108,12 +112,22 @@ function DeliveryFields({
     enabled: channel === "native" && initial.native_available,
     refetchInterval: channel === "native" ? 3000 : false,
   });
+  const target = watch("native_pairing_id");
+  const activeDevices =
+    devices.data?.devices.filter((device) => device.status === "active") ?? [];
+  useEffect(() => {
+    const active =
+      devices.data?.devices.filter((device) => device.status === "active") ??
+      [];
+    if (!target && !initial.native_pairing_id && active.length === 1)
+      setValue("native_pairing_id", active[0].id);
+  }, [devices.data, target, initial.native_pairing_id, setValue]);
   const canTest =
     channel !== "native" ||
-    !!devices.data?.devices.some((device) => device.status === "active");
+    activeDevices.some((device) => device.id === target);
   async function submit(values: Values, test = false) {
     setError(undefined);
-    if (test && !canTest) return;
+    if (!canTest) return;
     if (test) setTesting(true);
     try {
       await api(`/settings/delivery${test ? "/test" : ""}`, {
@@ -202,19 +216,41 @@ function DeliveryFields({
         )}
         {channel === "native" ? (
           <div className="flex flex-col gap-2">
-            <p className="text-muted-foreground">{t("ui.native_encrypted")}</p>
+            <SelectField
+              label={t("ui.receiving_device")}
+              labelAction={
+                <a
+                  className="text-sm text-primary underline underline-offset-4"
+                  href="#/app_settings"
+                >
+                  {t("ui.app_pairing_link")}
+                </a>
+              }
+              {...register("native_pairing_id")}
+            >
+              <option value="">{t("ui.select_device")}</option>
+              {target &&
+                !activeDevices.some((device) => device.id === target) && (
+                  <option value={target} disabled>
+                    {t("native_target_unavailable")}
+                  </option>
+                )}
+              {activeDevices.map((device) => (
+                <option key={device.id} value={device.id}>
+                  {device.device_name || t("ui.phone_unnamed")} ·{" "}
+                  {device.id.slice(0, 8)}
+                </option>
+              ))}
+            </SelectField>
+            <p className="text-sm text-muted-foreground">
+              {t("ui.native_encrypted")}
+            </p>
             <ErrorNotice error={devices.error} />
             {!devices.isPending && !devices.error && !canTest && (
               <p className="text-sm text-muted-foreground">
                 {t("ui.pair_before_test")}
               </p>
             )}
-            <a
-              className="text-sm text-primary underline underline-offset-4"
-              href="#/app_settings"
-            >
-              {t("ui.app_pairing_link")}
-            </a>
           </div>
         ) : (
           <FieldSet>
@@ -261,7 +297,11 @@ function DeliveryFields({
         </div>
       </FieldGroup>
       <div className="flex flex-wrap items-center gap-3">
-        <BusyButton type="submit" busy={isSubmitting} disabled={testing}>
+        <BusyButton
+          type="submit"
+          busy={isSubmitting}
+          disabled={testing || !canTest}
+        >
           {t(onSaved ? "ui.finish" : "ui.save")}
         </BusyButton>
         <BusyButton

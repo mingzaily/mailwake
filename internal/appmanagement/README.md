@@ -4,9 +4,9 @@
 
 ## 邀请
 
-管理员在 Web 的“手机”页面创建邀请（`POST /api/v1/device-invitations`），选择：
+管理员在 Web 的“App 授权”页面创建邀请（`POST /api/v1/device-invitations`），选择：
 
-- **App 管理**：填写手机能访问到的 Core HTTPS 地址，勾选 scope（`mailboxes`、`folders`、`channels`、`diagnostics`）。
+- **App 管理**：填写手机能访问到的 Core HTTPS 地址，勾选 scope（`mailboxes`、`folders`、`channels`、`diagnostics`、`content`）。
 - **原生推送**：同时创建一个 Relay 配对（默认使用官方生产 Relay，`MAILWAKE_RELAY_URL` 可覆盖地址）。
 
 邀请 5 分钟有效，二维码为 `mailwake://connect?v=3&...`，只在创建响应中出现；管理邀请通过 `scopes` 参数携带逗号分隔的授权范围。App 展示 Core 指纹、地址与本次授权范围，用户确认后调用 `POST /api/v1/app/accept`，取得 `mwac_` 凭证（Core 只保存哈希）。邀请 token 一次性；同一台设备再次接受新邀请会替换它原来的授权。
@@ -32,3 +32,5 @@ Platform 轮换签发密钥时：先把新 kid 加入信任并重启 Core，Plat
 ## 正文授权
 
 owner 单独授予 `content`，范围为此 Core 当前全部已订阅 Folder。`POST /api/v1/app/content` 使用同一 controller 凭证，但商业资格来自独立 purpose=`native_push` 和 `X-Mailwake-Native-Qualification`。配置读权限保持原范围；同一信任配置验证两类用途和 device/Core/environment/subject/有效期。请求实现位于 `internal/httpapi/app_management.go`，签名引用实现在 `internal/native/message_reference.go`；公开的合成测试向量位于 `internal/appmanagement/testdata/`。
+
+管理员通过 `GET /api/v1/device-invitations/{id}` 查询管理授权状态，返回 `id`、`status`、`device_name`、`expires_at`，状态为 `waiting`、`active`、`expired`、`revoked`。仅管理邀请的二维码据此结束等待；Native 配对继续使用 Native 状态接口。状态响应只含展示信息。

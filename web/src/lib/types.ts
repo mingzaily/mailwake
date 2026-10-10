@@ -62,6 +62,7 @@ export type Delivery = {
   last_error?: Failure;
 };
 export type DeliverySettings = {
+  native_pairing_id?: string;
   native_available?: boolean;
   revision: number;
   channel: string;

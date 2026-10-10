@@ -166,6 +166,31 @@ func (s *Service) Accept(ctx context.Context, input AcceptInput) (Credential, er
 	return Credential{ControllerID: controller.ID, CoreID: identity.ID, DeviceID: deviceID, Scopes: controller.Scopes, Credential: credential}, nil
 }
 
+// InvitationStatus reports the management acceptance of one administrator invitation.
+type InvitationStatus struct {
+	ID         string    `json:"id"`
+	Status     string    `json:"status"`
+	DeviceName string    `json:"device_name"`
+	ExpiresAt  time.Time `json:"expires_at"`
+}
+
+func (s *Service) InvitationStatus(ctx context.Context, id string) (InvitationStatus, error) {
+	invitation, err := s.Store.AppInvitation(ctx, id)
+	if err != nil {
+		return InvitationStatus{}, err
+	}
+	status := "waiting"
+	switch {
+	case invitation.UsedAt > 0:
+		status = "active"
+	case invitation.CancelledAt > 0:
+		status = "revoked"
+	case invitation.ExpiresAt <= time.Now().Unix():
+		status = "expired"
+	}
+	return InvitationStatus{ID: invitation.ID, Status: status, DeviceName: invitation.DeviceName, ExpiresAt: time.Unix(invitation.ExpiresAt, 0).UTC()}, nil
+}
+
 // Cancel withdraws an invitation and its pending Native pairing.
 func (s *Service) Cancel(ctx context.Context, id string) error {
 	invitation, err := s.Store.AppInvitation(ctx, id)

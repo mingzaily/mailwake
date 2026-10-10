@@ -50,7 +50,7 @@ func New(output io.Writer) *slog.Logger {
 func (h *handler) Enabled(_ context.Context, level slog.Level) bool { return level >= slog.LevelInfo }
 func allowed(key string) bool {
 	switch key {
-	case "pairing_id", "device_id", "mailbox_id", "folder", "mode", "check", "code", "event_id", "channel", "attempt", "duration_ms", "http_status", "next_attempt", "backoff_seconds", "count", "revision", "token_id", "version", "listen":
+	case "relay_code", "pairing_id", "device_id", "mailbox_id", "folder", "mode", "check", "code", "event_id", "channel", "attempt", "duration_ms", "http_status", "next_attempt", "backoff_seconds", "count", "revision", "token_id", "version", "listen":
 		return true
 	}
 	return false

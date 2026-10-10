@@ -59,7 +59,7 @@ JSON 请求体上限 64 KiB，未知字段或多余 JSON 返回 400。密码至�
 | GET | `/api/v1/diagnostics` | 下载脱敏 JSON 诊断报告，省略运行日志 |
 | GET | `/api/v1/logs` | 鉴权后查询运行日志，支持 after、level、mailbox_id、limit（见下文） |
 | GET | `/api/v1/deliveries` | 最近 50 条请求记录，包含标题和邮箱 / 文件夹摘要 |
-| POST | `/api/v1/test-push` | 测试通知入队，返回 202 |
+| POST | `/api/v1/test-push` | 使用已保存配置发送测试，接受后返回 204，保持配置原值 |
 | POST | `/api/v1/deliveries/:id/retry` | 重新处理 `dead` 任务，返回 202 |
 
 投递记录的可选 `message` 对象包含 `mailbox_id`、`mailbox_label`、`folder`、`subject`（字符串或 null）和 `test`（布尔值）。名称按入队时保存，邮箱改名或删除后保持历史来源。subject 为 null 表示标题未保留，空字符串表示邮件无主题。测试通知的 test=true，来源为空。摘要接口省略发件人和正文。
@@ -87,7 +87,7 @@ JSON 请求体上限 64 KiB，未知字段或多余 JSON 返回 400。密码至�
 
 每次更新前读取 `/settings/delivery` 并提交其 revision，首次保存从 0 增加到 1。Pushover 使用 `pushover.token`、`pushover.user`；Webhook 使用 `webhook.url`、`webhook.secret`。channel、preview、revision 必填；省略 language、retry_count 使用默认值。省略凭据（含 Webhook URL）保留已保存值，显式空的当前通道凭据会被拒绝；GET 将凭据替换为 `{"configured":true|false}`。独立测试接口无须 revision。
 
-邮箱创建和连接配置修改在保存前测试连接及登录。host、port、username、connection_limit 与现值相同且省略 password 时，PUT 只改 label：仍校验 revision 并保存，保持连接与进度，已入队通知保留原名称，之后入队使用新名称。创建或修改后的身份若与其他邮箱相同，返回 409 `mailbox_duplicate`；host 与 username 忽略大小写、port 精确匹配，同身份并发创建只成功一个。通道 PUT 仅在类型或当前通道地址、凭据变化时发送测试通知，预览、重试、语言修改直接保存。网络测试在配置锁外执行，现有监听保持运行，测试失败保留原配置。设置 revision 过期返回 409 `settings_conflict`；邮箱测试期间订阅变化同样使快照失效，需重新读取后提交。各邮箱、全局通道分别维护 revision，修改不同邮箱、同时修改邮箱和通道互不冲突。
+邮箱创建和连接配置修改在保存前测试连接及登录。host、port、username、connection_limit 与现值相同且省略 password 时，PUT 只改 label：仍校验 revision 并保存，保持连接与进度，已入队通知保留原名称，之后入队使用新名称。创建或修改后的身份若与其他邮箱相同，返回 409 `mailbox_duplicate`；host 与 username 忽略大小写、port 精确匹配，同身份并发创建只成功一个。通道 PUT 对所有通道统一校验字段、地址、所选配对状态与 revision，直接保存，保存过程不发送测试或联系通道服务。显式通道测试保持配置原值，失败后仍可保存合法配置。邮箱网络测试在配置锁外执行，现有监听保持运行，邮箱测试失败保留原配置。设置 revision 过期返回 409 `settings_conflict`；邮箱测试期间订阅变化同样使快照失效，需重新读取后提交。各邮箱、全局通道分别维护 revision，修改不同邮箱、同时修改邮箱和通道互不冲突。
 
 PUT 成功返回脱敏视图并立即生效。邮箱连接配置更新先停止自身监听，再保存并按需清理进度；存储失败恢复原监听，其他邮箱继续运行。通道变更时，进行中的请求沿用原快照，后续尝试使用新快照；尚未配置通道时队列保持待处理。
 
@@ -116,3 +116,17 @@ PUT 成功返回脱敏视图并立即生效。邮箱连接配置更新先停止�
 文件夹扫描与管理员邮箱测试返回原始路径数组 `folders`，并可附带 `folder_roles`：路径到 `inbox`、`drafts`、`sent`、`trash`、`junk`、`archive`、`all` 或 `flagged` 的映射。用途来自 IMAP SPECIAL-USE 属性，INBOX 按协议名称识别。Web 界面在缺少用途时，按常见英文文件夹名称进行忽略大小写的完整匹配；译名后用括号保留原始路径，其余名称保持原样。界面翻译不改变订阅路径。 通知标题仅显示斜杠分隔路径的末级名称；结构化 folder 字段保留完整路径。App 邮箱测试继续仅返回连接状态。
 
 `GET /api/v1/session` 在 Cookie 会话响应中返回 `username`，Token 鉴权响应保持原有结构。
+
+### App 接收设备
+
+通知配置增加 `native_pairing_id`。`native` 渠道必须从 `/api/v1/native/devices` 选择一个有效配对；测试通知和新事件只投递给该设备。更新时省略此字段保留原选择；空选择返回 `native_target_required`，失效目标返回 `native_target_unavailable`。撤销配对后管理员重新选择设备；已开始的投递重试保留原目标。
+
+App 授权页分别管理管理权限和推送权限，两者独立撤销。
+
+### Native 测试通知
+
+Core 使用签名 `POST /v1/pairing-tests`，正文 `{pairing_id,test_id}`；每次显式测试生成新的 UUID test_id。Relay 生成固定内容并同步提交 APNs，无须 Native Push 权益。表单测试、App 已保存配置测试和 `/api/v1/test-push` 共用此调用链。测试独立于邮件 Outbox，不自动重试。
+
+仅 Relay `accepted` 对应 Core HTTP 204。APNs 拒绝、结果未知、`sending` 均返回本地化错误；Relay 限频映射为 Core HTTP 429 并保留 `Retry-After`。安全日志记录 Relay HTTP 状态与稳定错误码，省去响应正文、Token 和通知内容。Core 与 App 共享 Relay 现有每设备每分钟、每主体每日额度及 `(device_id,test_id)` 幂等。用户再次点击测试会创建新的测试 ID。
+
+正式邮件仍使用 `/v1/push` 并校验权益，事件 ID 或客户端测试标志均保持此规则。先部署支持配对测试接口的 Relay，再部署此版本 Core；Core 不回退到正式邮件接口。

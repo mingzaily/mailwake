@@ -109,15 +109,20 @@ export function SelectField({
   label,
   children,
   fieldClassName,
+  labelAction,
   ...props
 }: ComponentProps<typeof NativeSelect> & {
   label: string;
   fieldClassName?: string;
+  labelAction?: ReactNode;
 }) {
   const id = useId();
   return (
     <Field className={fieldClassName}>
-      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <div className="flex items-center justify-between gap-3">
+        <FieldLabel htmlFor={id}>{label}</FieldLabel>
+        {labelAction}
+      </div>
       <NativeSelect id={id} {...props}>
         {children}
       </NativeSelect>

@@ -65,22 +65,24 @@ type Webhook struct {
 	Secret string `json:"secret"`
 }
 type Delivery struct {
-	Revision   int64    `json:"-"`
-	Channel    string   `json:"channel"`
-	Preview    string   `json:"preview"`
-	RetryCount int      `json:"retry_count"`
-	Language   string   `json:"language"`
-	Bark       Bark     `json:"bark"`
-	Pushover   Pushover `json:"pushover"`
-	Webhook    Webhook  `json:"webhook"`
+	NativePairingID string   `json:"native_pairing_id"`
+	Revision        int64    `json:"-"`
+	Channel         string   `json:"channel"`
+	Preview         string   `json:"preview"`
+	RetryCount      int      `json:"retry_count"`
+	Language        string   `json:"language"`
+	Bark            Bark     `json:"bark"`
+	Pushover        Pushover `json:"pushover"`
+	Webhook         Webhook  `json:"webhook"`
 }
 type DeliveryUpdate struct {
-	Revision   *int64 `json:"revision"`
-	Channel    string `json:"channel"`
-	Preview    string `json:"preview"`
-	RetryCount int    `json:"retry_count"`
-	Language   string `json:"language"`
-	Bark       struct {
+	NativePairingID *string `json:"native_pairing_id"`
+	Revision        *int64  `json:"revision"`
+	Channel         string  `json:"channel"`
+	Preview         string  `json:"preview"`
+	RetryCount      int     `json:"retry_count"`
+	Language        string  `json:"language"`
+	Bark            struct {
 		Endpoint string  `json:"endpoint"`
 		Key      *string `json:"key"`
 	} `json:"bark"`
@@ -169,6 +171,9 @@ func (old Delivery) Merge(u DeliveryUpdate) (Delivery, error) {
 	d.Channel = u.Channel
 	d.Preview = u.Preview
 	d.RetryCount = u.RetryCount
+	if u.NativePairingID != nil {
+		d.NativePairingID = *u.NativePairingID
+	}
 	d.Language = u.Language
 	if d.Language == "" {
 		d.Language = "en"
@@ -187,6 +192,9 @@ func (old Delivery) Merge(u DeliveryUpdate) (Delivery, error) {
 			*p.target = *p.value
 		}
 	}
+	if d.Channel == "native" && d.NativePairingID == "" {
+		return d, fault.New("native_target_required")
+	}
 	return d, d.validate()
 }
 
@@ -197,31 +205,13 @@ func (m Mailbox) Limit() int {
 	return m.ConnectionLimit
 }
 
-// ConnectionChanged reports whether saving next needs a test notification.
-// Only the active transport matters.
-func (current Delivery) ConnectionChanged(next Delivery) bool {
-	if current.Channel != next.Channel {
-		return true
-	}
-	switch next.Channel {
-	case "bark":
-		return current.Bark != next.Bark
-	case "pushover":
-		return current.Pushover != next.Pushover
-	case "webhook":
-		return current.Webhook != next.Webhook
-	default:
-		return false
-	}
-}
-
 // Public views use explicit allowlists. URLs that may carry credentials stay write-only.
 func configured(value string) map[string]bool { return map[string]bool{"configured": value != ""} }
 func (m Mailbox) View(connections int) map[string]any {
 	return map[string]any{"id": m.ID, "label": m.Label, "revision": m.Revision, "connection_limit": m.Limit(), "connections_in_use": connections, "host": m.Host, "port": m.Port, "username": m.Username, "password": configured(m.Password)}
 }
 func (d Delivery) View() map[string]any {
-	return map[string]any{"revision": d.Revision, "channel": d.Channel, "preview": d.Preview, "retry_count": d.RetryCount, "language": d.Language, "bark": map[string]any{"endpoint": d.Bark.Endpoint, "key": configured(d.Bark.Key)}, "pushover": map[string]any{"token": configured(d.Pushover.Token), "user": configured(d.Pushover.User)}, "webhook": map[string]any{"url": configured(d.Webhook.URL), "secret": configured(d.Webhook.Secret)}}
+	return map[string]any{"native_pairing_id": d.NativePairingID, "revision": d.Revision, "channel": d.Channel, "preview": d.Preview, "retry_count": d.RetryCount, "language": d.Language, "bark": map[string]any{"endpoint": d.Bark.Endpoint, "key": configured(d.Bark.Key)}, "pushover": map[string]any{"token": configured(d.Pushover.Token), "user": configured(d.Pushover.User)}, "webhook": map[string]any{"url": configured(d.Webhook.URL), "secret": configured(d.Webhook.Secret)}}
 }
 
 func NewMailbox() Mailbox { return Mailbox{ID: "mbx_" + rand.Text()} }

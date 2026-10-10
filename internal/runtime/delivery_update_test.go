@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
@@ -30,87 +31,71 @@ func (s *countingSender) Send(context.Context, event.Notification) error {
 	}
 	return nil
 }
-func TestDeliveryTestsOnlyActiveConnectionChanges(t *testing.T) {
+func TestDeliverySavingIsIndependentOfProviderAvailability(t *testing.T) {
 	for _, channel := range []string{"bark", "pushover", "webhook"} {
 		t.Run(channel, func(t *testing.T) {
-			store, err := storage.Open(t.Context(), t.TempDir())
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer store.Close()
-			vault, err := OpenVault(t.TempDir(), false)
+			m, store, dir := managerFixture(t, nil)
+			vault, err := OpenVault(dir, true)
 			if err != nil {
 				t.Fatal(err)
 			}
 			counter := &countingSender{}
-			s, err := newService(t.Context(), store, vault, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, func(Delivery) delivery.Sender { return counter })
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer s.Close()
-			input := DeliveryUpdate{Channel: channel, Preview: "off"}
+			counter.fail.Store(true)
+			m.newSender = func(Delivery) delivery.Sender { return counter }
+			revision := m.DeliveryView()["revision"].(int64)
+			input := DeliveryUpdate{Revision: &revision, Channel: channel, Preview: "off"}
 			input.Bark.Key = ptr("bark-key")
 			input.Pushover.Token = ptr("application")
 			input.Pushover.User = ptr("user")
 			input.Webhook.URL = ptr("https://hooks.example.org")
 			input.Webhook.Secret = ptr(strings.Repeat("a", 32))
-			if err := s.UpdateDelivery(t.Context(), input); err != nil {
+			if err := m.UpdateDelivery(t.Context(), input); err != nil {
 				t.Fatal(err)
+			}
+			if counter.calls.Load() != 0 {
+				t.Fatal("save sent a notification")
+			}
+			if err := m.TestSavedDelivery(t.Context()); fault.From(err, "").Code != "delivery_test_failed" {
+				t.Fatal(err)
+			}
+			revision++
+			input.Bark.Key = ptr("changed-bark")
+			input.Pushover.User = ptr("changed-user")
+			input.Webhook.URL = ptr("https://changed.example.org")
+			if err := m.UpdateDelivery(t.Context(), input); err != nil {
+				t.Fatal("failed test blocked saving", err)
 			}
 			if counter.calls.Load() != 1 {
-				t.Fatal("initial test missing")
+				t.Fatal("update sent a notification")
 			}
-			counter.fail.Store(true)
-			input.Preview = "subject"
-			input.Language = "zh-CN"
-			input.RetryCount = 3
-			if err := s.UpdateDelivery(t.Context(), input); err != nil {
-				t.Fatal("metadata depends on provider availability", err)
-			}
-			if counter.calls.Load() != 1 {
-				t.Fatal("metadata sent test")
-			}
-			var changes []func(*DeliveryUpdate)
-			switch channel {
-			case "bark":
-				changes = []func(*DeliveryUpdate){func(d *DeliveryUpdate) { d.Bark.Endpoint = "https://bark.example.org" }, func(d *DeliveryUpdate) { d.Bark.Key = ptr("new-key") }}
-			case "pushover":
-				changes = []func(*DeliveryUpdate){func(d *DeliveryUpdate) { d.Pushover.Token = ptr("new-token") }, func(d *DeliveryUpdate) { d.Pushover.User = ptr("new-user") }}
-			case "webhook":
-				changes = []func(*DeliveryUpdate){func(d *DeliveryUpdate) { d.Webhook.URL = ptr("https://new.example.org") }, func(d *DeliveryUpdate) { d.Webhook.Secret = ptr(strings.Repeat("b", 32)) }}
-			}
-			for i, change := range changes {
-				candidate := input
-				change(&candidate)
-				if err := s.UpdateDelivery(t.Context(), candidate); fault.From(err, "").Code != "delivery_test_failed" {
-					t.Fatal("changed connection skipped test", err)
-				}
-				if counter.calls.Load() != int32(i+2) {
-					t.Fatal("incorrect test count")
-				}
-			}
-			counter.fail.Store(false)
-			if channel == "bark" {
-				input.Pushover.User = ptr("inactive-change")
-			} else {
-				input.Bark.Key = ptr("inactive-change")
-			}
-			if err := s.UpdateDelivery(t.Context(), input); err != nil {
+			encrypted, err := store.Configuration(t.Context(), "delivery")
+			if err != nil {
 				t.Fatal(err)
 			}
-			if counter.calls.Load() != 3 {
-				t.Fatal("inactive channel change sent test")
-			}
-			if channel == "bark" {
-				input.Channel = "pushover"
-			} else {
-				input.Channel = "bark"
-			}
-			if err := s.UpdateDelivery(t.Context(), input); err != nil {
+			plain, err := vault.Open("delivery", encrypted)
+			if err != nil {
 				t.Fatal(err)
 			}
-			if counter.calls.Load() != 4 {
-				t.Fatal("channel switch skipped test")
+			var saved Delivery
+			if err := json.Unmarshal(plain, &saved); err != nil {
+				t.Fatal(err)
+			}
+			record, err := store.ConfigurationRecord(t.Context(), "delivery")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if record.Revision != revision+1 || saved.Channel != channel || saved.Webhook.URL != *input.Webhook.URL {
+				t.Fatal("configuration was not persisted", saved.Revision)
+			}
+			if err := m.UpdateDelivery(t.Context(), input); fault.From(err, "").Code != "settings_conflict" {
+				t.Fatal("stale revision accepted", err)
+			}
+			revision++
+			invalid := input
+			invalid.Channel = "webhook"
+			invalid.Webhook.URL = ptr("http://public.example.org")
+			if err := m.UpdateDelivery(t.Context(), invalid); err == nil {
+				t.Fatal("invalid address accepted")
 			}
 		})
 	}

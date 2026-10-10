@@ -143,7 +143,7 @@ func newManagerWithOptions(ctx context.Context, store *storage.Store, vault *set
 	}
 	m.dispatcher = delivery.New(store, channel, m.delivery.RetryCount, log)
 	m.dispatcher.Configure(channel, m.delivery.RetryCount, m.preview.Load())
-	m.dispatcher.SetNativeSender(m.native)
+	m.dispatcher.SetNativeSender(m.native.ForPairing(m.delivery.NativePairingID))
 	for id, b := range m.mailboxes {
 		m.startMailbox(b, states[id])
 	}
@@ -557,7 +557,7 @@ func (m *Manager) TestDelivery(ctx context.Context, input settings.DeliveryUpdat
 	if next.Channel == "native" && !m.native.Available() {
 		return fault.New("native_push_unavailable")
 	}
-	return testDelivery(ctx, m.deliverySender(next))
+	return m.testDelivery(ctx, next)
 }
 
 // TestSavedDelivery sends a test notification through the saved channel.
@@ -571,7 +571,7 @@ func (m *Manager) TestSavedDelivery(ctx context.Context) error {
 	if current.Channel == "native" && !m.native.Available() {
 		return fault.New("native_push_unavailable")
 	}
-	return testDelivery(ctx, m.deliverySender(current))
+	return m.testDelivery(ctx, current)
 }
 func (m *Manager) UpdateDelivery(ctx context.Context, input settings.DeliveryUpdate) error {
 	m.deliveryMu.RLock()
@@ -587,12 +587,19 @@ func (m *Manager) UpdateDelivery(ctx context.Context, input settings.DeliveryUpd
 	if next.Channel == "native" && !m.native.Available() {
 		return fault.New("native_push_unavailable")
 	}
-	channel := m.deliverySender(next)
-	if current.ConnectionChanged(next) {
-		if err := testDelivery(ctx, channel); err != nil {
+	if next.Channel == "native" {
+		target, err := m.store.NativePairing(ctx, next.NativePairingID)
+		if err != nil {
+			if fault.From(err, "database_unavailable").Code == "native_pairing_not_found" {
+				return fault.New("native_target_unavailable")
+			}
 			return err
 		}
+		if target.State != "active" {
+			return fault.New("native_target_unavailable")
+		}
 	}
+	channel := m.deliverySender(next)
 	m.deliveryMu.Lock()
 	defer m.deliveryMu.Unlock()
 	if err := m.ctx.Err(); err != nil {
@@ -669,7 +676,7 @@ func (m *Manager) Native() *native.Service { return m.native }
 
 func (m *Manager) deliverySender(d settings.Delivery) delivery.Sender {
 	if d.Channel == "native" {
-		return m.native
+		return m.native.ForPairing(d.NativePairingID)
 	}
 	return m.newSender(d)
 }

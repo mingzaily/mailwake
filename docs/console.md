@@ -27,22 +27,23 @@ Use the new-york / Radix / lucide / Tailwind v4 configuration in `web/components
 
 ### CSP overlay exceptions
 
-Keep `style-src 'self'` without `unsafe-inline`. Radix modal Dialog, AlertDialog and Sheet use `react-remove-scroll` / `react-style-singleton` to insert runtime style tags for scroll locking. Those tags are blocked by Core’s CSP; the current modal components provide no supported injection-free mode, and nonce support would require a server-side CSP change. Preserve these three native dialogs:
+Keep `style-src 'self'` without `unsafe-inline`. Radix modal Dialog, AlertDialog and Sheet use `react-remove-scroll` / `react-style-singleton` to insert runtime style tags for scroll locking. Those tags are blocked by Core’s CSP; the current modal components provide no supported injection-free mode, and nonce support would require a server-side CSP change. Preserve these four native dialogs:
 
 | Source under `web/src/components/` | Purpose and behavior |
 | --- | --- |
 | `folder-scan-dialog.tsx` | Folder scanning: associated title/description, fixed header/actions, internally scrolling content, title focus on opening and trigger focus on closing; saving blocks closing and Escape. |
-| `native-devices.tsx` | Phone pairing: associated title/description, title focus, internally scrolling content, fixed actions and focus returned to the pairing trigger. |
+| `delivery-details.tsx` | Delivery details: full subject, source, errors and device status; native modal focus containment, Escape dismissal and trigger focus restoration. |
+| `native-devices.tsx` | Phone pairing and permission revocation: associated title/description, focus inside the dialog, fixed actions and focus returned to the trigger. Revocation focuses Cancel first and blocks dismissal while the request is running. |
 | `shell.tsx` | Keyboard-accessible narrow-screen navigation drawer; Sidebar’s Sheet/offcanvas branch stays unmounted. |
 
-Destructive actions retain inline confirmation because AlertDialog shares the same injection path. Sonner 2.0.8 inserts style tags even when its static CSS is imported, so `useToast` retains static Alert markup with a close button and five-second dismissal. Keep these exceptions until a replacement passes keyboard/focus checks and produces no CSP violations with the built Core. Sheet remains a generated Sidebar dependency; its built-in labels use the shared catalogs.
+Destructive actions use inline confirmation or the documented native permission-revocation dialog because AlertDialog shares the same injection path. Sonner 2.0.8 inserts style tags even when its static CSS is imported, so `useToast` retains static Alert markup with a close button and five-second dismissal. Keep these exceptions until a replacement passes keyboard/focus checks and produces no CSP violations with the built Core. Sheet remains a generated Sidebar dependency; its built-in labels use the shared catalogs.
 
 ### UI checks
 
 `npm run check` includes `web/scripts/check-ui.mjs`. It scans `src/styles.css` and non-test TSX files under `src` for:
 
 - Global `[data-slot=…]` component overrides, `.auth`, `.wizard`, `.spinner` rules and global select rules.
-- Raw `<select>` outside `components/ui/native-select.tsx` and raw `<dialog>` outside the three CSP exceptions above.
+- Raw `<select>` outside `components/ui/native-select.tsx` and raw `<dialog>` outside the four CSP exceptions above.
 - Native `type="checkbox"`, `space-y-*` and numbered background color classes such as `bg-green-500`.
 
 These checks complement TypeScript, ESLint and component tests. Verify production overlays against the built Core’s CSP when changing their dependencies or behavior.

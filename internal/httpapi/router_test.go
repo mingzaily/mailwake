@@ -185,12 +185,12 @@ func TestAuthenticationAndDurableTestPush(t *testing.T) {
 	authorizeSession(request, grant)
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, request)
-	if recorder.Code != 202 {
-		t.Fatalf("测试入队: %d %s", recorder.Code, recorder.Body.String())
+	if recorder.Code != 400 {
+		t.Fatalf("测试发送失败应原样返回: %d %s", recorder.Code, recorder.Body.String())
 	}
 	task, err := s.Due(ctx, time.Now().Add(time.Second))
-	if err != nil || task == nil || !task.Event.Test {
-		t.Fatalf("应走持久化投递链路: %+v %v", task, err)
+	if err != nil || task != nil {
+		t.Fatalf("手动测试应独立于邮件队列: %+v %v", task, err)
 	}
 }
 

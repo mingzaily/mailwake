@@ -58,3 +58,5 @@ def verify(secret: bytes, timestamp: str, body: bytes, signature: str) -> bool:
 ```
 
 返回任意 2xx 视为接收成功；429 与 5xx 按重试配置处理，其他状态结束本轮并记录失败。
+
+保存通知设置只校验字段、地址、配对状态与配置版本，直接保存。需要验证投递时手动点击发送测试通知。Native 测试使用 Relay 固定内容的免费测试接口，与 App 测试共享额度；正式邮件仍要求 Native Push 权益。

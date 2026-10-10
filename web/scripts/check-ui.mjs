@@ -11,6 +11,7 @@ const nativeDialogs = new Set([
   "components/folder-scan-dialog.tsx",
   "components/native-devices.tsx",
   "components/shell.tsx",
+  "components/delivery-details.tsx",
 ]);
 async function check(directory, prefix = "") {
   for (const item of await readdir(directory, { withFileTypes: true })) {
@@ -32,5 +33,5 @@ async function check(directory, prefix = "") {
 }
 await check(root);
 console.log(
-  "UI audit passed: NativeSelect primitive + 3 documented CSP dialog exceptions",
+  "UI audit passed: NativeSelect primitive + 4 documented CSP dialog exceptions",
 );

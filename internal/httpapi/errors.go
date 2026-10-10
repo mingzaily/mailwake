@@ -17,7 +17,7 @@ func respondFault(c *gin.Context, err error) {
 	case "discovery_busy":
 		status = http.StatusTooManyRequests
 		c.Header("Retry-After", "1")
-	case "too_many_attempts":
+	case "too_many_attempts", "rate_limited":
 		status = http.StatusTooManyRequests
 		c.Header("Retry-After", failure.Params["retry_after"])
 	case "database_unavailable", "configuration_corrupt", "subscriptions_storage_failed":
@@ -43,7 +43,7 @@ func respondFault(c *gin.Context, err error) {
 	case "setup_required", "csrf_invalid":
 		status = http.StatusForbidden
 	case "setup_code_invalid", "current_password_invalid", "configuration_invalid", "connection_budget_exceeded", "connection_limit_invalid", "mailbox_required", "delivery_test_failed",
-		"credential_required", "config_imap_address_invalid", "config_account_required", "config_language_invalid", "config_retry_count_invalid",
+		"native_target_required", "native_target_unavailable", "credential_required", "config_imap_address_invalid", "config_account_required", "config_language_invalid", "config_retry_count_invalid",
 		"config_preview_invalid", "config_bark_endpoint_invalid", "config_webhook_url_invalid", "config_webhook_secret_invalid", "config_delivery_channel_invalid",
 		"request_invalid", "scope_invalid", "core_origin_invalid":
 		status = http.StatusBadRequest

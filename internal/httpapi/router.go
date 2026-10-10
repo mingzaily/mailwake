@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"context"
-	"crypto/rand"
 	"embed"
 	"errors"
 	"io/fs"
@@ -16,7 +15,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/mingzaily/mailwake/internal/auth"
 	"github.com/mingzaily/mailwake/internal/engine"
-	"github.com/mingzaily/mailwake/internal/event"
 	"github.com/mingzaily/mailwake/internal/fault"
 	"github.com/mingzaily/mailwake/internal/i18n"
 	"github.com/mingzaily/mailwake/internal/storage"
@@ -135,12 +133,11 @@ func New(authService *auth.Service, runtime Runtime, store *storage.Store, log *
 	api.GET("/status", statusHandler(runtime, store))
 	api.GET("/deliveries", deliveriesHandler(store))
 	api.POST("/test-push", func(c *gin.Context) {
-		n := event.Notification{ID: "test_" + rand.Text(), Test: true, ReceivedAt: time.Now().UTC()}
-		if err := store.Enqueue(c.Request.Context(), n); err != nil {
-			databaseError(c)
+		if err := runtime.TestSavedDelivery(c.Request.Context()); err != nil {
+			respondFault(c, err)
 			return
 		}
-		c.JSON(202, gin.H{"id": n.ID, "state": "pending"})
+		c.Status(204)
 	})
 	api.POST("/deliveries/:id/retry", func(c *gin.Context) {
 		ok, err := store.Retry(c.Request.Context(), c.Param("id"))
@@ -232,8 +229,16 @@ func statusHandler(runtime Runtime, store *storage.Store) gin.HandlerFunc {
 				databaseError(c)
 				return
 			}
-			if len(devices) == 0 {
-				notices["delivery"] = localize(c, fault.New("native_no_devices"))
+			target, _ := runtime.DeliveryView()["native_pairing_id"].(string)
+			found := false
+			for _, device := range devices {
+				if device.ID == target {
+					found = true
+					break
+				}
+			}
+			if !found {
+				notices["delivery"] = localize(c, fault.New("native_target_unavailable"))
 			}
 		}
 		c.JSON(200, gin.H{"folders": folders, "delivery": summary, "channel": runtime.Channel(), "notices": notices})

@@ -58,3 +58,5 @@ def verify(secret: bytes, timestamp: str, body: bytes, signature: str) -> bool:
 ```
 
 Any 2xx response counts as accepted. 429 and 5xx follow the retry setting; other statuses end the attempt and record a failure.
+
+Saving notification settings validates fields, addresses, pairing state and revision without sending a test. Use the explicit test button after saving. Native tests use Relay’s fixed free test endpoint and share the App test quota; ordinary email notifications require Native Push entitlement.

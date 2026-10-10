@@ -74,6 +74,14 @@ func appManagementRoutes(r *gin.Engine, admin *gin.RouterGroup, runtime Runtime,
 		}
 		c.JSON(201, invitation)
 	})
+	admin.GET("/device-invitations/:id", func(c *gin.Context) {
+		status, err := service.InvitationStatus(c.Request.Context(), c.Param("id"))
+		if err != nil {
+			nativeError(c, err)
+			return
+		}
+		c.JSON(200, status)
+	})
 	admin.DELETE("/device-invitations/:id", func(c *gin.Context) {
 		if err := service.Cancel(c.Request.Context(), c.Param("id")); err != nil {
 			nativeError(c, err)

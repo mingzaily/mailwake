@@ -1,11 +1,28 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import QRCode from "qrcode";
+import { CircleHelp } from "lucide-react";
+import { Badge } from "./ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "./ui/tooltip";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import type { DeliverySettings } from "@/lib/types";
 import { Button } from "./ui/button";
 import { Checkbox } from "./ui/checkbox";
+import { Input } from "./ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "./ui/table";
 import {
   Field,
   FieldGroup,
@@ -14,200 +31,20 @@ import {
   FieldSet,
 } from "./ui/field";
 import { Alert, AlertDescription } from "./ui/alert";
-import {
-  BusyButton,
-  EmptyState,
-  ErrorNotice,
-  Panel,
-  TextField,
-  InlineConfirm,
-  Time,
-} from "./common";
+import { BusyButton, ErrorNotice, Panel, Time } from "./common";
 export type NativePairing = {
   id: string;
   status: "waiting" | "active" | "expired" | "failed" | "revoked";
   device_name: string;
+  device_id?: string;
   expires_at: string;
   revoked_at?: string;
   error_code?: string;
   uri?: string;
   fingerprint?: string;
-  /** Set for a management-only invitation, which has no pairing status to follow. */
+  /** Set for a management-only invitation, whose acceptance is tracked by its invitation ID. */
   managementOnly?: boolean;
 };
-
-export function NativeDevices({
-  pairingEnabled = true,
-}: {
-  pairingEnabled?: boolean;
-}) {
-  const { t, language } = useI18n();
-  const client = useQueryClient();
-  const settings = useQuery({
-    queryKey: ["delivery-settings"],
-    queryFn: () => api<DeliverySettings>("/settings/delivery"),
-  });
-  const devices = useQuery({
-    queryKey: ["native-devices"],
-    queryFn: ({ signal }) =>
-      api<{ devices: NativePairing[] }>("/native/devices", { signal }),
-    enabled: !!settings.data?.native_available,
-  });
-  const [pairing, setPairing] = useState<NativePairing>();
-  const [error, setError] = useState<unknown>();
-  const [busy, setBusy] = useState("");
-  const [confirm, setConfirm] = useState("");
-  const unpairTriggers = useRef(new Map<string, HTMLButtonElement>());
-  const cancelUnpair = useRef<HTMLButtonElement>(null);
-  const previousConfirm = useRef("");
-  const confirmDescription = useId();
-  useEffect(() => {
-    if (confirm) cancelUnpair.current?.focus();
-    else if (previousConfirm.current)
-      unpairTriggers.current.get(previousConfirm.current)?.focus();
-    previousConfirm.current = confirm;
-  }, [confirm]);
-  const trigger = useRef<HTMLButtonElement>(null);
-  const wasPairing = useRef(false);
-  useEffect(() => {
-    if (wasPairing.current && !pairing) trigger.current?.focus();
-    wasPairing.current = !!pairing;
-  }, [pairing]);
-  if (!settings.data?.native_available) return null;
-  async function create() {
-    setBusy("create");
-    setError(undefined);
-    try {
-      setPairing(
-        await api<NativePairing>("/native/pairings", { method: "POST" }),
-      );
-    } catch (error) {
-      setError(error);
-    } finally {
-      setBusy("");
-    }
-  }
-  async function remove(id: string) {
-    setBusy(id);
-    setError(undefined);
-    try {
-      await api(`/native/devices/${encodeURIComponent(id)}`, {
-        method: "DELETE",
-      });
-      setConfirm("");
-      await client.invalidateQueries({ queryKey: ["native-devices"] });
-    } catch (error) {
-      setError(error);
-    } finally {
-      setBusy("");
-    }
-  }
-  return (
-    <Panel
-      title={t("ui.phones")}
-      actions={
-        pairingEnabled ? (
-          <BusyButton
-            ref={trigger}
-            busy={busy === "create"}
-            disabled={!!busy || !!pairing}
-            onClick={() => void create()}
-          >
-            {t("ui.pair_phone")}
-          </BusyButton>
-        ) : undefined
-      }
-    >
-      <div className="p-4 md:p-5 flex flex-col gap-4">
-        <ErrorNotice error={error ?? devices.error} />
-        {!devices.data ? (
-          <p>{t("ui.loading")}</p>
-        ) : devices.data.devices.length === 0 ? (
-          <EmptyState message={t("ui.no_phones")} />
-        ) : (
-          <ul className="flex list-none flex-col gap-4 p-0">
-            {devices.data.devices.map((device) => (
-              <li
-                key={device.id}
-                className="flex flex-wrap items-center gap-3 justify-between"
-              >
-                <span>
-                  {device.device_name || t("ui.phone_unnamed")}
-                  {device.status === "revoked" && (
-                    <>
-                      {" "}
-                      · {t("ui.pairing_revoked")}
-                      {device.revoked_at && (
-                        <>
-                          {" "}
-                          ·{" "}
-                          <time dateTime={device.revoked_at}>
-                            {new Date(device.revoked_at).toLocaleString(
-                              language,
-                            )}
-                          </time>
-                        </>
-                      )}
-                    </>
-                  )}
-                </span>
-                {confirm === device.id ? (
-                  <div className="flex flex-wrap items-center gap-3">
-                    <span id={confirmDescription}>
-                      {t(
-                        device.status === "revoked"
-                          ? "ui.remove_device_confirm"
-                          : "ui.unpair_confirm",
-                      )}
-                    </span>
-                    <BusyButton
-                      aria-describedby={confirmDescription}
-                      variant="destructive"
-                      busy={busy === device.id}
-                      disabled={!!busy}
-                      onClick={() => void remove(device.id)}
-                    >
-                      {t(
-                        device.status === "revoked" ? "ui.remove" : "ui.unpair",
-                      )}
-                    </BusyButton>
-                    <Button
-                      variant="outline"
-                      disabled={!!busy}
-                      ref={cancelUnpair}
-                      aria-describedby={confirmDescription}
-                      onClick={() => setConfirm("")}
-                    >
-                      {t("ui.cancel")}
-                    </Button>
-                  </div>
-                ) : (
-                  <Button
-                    variant="outline"
-                    disabled={!!busy}
-                    ref={(node) => {
-                      if (node) unpairTriggers.current.set(device.id, node);
-                      else unpairTriggers.current.delete(device.id);
-                    }}
-                    onClick={() => setConfirm(device.id)}
-                  >
-                    {t(device.status === "revoked" ? "ui.remove" : "ui.unpair")}
-                  </Button>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-      {pairing && (
-        <PairingDialog
-          created={pairing}
-          onClose={() => setPairing(undefined)}
-        />
-      )}
-    </Panel>
-  );
-}
 
 export function PairingDialog({
   created,
@@ -226,23 +63,19 @@ export function PairingDialog({
   const [image, setImage] = useState("");
   const [qrError, setQRError] = useState<unknown>();
   const query = useQuery({
-    queryKey: ["native-pairing", created.id],
+    queryKey: [
+      created.managementOnly ? "management-invitation" : "native-pairing",
+      created.id,
+    ],
     queryFn: ({ signal }) =>
-      api<NativePairing>(`/native/pairings/${encodeURIComponent(created.id)}`, {
-        signal,
-      }),
-    enabled: !created.managementOnly,
+      api<NativePairing>(
+        `${created.managementOnly ? "/device-invitations" : "/native/pairings"}/${encodeURIComponent(created.id)}`,
+        {
+          signal,
+        },
+      ),
     refetchInterval: (query) =>
       !query.state.data || query.state.data.status === "waiting" ? 3000 : false,
-    refetchIntervalInBackground: false,
-  });
-  // A management-only invitation is accepted directly by the App; follow the device list.
-  useQuery({
-    queryKey: ["management-devices"],
-    queryFn: ({ signal }) =>
-      api<{ devices: ManagementDevice[] }>("/management/devices", { signal }),
-    enabled: !!created.managementOnly,
-    refetchInterval: 3000,
     refetchIntervalInBackground: false,
   });
   const current = query.data ?? created;
@@ -257,9 +90,12 @@ export function PairingDialog({
   useEffect(() => {
     dialog.current?.showModal();
     heading.current?.focus();
+  }, []);
+  useEffect(() => {
+    if (status !== "waiting") return;
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [status]);
   useEffect(() => {
     let active = true;
     if (created.uri)
@@ -372,7 +208,6 @@ type ManagementDevice = {
 };
 export function ManagementDevices() {
   const { t } = useI18n();
-  const client = useQueryClient();
   const devices = useQuery({
     queryKey: ["management-devices"],
     queryFn: ({ signal }) =>
@@ -383,12 +218,14 @@ export function ManagementDevices() {
     queryFn: () => api<DeliverySettings>("/settings/delivery"),
   });
   const [management, setManagement] = useState(true);
-  const [native, setNative] = useState(false);
+  const [nativeSelected, setNative] = useState(true);
+  const native = nativeSelected && !!settings.data?.native_available;
   const [origin, setOrigin] = useState(() =>
     window.location.protocol === "https:" ? window.location.origin : "",
   );
   const [scopes, setScopes] = useState([
     "channels",
+    "content",
     "diagnostics",
     "folders",
     "mailboxes",
@@ -432,167 +269,438 @@ export function ManagementDevices() {
       setBusy("");
     }
   }
-  async function revoke(id: string) {
-    setBusy(id);
-    setError(undefined);
-    try {
-      await api(`/management/devices/${encodeURIComponent(id)}`, {
-        method: "DELETE",
-      });
-      await client.invalidateQueries({ queryKey: ["management-devices"] });
-    } catch (error) {
-      setError(error);
-    } finally {
-      setBusy("");
-    }
-  }
   return (
     <>
       <Panel>
         <div className="flex flex-col gap-6 p-5 md:p-6">
           <ErrorNotice error={error ?? devices.error} />
-          <FieldGroup>
-            <div className="grid gap-5 sm:grid-cols-2">
-              <Field orientation="horizontal">
-                <Checkbox
-                  id={managementID}
-                  checked={management}
-                  onCheckedChange={(value) => setManagement(value === true)}
-                />
-                <FieldLabel htmlFor={managementID}>
-                  {t("ui.allow_app_management")}
-                </FieldLabel>
-              </Field>
-              <Field orientation="horizontal">
-                <Checkbox
-                  id={nativeID}
-                  checked={native}
-                  disabled={!settings.data?.native_available}
-                  onCheckedChange={(value) => setNative(value === true)}
-                />
-                <FieldLabel htmlFor={nativeID}>
-                  {t("ui.enable_native_push")}
-                </FieldLabel>
-              </Field>
-            </div>
-            {management && (
-              <>
-                <TextField
-                  label={t("ui.core_https_origin")}
-                  hint={t("ui.app_management_endpoint_hint")}
-                  type="url"
-                  value={origin}
-                  onChange={(event) => setOrigin(event.target.value)}
-                />
-                <FieldSet>
-                  <FieldLegend>{t("ui.management_scopes")}</FieldLegend>
-                  <FieldGroup className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    {[
-                      "mailboxes",
-                      "folders",
-                      "channels",
-                      "diagnostics",
-                      "content",
-                    ].map((scope) => (
-                      <Field
-                        key={scope}
-                        orientation="horizontal"
-                        className={
-                          scope === "content" ? "sm:col-span-2" : undefined
-                        }
-                      >
-                        <Checkbox
-                          id={`${managementID}-${scope}`}
-                          checked={scopes.includes(scope)}
-                          onCheckedChange={(value) =>
-                            setScopes((previous) =>
-                              value === true
-                                ? [...previous, scope].sort()
-                                : previous.filter((item) => item !== scope),
-                            )
-                          }
-                        />
-                        <FieldLabel htmlFor={`${managementID}-${scope}`}>
-                          {t(`ui.scope_${scope}`)}
+          <FieldGroup className="gap-6">
+            <FieldGroup className="gap-6">
+              <FieldSet className="gap-4">
+                <FieldLegend className="sr-only">
+                  {t("ui.management_scopes")}
+                </FieldLegend>
+                <FieldGroup className="gap-4 [&>[data-slot=field-group]]:gap-3">
+                  <Field orientation="horizontal">
+                    <Checkbox
+                      id={managementID}
+                      checked={management}
+                      onCheckedChange={(value) => setManagement(value === true)}
+                    />
+                    <FieldLabel htmlFor={managementID}>
+                      {t("ui.allow_app_management")}
+                    </FieldLabel>
+                  </Field>
+                  {management && (
+                    <div className="flex flex-col gap-5 rounded-md bg-muted/40 p-4 md:p-5">
+                      <div className="grid gap-3 sm:grid-cols-[7rem_minmax(0,1fr)] sm:items-start">
+                        <FieldLabel
+                          htmlFor={`${managementID}-origin`}
+                          className="sm:pt-2"
+                        >
+                          {t("ui.core_https_origin")}
                         </FieldLabel>
-                      </Field>
-                    ))}
-                  </FieldGroup>
-                </FieldSet>
-              </>
-            )}
+                        <div className="flex flex-col gap-2">
+                          <Input
+                            id={`${managementID}-origin`}
+                            type="url"
+                            value={origin}
+                            aria-describedby={`${managementID}-origin-hint`}
+                            onChange={(event) => setOrigin(event.target.value)}
+                          />
+                          <p
+                            id={`${managementID}-origin-hint`}
+                            className="text-sm text-muted-foreground"
+                          >
+                            {t("ui.app_management_endpoint_hint")}
+                          </p>
+                        </div>
+                      </div>
+                      <FieldSet className="grid gap-3 sm:grid-cols-[7rem_minmax(0,1fr)]">
+                        <FieldLegend className="sr-only">
+                          {t("ui.management_scopes")}
+                        </FieldLegend>
+                        <span
+                          aria-hidden="true"
+                          className="text-sm font-medium"
+                        >
+                          {t("ui.management_scopes")}
+                        </span>
+                        <div className="flex flex-wrap gap-x-6 gap-y-3">
+                          {[
+                            "mailboxes",
+                            "folders",
+                            "channels",
+                            "diagnostics",
+                            "content",
+                          ].map((scope) => (
+                            <Field
+                              key={scope}
+                              orientation="horizontal"
+                              className="w-auto"
+                            >
+                              <Checkbox
+                                id={`${managementID}-${scope}`}
+                                checked={scopes.includes(scope)}
+                                onCheckedChange={(value) =>
+                                  setScopes((previous) =>
+                                    value === true
+                                      ? [...previous, scope].sort()
+                                      : previous.filter(
+                                          (item) => item !== scope,
+                                        ),
+                                  )
+                                }
+                              />
+                              <div className="flex items-center gap-0.5">
+                                <FieldLabel
+                                  htmlFor={`${managementID}-${scope}`}
+                                >
+                                  {t(`ui.scope_${scope}`)}
+                                </FieldLabel>
+                                {scope === "content" && (
+                                  <ContentPermissionInfo />
+                                )}
+                              </div>
+                            </Field>
+                          ))}
+                        </div>
+                      </FieldSet>
+                    </div>
+                  )}
+                </FieldGroup>
+              </FieldSet>
+              <FieldSet className="gap-4 border-t border-border-subtle pt-5">
+                <FieldLegend className="sr-only">
+                  {t("ui.push_permission")}
+                </FieldLegend>
+                <FieldGroup className="gap-4 [&>[data-slot=field-group]]:gap-3">
+                  <Field orientation="horizontal">
+                    <Checkbox
+                      id={nativeID}
+                      checked={native}
+                      disabled={!settings.data?.native_available}
+                      onCheckedChange={(value) => setNative(value === true)}
+                    />
+                    <FieldLabel htmlFor={nativeID}>
+                      {t("ui.enable_native_push")}
+                    </FieldLabel>
+                  </Field>
+                </FieldGroup>
+              </FieldSet>
+            </FieldGroup>
           </FieldGroup>
+          <div className="flex flex-col items-start gap-3">
+            <BusyButton
+              ref={trigger}
+              className="self-start"
+              busy={busy === "create"}
+              disabled={
+                !!busy ||
+                !!pairing ||
+                (!management && !native) ||
+                (management && (!origin || scopes.length === 0))
+              }
+              onClick={() => void create()}
+            >
+              {t("ui.add_phone")}
+            </BusyButton>
+          </div>
+        </div>
+      </Panel>
+      <AuthorizedApps
+        management={devices.data?.devices}
+        loading={!devices.data}
+      />
+      {pairing && (
+        <PairingDialog
+          created={pairing}
+          onClose={() => setPairing(undefined)}
+        />
+      )}
+    </>
+  );
+}
+
+function AuthorizedApps({
+  management,
+  loading,
+}: {
+  management?: ManagementDevice[];
+  loading: boolean;
+}) {
+  const { t } = useI18n();
+  const client = useQueryClient();
+  const settings = useQuery({
+    queryKey: ["delivery-settings"],
+    queryFn: () => api<DeliverySettings>("/settings/delivery"),
+  });
+  const push = useQuery({
+    queryKey: ["native-devices"],
+    queryFn: () => api<{ devices: NativePairing[] }>("/native/devices"),
+    enabled: !!settings.data?.native_available,
+  });
+  const [confirm, setConfirm] = useState<{
+    kind: "management" | "push";
+    id: string;
+    name: string;
+  }>();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>();
+  const rows = new Map<
+    string,
+    { name: string; management?: ManagementDevice; push: NativePairing[] }
+  >();
+  for (const device of management ?? [])
+    rows.set(device.device_id, {
+      name: device.device_name,
+      management: device,
+      push: [],
+    });
+  for (const device of push.data?.devices ?? []) {
+    const key = device.device_id || device.id;
+    const row = rows.get(key) ?? { name: device.device_name, push: [] };
+    row.push.push(device);
+    rows.set(key, row);
+  }
+  async function revoke() {
+    if (!confirm) return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      await api(
+        `/${confirm.kind === "management" ? "management" : "native"}/devices/${encodeURIComponent(confirm.id)}`,
+        { method: "DELETE" },
+      );
+      await Promise.all(
+        ["management-devices", "native-devices", "status"].map((key) =>
+          client.invalidateQueries({ queryKey: [key] }),
+        ),
+      );
+      setConfirm(undefined);
+    } catch (error) {
+      setError(error);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Panel title={t("ui.management_devices")}>
+      <div className="p-5 md:p-6">
+        <ErrorNotice error={push.error} />
+        {loading ? (
+          <p>{t("ui.loading")}</p>
+        ) : rows.size === 0 ? (
           <p className="text-sm text-muted-foreground">
-            {t("ui.app_management_pro_hint")}
+            {t("ui.no_management_devices")}
           </p>
-          <BusyButton
-            ref={trigger}
-            className="self-start"
-            busy={busy === "create"}
-            disabled={
-              !!busy ||
-              !!pairing ||
-              (!management && !native) ||
-              (management && (!origin || scopes.length === 0))
-            }
-            onClick={() => void create()}
-          >
-            {t("ui.add_phone")}
+        ) : (
+          <Table className="min-w-[900px] [&_th]:h-12 [&_th]:px-5 [&_td]:px-5 [&_td]:py-4">
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t("ui.phones")}</TableHead>
+                <TableHead>{t("ui.management_scopes")}</TableHead>
+                <TableHead>{t("ui.push_permission")}</TableHead>
+                <TableHead>{t("ui.last_used")}</TableHead>
+                <TableHead className="text-center">{t("ui.actions")}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {Array.from(rows, ([id, row]) => (
+                <TableRow key={id}>
+                  <TableCell>
+                    <div className="flex flex-col gap-2">
+                      <strong>{row.name || t("ui.phone_unnamed")}</strong>
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {id.slice(0, 8)}
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="max-w-sm whitespace-normal">
+                    {row.management ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        {row.management.scopes.map((scope) => (
+                          <Badge key={scope} variant="secondary">
+                            {t(`ui.scope_${scope}`)}
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">
+                        {t("ui.not_authorized")}
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-col gap-2 text-muted-foreground">
+                      {row.push.length
+                        ? row.push.map((device) => (
+                            <Badge
+                              key={device.id}
+                              variant={
+                                device.status === "active"
+                                  ? "success"
+                                  : "neutral"
+                              }
+                            >
+                              {t(`ui.pairing_${device.status}`)}
+                            </Badge>
+                          ))
+                        : t("ui.not_authorized")}
+                    </div>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    {row.management?.last_used_at ? (
+                      <Time value={row.management.last_used_at} />
+                    ) : (
+                      <span className="text-muted-foreground">
+                        {row.management ? t("ui.never") : "—"}
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center justify-center gap-2">
+                      {row.management && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            setConfirm({
+                              kind: "management",
+                              id: row.management!.controller_id,
+                              name: row.name,
+                            })
+                          }
+                        >
+                          {t("ui.revoke_management")}
+                        </Button>
+                      )}
+                      {row.push.map((device) => (
+                        <Button
+                          key={device.id}
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            setConfirm({
+                              kind: "push",
+                              id: device.id,
+                              name: row.name,
+                            })
+                          }
+                        >
+                          {t(
+                            device.status === "revoked"
+                              ? "ui.remove"
+                              : "ui.revoke_push",
+                          )}
+                        </Button>
+                      ))}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </div>
+      {confirm && (
+        <RevokeDialog
+          title={t(
+            confirm.kind === "management"
+              ? "ui.revoke_management"
+              : "ui.revoke_push",
+          )}
+          description={`${confirm.name} · ${t(confirm.kind === "management" ? "ui.revoke_management_confirm" : "ui.revoke_push_confirm")}`}
+          busy={busy}
+          error={error}
+          onConfirm={() => void revoke()}
+          onClose={() => {
+            setConfirm(undefined);
+            setError(undefined);
+          }}
+        />
+      )}
+    </Panel>
+  );
+}
+
+function RevokeDialog({
+  title,
+  description,
+  busy,
+  error,
+  onConfirm,
+  onClose,
+}: {
+  title: string;
+  description: string;
+  busy: boolean;
+  error: unknown;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  const { t } = useI18n();
+  const dialog = useRef<HTMLDialogElement>(null);
+  const trigger = useRef(document.activeElement as HTMLElement | null);
+  const heading = useId();
+  const detail = useId();
+  useEffect(() => {
+    dialog.current?.showModal();
+    const element = trigger.current;
+    return () => element?.focus();
+  }, []);
+  return (
+    <dialog
+      ref={dialog}
+      aria-labelledby={heading}
+      aria-describedby={detail}
+      onClose={onClose}
+      onCancel={(event) => {
+        if (busy) event.preventDefault();
+      }}
+      className="m-auto w-[min(28rem,calc(100vw-2rem))] rounded-lg border bg-card p-6 text-card-foreground backdrop:bg-[var(--dialog-backdrop)]"
+    >
+      <div className="flex flex-col gap-5">
+        <h2 id={heading} className="text-lg font-semibold">
+          {title}
+        </h2>
+        <p id={detail} className="text-sm text-muted-foreground">
+          {description}
+        </p>
+        <ErrorNotice error={error} />
+        <div className="flex justify-end gap-3">
+          <Button variant="outline" disabled={busy} onClick={onClose}>
+            {t("ui.cancel")}
+          </Button>
+          <BusyButton variant="destructive" busy={busy} onClick={onConfirm}>
+            {t("ui.revoke")}
           </BusyButton>
         </div>
-      </Panel>
-      <Panel title={t("ui.management_devices")}>
-        <div className="p-5 md:p-6">
-          {!devices.data ? (
-            <p>{t("ui.loading")}</p>
-          ) : devices.data.devices.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              {t("ui.no_management_devices")}
-            </p>
-          ) : (
-            <ul className="flex list-none flex-col gap-4 p-0">
-              {devices.data.devices.map((device) => (
-                <li
-                  key={device.controller_id}
-                  className="flex flex-wrap items-center justify-between gap-3"
-                >
-                  <div>
-                    <strong>
-                      {device.device_name || t("ui.phone_unnamed")}
-                    </strong>
-                    <p className="text-sm text-muted-foreground">
-                      {device.scopes
-                        .map((scope) => t(`ui.scope_${scope}`))
-                        .join(" · ")}{" "}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {t("ui.last_used")}{" "}
-                      {device.last_used_at ? (
-                        <Time value={device.last_used_at} />
-                      ) : (
-                        t("ui.never")
-                      )}
-                    </p>
-                  </div>
-                  <InlineConfirm
-                    label={t("ui.revoke")}
-                    question={t("ui.revoke_management_confirm")}
-                    confirm={t("ui.revoke")}
-                    busy={busy === device.controller_id}
-                    onConfirm={() => revoke(device.controller_id)}
-                  />
-                </li>
-              ))}
-            </ul>
-          )}
-          {pairing && (
-            <PairingDialog
-              created={pairing}
-              onClose={() => setPairing(undefined)}
-            />
-          )}
-        </div>
-      </Panel>
-    </>
+      </div>
+    </dialog>
+  );
+}
+
+function ContentPermissionInfo() {
+  const { t } = useI18n();
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <span className="inline-flex text-muted-foreground">
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              className="inline-flex size-5 items-center justify-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label={t("ui.scope_content_hint")}
+            >
+              <CircleHelp className="size-3.5" aria-hidden="true" />
+            </button>
+          </TooltipTrigger>
+        </span>
+        <TooltipContent className="max-w-xs">
+          {t("ui.scope_content_hint")}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }

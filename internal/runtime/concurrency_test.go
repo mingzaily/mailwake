@@ -128,7 +128,7 @@ func (s slowSender) Send(ctx context.Context, _ event.Notification) error {
 		return ctx.Err()
 	}
 }
-func TestDeliveryTestingPreservesAvailabilityAndDetectsConflict(t *testing.T) {
+func TestDeliveryTestingPreservesAvailabilityAndAllowsSaving(t *testing.T) {
 	store, err := storage.Open(t.Context(), t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -152,7 +152,7 @@ func TestDeliveryTestingPreservesAvailabilityAndDetectsConflict(t *testing.T) {
 	input := DeliveryUpdate{Channel: "bark", Preview: "off"}
 	input.Bark.Key = ptr("slow")
 	result := make(chan error, 1)
-	go func() { result <- s.UpdateDelivery(t.Context(), input) }()
+	go func() { result <- s.TestDelivery(t.Context(), input) }()
 	<-started
 	responsiveStatus(t, s)
 	winner := input
@@ -168,8 +168,11 @@ func TestDeliveryTestingPreservesAvailabilityAndDetectsConflict(t *testing.T) {
 		t.Error("concurrent update blocked")
 	}
 	close(release)
-	if err := <-result; fault.From(err, "").Code != "settings_conflict" {
+	if err := <-result; err != nil {
 		t.Fatal(err)
+	}
+	if s.delivery.Bark.Key != "winner" {
+		t.Fatal("test changed saved configuration")
 	}
 }
 
