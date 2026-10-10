@@ -4,6 +4,7 @@ COPY web/package.json web/package-lock.json ./
 RUN npm ci
 COPY web/ ./
 COPY internal/i18n/locales/ /src/internal/i18n/locales/
+COPY internal/i18n/languages.json /src/internal/i18n/languages.json
 COPY internal/httpapi/testdata/ /src/internal/httpapi/testdata/
 RUN npm run build
 
