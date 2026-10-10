@@ -1,0 +1,27 @@
+# Run in a dedicated directory: docker compose -f compose.1panel.yaml up -d
+# Set MAILWAKE_RELAY_URL in .env to select a sandbox or custom Relay.
+networks:
+    1panel-network:
+        external: true
+
+services:
+    mailwake:
+        image: ghcr.io/mingzaily/mailwake:v1.0.0-rc.1
+        user: "0:0"
+        networks:
+            - 1panel-network
+        ports:
+            - "8080:8080"
+        restart: always
+        environment:
+            MAILWAKE_LISTEN: "0.0.0.0:8080"
+            MAILWAKE_DATA_DIR: "/data"
+            MAILWAKE_RELAY_URL: "${MAILWAKE_RELAY_URL:-}"
+        volumes:
+            - ./data:/data
+        read_only: true
+        security_opt:
+            - no-new-privileges:true
+        cap_drop:
+            - ALL
+        stop_grace_period: 30s

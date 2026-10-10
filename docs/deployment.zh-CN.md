@@ -19,6 +19,23 @@ docker compose logs core
 
 首次构建需要下载基础镜像、Go 与 npm 依赖。服务使用非 root 用户、只读容器文件系统和 `core-data` 持久卷，监听主机的 `127.0.0.1:8080`。所有后续命令在同一个克隆目录执行，保持 Compose 项目名称不变，以继续使用原来的数据卷。
 
+### 使用宿主机数据目录的 1Panel 部署
+
+可选的 [compose.1panel.yaml](../compose.1panel.yaml) 使用 root 用户和 `./data:/data` 挂载。将它复制到独立的 1Panel 编排目录，命名为 `docker-compose.yml`。外部网络 `1panel-network` 需要已存在。默认 Compose 继续使用非 root 用户和命名卷。
+
+示例使用已发布镜像 `v1.0.0-rc.1`。测试沙盒 App 时，在该编排的 `.env` 中设置 `MAILWAKE_RELAY_URL=https://notify-sandbox.mailwake.oritx.com`；留空时使用生产 Relay。
+
+```sh
+docker compose up -d
+docker compose logs --tail=50 -f mailwake
+```
+
+访问 `http://服务器IP:8080`。1Panel 反向代理加入相同网络后，上游填写 `http://mailwake:8080`。全部流量通过反向代理时可移除 `ports`；App 连接需要受信任的 HTTPS。
+
+此方案使用 UID/GID `0:0`，保留容器根文件系统只读、移除 capabilities 和 `no-new-privileges` 配置。Docker 自动创建的挂载目录通常属于 root。已有数据文件须属于所选运行用户；切换用户时先停止 Core，再调整专用数据目录的所有者。数据库与 `secret.key` 须一并保留。
+
+启动错误中，`data_directory_permission_denied` 表示文件系统权限不足，`data_directory_read_only` 表示只读挂载，`storage_open_failed` 表示其他存储初始化失败。这些诊断随包含本次变更的构建生效；`v1.0.0-rc.1` 对其中部分错误仍显示 `request_failed`。
+
 ## 2. 创建管理员与连接邮箱
 
 在运行 Docker 的电脑打开 `http://127.0.0.1:8080`。远程服务器可先通过 SSH 转发端口，把 `user@server` 替换为实际 SSH 地址：

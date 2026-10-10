@@ -50,9 +50,15 @@ func main() {
 	}
 	log := logging.New(os.Stderr)
 	if err := run(log); err != nil {
-		log.Error(i18n.Message("en", "log.core_failed", nil), "code", fault.From(err, "request_failed").Code)
+		logStartupFailure(log, err)
 		os.Exit(1)
 	}
+}
+
+// Startup diagnostics use catalog messages to keep raw paths and secrets out of logs.
+func logStartupFailure(log *slog.Logger, err error) {
+	coded := fault.From(err, "core_startup_failed")
+	log.Error(i18n.Message("en", "log.core_failed", nil)+" "+i18n.Message("en", coded.Code, nil), "code", coded.Code)
 }
 
 func run(log *slog.Logger) error {
@@ -93,7 +99,7 @@ func run(log *slog.Logger) error {
 	server := &http.Server{Handler: httpapi.New(authService, configuration, store, log), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 40 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10}
 	listener, err := net.Listen("tcp", c.Listen)
 	if err != nil {
-		return fmt.Errorf("%s: %w", i18n.Message("en", "cli.listen_http", nil), err)
+		return fault.New("http_listen_failed")
 	}
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- server.Serve(listener) }()

@@ -174,7 +174,7 @@ function LocalizedConsole() {
           onClick={() => void catalog.refetch()}
           aria-busy={catalog.isPending}
         >
-          Mailwake Core
+          Mailwake
         </button>
       </main>
     );
