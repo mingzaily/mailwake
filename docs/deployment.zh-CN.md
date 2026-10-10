@@ -19,21 +19,6 @@ docker compose logs core
 
 首次构建需要下载基础镜像、Go 与 npm 依赖。服务使用非 root 用户、只读容器文件系统和 `core-data` 持久卷，监听主机的 `127.0.0.1:8080`。所有后续命令在同一个克隆目录执行，保持 Compose 项目名称不变，以继续使用原来的数据卷。
 
-### 使用宿主机数据目录的 1Panel 部署
-
-可选的 [compose.1panel.yaml](../compose.1panel.yaml) 使用 root 用户和 `./data:/data` 挂载。将它复制到独立的 1Panel 编排目录，命名为 `docker-compose.yml`。外部网络 `1panel-network` 需要已存在。默认 Compose 继续使用非 root 用户和命名卷。
-
-示例使用镜像 `v1.0.0-rc.3`。测试沙盒 App 时，在该编排的 `.env` 中设置 `MAILWAKE_RELAY_URL=https://notify-sandbox.mailwake.oritx.com`；留空时使用生产 Relay。
-
-```sh
-docker compose up -d
-docker compose logs --tail=50 -f mailwake
-```
-
-访问 `http://服务器IP:8080`。1Panel 反向代理加入相同网络后，上游填写 `http://mailwake:8080`。全部流量通过反向代理时可移除 `ports`；App 连接需要受信任的 HTTPS。
-
-此方案使用 UID/GID `0:0`，保留容器根文件系统只读、移除 capabilities 和 `no-new-privileges` 配置。Docker 自动创建的挂载目录通常属于 root。已有数据文件须属于所选运行用户；切换用户时先停止 Core，再调整专用数据目录的所有者。数据库与 `secret.key` 须一并保留。
-
 启动错误中，`data_directory_permission_denied` 表示文件系统权限不足，`data_directory_read_only` 表示只读挂载，`storage_open_failed` 表示其他存储初始化失败。这些诊断从 `v1.0.0-rc.2` 起生效；`v1.0.0-rc.1` 对其中部分错误仍显示 `request_failed`。
 
 ## 2. 创建管理员与连接邮箱
@@ -84,20 +69,29 @@ Core 信任这些代理对端网段：`127.0.0.0/8`, `::1/128`, `10.0.0.0/8`, `1
 
 Free 部署到这里即可使用。官方 App 尚未上架；App Store 下载、正式 Relay 地址和 Platform 公钥信任文件以官方发布为准。
 
-接入 App 管理时，先取得并核实官方公钥信任 JSON，再按 [环境示例](../app-management.env.example) 配置绝对路径与正式 Relay 地址。示例域名用于说明格式。将环境配置保存在本地 `app-management.env`，然后使用 [Compose overlay](../compose.app-management.yaml)：
+接入 App 管理时，先取得并核实官方公钥信任 JSON。在本地 `compose.yaml` 的 `services.core` 下，将以下配置合并到已有的 `environment` 和 `volumes` 中，保留原有环境变量和 `core-data:/data` 数据卷。将 `source` 替换为已存在的公钥文件绝对路径：
 
-```sh
-docker compose --env-file app-management.env \
-  -f compose.yaml -f compose.app-management.yaml up -d --build --pull never
+```yaml
+environment:
+  MAILWAKE_APP_MANAGEMENT_TRUST_FILE: /etc/mailwake/app-management-trust.json
+volumes:
+  - type: bind
+    source: /absolute/path/to/app-management-trust.json
+    target: /etc/mailwake/app-management-trust.json
+    read_only: true
+    bind:
+      create_host_path: false
 ```
 
-后续 Compose 操作保持同一组 `--env-file` 与 `-f` 参数。Core Web 的“手机”页面可创建邀请，分别授予管理、原生推送与正文读取权限。Pro 购买、Core 所有者授权和设备配对分别验证。公钥轮换、scope 与资格校验见 [App 管理说明](../internal/appmanagement/README.md)。
+执行 `docker compose up -d` 应用配置。更新公钥文件后执行 `docker compose restart core`。需要指定 Relay 时，在本地 `.env` 中设置 `MAILWAKE_RELAY_URL`；留空使用默认生产 Relay。
+
+在 Web 的“App 设置”页面创建邀请，分别授予管理、原生推送与正文读取权限。Pro 购买、Core 所有者授权和设备配对分别验证。公钥轮换、scope 与资格校验见 [App 管理说明](../internal/appmanagement/README.md)。
 
 ## 5. 备份、恢复与升级
 
 备份包含邮箱凭据、管理员和设备授权等敏感状态，保存在受限目录或加密存储。完整复制数据卷，包括 SQLite 文件和 `secret.key`；密钥与数据库共同用于恢复。
 
-先停止写入，再复制整个数据目录。以下示例使用基础 Compose；使用 overlay 时在每条 Compose 命令补齐上一节参数：
+先停止写入，再复制整个数据目录。所有操作使用同一份 `compose.yaml`：
 
 ```sh
 docker compose stop core

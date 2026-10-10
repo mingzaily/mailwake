@@ -72,7 +72,7 @@ jobs:
             GOOS=$os GOARCH=$arch CGO_ENABLED=0 go build -tags nomsgpack -trimpath \
               -ldflags="-s -w -X github.com/mingzaily/mailwake/internal/buildinfo.Version=${GITHUB_REF_NAME} -X github.com/mingzaily/mailwake/internal/buildinfo.Revision=${GITHUB_SHA}" \
               -o "dist/$name/mailwake" ./cmd/mailwake
-            cp LICENSE COPYRIGHT README.md README.zh-CN.md compose.yaml compose.1panel.yaml compose.app-management.yaml app-management.env.example internal/httpapi/webdist/third-party-notices.txt "dist/$name/"
+            cp LICENSE COPYRIGHT README.md README.zh-CN.md compose.yaml internal/httpapi/webdist/third-party-notices.txt "dist/$name/"
             cp -R docs "dist/$name/"
             mkdir -p "dist/$name/internal/appmanagement"
             cp internal/appmanagement/README.md "dist/$name/internal/appmanagement/"

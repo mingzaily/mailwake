@@ -25,7 +25,7 @@ MAILWAKE_APP_MANAGEMENT_TRUST='{"issuer":"mailwake-platform","environment":"prod
 MAILWAKE_APP_MANAGEMENT_TRUST_FILE=/etc/mailwake/app-management-trust.json
 ```
 
-文件方式与 [compose.app-management.yaml](../../compose.app-management.yaml) 配合使用，修改后重启 Core。未配置信任时，付费路由返回 503 `app_management_unavailable`，其余功能不受影响。
+文件方式按[部署指南](../../docs/deployment.zh-CN.md#4-接入官方-app-与-pro)配置只读挂载，修改后重启 Core。未配置信任时，付费路由返回 503 `app_management_unavailable`，其余功能不受影响。
 
 Platform 轮换签发密钥时：先把新 kid 加入信任并重启 Core，Platform 切换签发后 300 秒再移除旧 kid。
 
