@@ -11,7 +11,7 @@ export function Diagnostics() {
     queryFn: () => api<Report>("/diagnostics"),
   });
   return (
-    <>
+    <div className="mx-auto flex w-full max-w-[960px] flex-col gap-5">
       <PageHeading
         title={t("ui.diagnostics")}
         description={t("ui.diagnostics_description")}
@@ -26,7 +26,7 @@ export function Diagnostics() {
             </dd>
             <dt className="text-muted-foreground">{t("ui.revision")}</dt>
             <dd className="wrap-anywhere font-mono text-[13px] tabular-nums">
-              {query.data?.build.revision ?? "—"}
+              {query.data?.build.revision || t("ui.not_provided")}
             </dd>
             <dt className="text-muted-foreground">{t("ui.platform")}</dt>
             <dd className="wrap-anywhere font-mono text-[13px] tabular-nums">
@@ -52,6 +52,6 @@ export function Diagnostics() {
           </div>
         </div>
       </Panel>
-    </>
+    </div>
   );
 }

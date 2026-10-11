@@ -1,14 +1,17 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useId,
   useRef,
   useState,
   type ComponentProps,
+  type CSSProperties,
   type ReactNode,
 } from "react";
-import { X } from "lucide-react";
+import { toast } from "sonner";
+import { Toaster, ToastMessage } from "./ui/sonner";
 import { APIError } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { Card, CardHeader, CardTitle, CardAction } from "./ui/card";
@@ -26,23 +29,29 @@ export function Panel({
   actions,
   children,
 }: {
-  title: ReactNode;
+  title?: ReactNode;
   actions?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <Card className="min-w-0 gap-0 overflow-hidden py-0">
-      <CardHeader className="flex flex-row items-center gap-3 px-4 py-3">
-        <CardTitle className="text-sm">
-          <h2>{title}</h2>
-        </CardTitle>
-        {actions && (
-          <CardAction className="ml-auto flex flex-wrap items-center gap-2 self-center">
-            {actions}
-          </CardAction>
-        )}
-      </CardHeader>
-      <Separator />
+      {(title || actions) && (
+        <>
+          <CardHeader className="flex flex-row items-center gap-3 px-4 py-3">
+            {title && (
+              <CardTitle className="text-sm">
+                <h2>{title}</h2>
+              </CardTitle>
+            )}
+            {actions && (
+              <CardAction className="ml-auto flex flex-wrap items-center gap-2 self-center">
+                {actions}
+              </CardAction>
+            )}
+          </CardHeader>
+          <Separator className="bg-border-subtle" />
+        </>
+      )}
       {children}
     </Card>
   );
@@ -103,15 +112,20 @@ export function SelectField({
   label,
   children,
   fieldClassName,
+  labelAction,
   ...props
 }: ComponentProps<typeof NativeSelect> & {
   label: string;
   fieldClassName?: string;
+  labelAction?: ReactNode;
 }) {
   const id = useId();
   return (
     <Field className={fieldClassName}>
-      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <div className="flex items-center justify-between gap-3">
+        <FieldLabel htmlFor={id}>{label}</FieldLabel>
+        {labelAction}
+      </div>
       <NativeSelect id={id} {...props}>
         {children}
       </NativeSelect>
@@ -200,39 +214,81 @@ export function Time({ value }: { value?: string | null }) {
     </time>
   );
 }
-const ToastContext = createContext<(message: string) => void>(() => {});
+type ToastKind = "success" | "error";
+type Notify = (message: ReactNode, kind?: ToastKind) => void;
+const ToastContext = createContext<Notify>(() => {});
 export const useToast = () => useContext(ToastContext);
 export function ToastProvider({ children }: { children: ReactNode }) {
-  const [message, setMessage] = useState("");
   const { t } = useI18n();
-  useEffect(() => {
-    if (!message) return;
-    const timer = setTimeout(() => setMessage(""), 5000);
-    return () => clearTimeout(timer);
-  }, [message]);
+  const toasterId = useId();
+  const notify = useCallback<Notify>(
+    (message, kind = "success") => {
+      const duration = kind === "error" ? 8000 : 4000;
+      toast[kind](<ToastMessage duration={duration}>{message}</ToastMessage>, {
+        toasterId,
+        duration,
+      });
+    },
+    [toasterId],
+  );
   return (
-    <ToastContext.Provider value={setMessage}>
+    <ToastContext.Provider value={notify}>
       {children}
-      <div
-        className="fixed right-5 bottom-[calc(20px+env(safe-area-inset-bottom,0px))] z-50 max-w-[calc(100%-40px)]"
-        role="status"
-        aria-live="polite"
-      >
-        {message && (
-          <Alert role="presentation" className="flex items-center gap-3 py-2.5">
-            <AlertDescription>{message}</AlertDescription>
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              aria-label={t("ui.close")}
-              onClick={() => setMessage("")}
-            >
-              <X aria-hidden="true" />
-            </Button>
-          </Alert>
-        )}
-      </div>
+      <Toaster
+        id={toasterId}
+        containerAriaLabel={t("ui.operation_feedback")}
+        position="top-right"
+        richColors
+        closeButton
+        style={{ "--width": "300px" } as CSSProperties}
+        offset={24}
+        mobileOffset={16}
+        toastOptions={{
+          closeButtonAriaLabel: t("ui.close"),
+          classNames: {
+            toast: "mailwake-toast",
+            closeButton: "mailwake-toast-close",
+          },
+        }}
+      />
     </ToastContext.Provider>
+  );
+}
+
+// Conflicts need a persistent reload action; other operation failures use a toast.
+export function useActionError(): [unknown, (error: unknown) => void] {
+  const [error, setError] = useState<unknown>();
+  const toast = useToast();
+  const { t } = useI18n();
+  function report(value: unknown) {
+    if (!value || (value instanceof APIError && value.conflict)) {
+      setError(value);
+      return;
+    }
+    setError(undefined);
+    const message =
+      value instanceof APIError &&
+      value.failure.params?.reason !== "invalid_response"
+        ? value.message
+        : t("ui.core_unreachable");
+    toast(
+      <>
+        <p>{message}</p>
+        {value instanceof APIError && value.status === 429 && (
+          <p>{t("ui.wait_seconds", { seconds: value.retryAfter })}</p>
+        )}
+      </>,
+      "error",
+    );
+  }
+  return [error, report];
+}
+
+export function FormActions({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-3">
+      {children}
+    </div>
   );
 }
 export function InlineConfirm({

@@ -48,7 +48,7 @@ func TestNativeOverviewRequiresActiveDevice(t *testing.T) {
 	req.Header.Set("Accept-Language", "zh-CN")
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
-	if w.Code != 200 || !strings.Contains(w.Body.String(), "native_no_devices") || !strings.Contains(w.Body.String(), "原生推送没有已配对的设备") {
+	if w.Code != 200 || !strings.Contains(w.Body.String(), "native_target_unavailable") || !strings.Contains(w.Body.String(), "接收设备已失效，请重新选择。") {
 		t.Fatal(w.Code, w.Body.String())
 	}
 }

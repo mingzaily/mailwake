@@ -10,7 +10,9 @@ if (
 const nativeDialogs = new Set([
   "components/folder-scan-dialog.tsx",
   "components/native-devices.tsx",
+  "components/confirm-action-dialog.tsx",
   "components/shell.tsx",
+  "components/delivery-details.tsx",
 ]);
 async function check(directory, prefix = "") {
   for (const item of await readdir(directory, { withFileTypes: true })) {
@@ -25,12 +27,12 @@ async function check(directory, prefix = "") {
     if (/<select\b/.test(source) && name !== "components/ui/native-select.tsx")
       throw new Error(`Use NativeSelect: ${name}`);
     if (/<dialog\b/.test(source) && !nativeDialogs.has(name))
-      throw new Error(`Review CSP exception for dialog: ${name}`);
+      throw new Error(`Use the shared dialog components: ${name}`);
     if (/type=["']checkbox["']|\bspace-y-|\bbg-[a-z]+-\d{2,3}\b/.test(source))
       throw new Error(`Unmigrated control or styling: ${name}`);
   }
 }
 await check(root);
 console.log(
-  "UI audit passed: NativeSelect primitive + 3 documented CSP dialog exceptions",
+  "UI audit passed: NativeSelect primitive + 5 documented native dialog components",
 );

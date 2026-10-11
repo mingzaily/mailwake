@@ -1,3 +1,5 @@
+import { ClearHistoryButton } from "@/components/clear-history-button";
+import english from "../../../internal/i18n/locales/en.json";
 import { Badge } from "@/components/ui/badge";
 import { useEffect, useRef, useState } from "react";
 import { api, downloadJSON } from "@/lib/api";
@@ -13,6 +15,18 @@ import {
   Time,
 } from "@/components/common";
 import { Button } from "@/components/ui/button";
+const logKeys = new Map(
+  Object.entries(english)
+    .filter(([key]) => key.startsWith("log."))
+    .map(([key, value]) => [value, key]),
+);
+const attributeLabels: Record<string, string> = {
+  mailbox_id: "ui.mailbox",
+  folder: "ui.folder",
+  check: "ui.check",
+  count: "ui.log_count",
+  backoff_seconds: "ui.log_retry",
+};
 export function Logs() {
   const { t, language } = useI18n();
   const boxes = useMailboxes();
@@ -59,7 +73,6 @@ export function Logs() {
           new Map(boxes.data?.mailboxes.map((box) => [box.id, box.label]))
         }
       />
-      <p className="text-muted-foreground text-xs">{t("ui.log_retention")}</p>
     </>
   );
 }
@@ -77,12 +90,15 @@ function LogFeed({
   const [paused, setPaused] = useState(false);
   const [error, setError] = useState<unknown>();
   const after = useRef(0);
+  const request = useRef<AbortController | null>(null);
+  const [revision, setRevision] = useState(0);
   const viewport = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
   const [following, setFollowing] = useState(true);
   useEffect(() => {
     if (paused) return;
     const controller = new AbortController();
+    request.current = controller;
     let timer: ReturnType<typeof setTimeout>;
     let active = false;
     async function refresh() {
@@ -108,7 +124,12 @@ function LogFeed({
         if (controller.signal.aborted) return;
         after.current = page.next;
         setEntries((previous) =>
-          [...(restarted ? [] : previous), ...page.entries].slice(-2000),
+          [
+            ...(restarted
+              ? []
+              : previous.filter((entry) => entry.seq > page.cleared_through)),
+            ...page.entries,
+          ].slice(-2000),
         );
         setError(undefined);
       } catch (error) {
@@ -130,7 +151,7 @@ function LogFeed({
       clearTimeout(timer);
       document.removeEventListener("visibilitychange", visibility);
     };
-  }, [level, mailbox, paused]);
+  }, [level, mailbox, paused, revision]);
   useEffect(() => {
     if (follow.current && viewport.current)
       viewport.current.scrollTop = viewport.current.scrollHeight;
@@ -142,6 +163,16 @@ function LogFeed({
         title={t("ui.logs")}
         actions={
           <>
+            <ClearHistoryButton
+              kind="logs"
+              onCleared={() => {
+                request.current?.abort();
+                after.current = 0;
+                setEntries([]);
+                setError(undefined);
+                setRevision((value) => value + 1);
+              }}
+            />
             <Button
               variant="outline"
               size="sm"
@@ -152,6 +183,7 @@ function LogFeed({
             <Button
               variant="outline"
               size="sm"
+              title={t("ui.log_export_notice")}
               onClick={() => downloadJSON(entries, "mailwake-logs.json")}
             >
               {t("ui.export")}
@@ -191,15 +223,21 @@ function LogFeed({
                         : "neutral"
                   }
                 >
-                  {entry.level}
+                  {t(`ui.level_${entry.level}`)}
                 </Badge>
-                <span>{entry.message}</span>
+                <span>
+                  {logKeys.has(entry.message)
+                    ? t(logKeys.get(entry.message)!)
+                    : entry.message}
+                </span>
                 <div className="flex flex-wrap gap-x-3 text-muted-foreground">
                   {Object.entries(entry.attrs)
-                    .filter(([, value]) => value !== "")
+                    .filter(
+                      ([key, value]) => value !== "" && key in attributeLabels,
+                    )
                     .map(([key, value]) => (
                       <span key={key}>
-                        {key}=
+                        {t(attributeLabels[key])}:
                         {key === "mailbox_id" ? (
                           <span title={String(value)}>
                             {mailboxNames.get(String(value)) ?? String(value)}
@@ -214,6 +252,8 @@ function LogFeed({
                               }).format(value),
                             })}
                           </span>
+                        ) : key === "check" ? (
+                          t(`ui.check_${value}`)
                         ) : typeof value === "string" ? (
                           value
                         ) : (
@@ -222,35 +262,47 @@ function LogFeed({
                       </span>
                     ))}
                 </div>
+                <details className="mt-1 text-xs text-muted-foreground">
+                  <summary className="cursor-pointer">
+                    {t("ui.technical_details")}
+                  </summary>
+                  <pre className="mt-2 whitespace-pre-wrap break-all">
+                    {JSON.stringify(
+                      { message: entry.message, ...entry.attrs },
+                      null,
+                      2,
+                    )}
+                  </pre>
+                </details>
               </div>
             ))
           ) : (
             <EmptyState />
           )}
         </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t p-4">
+          <p className="text-muted-foreground text-xs">
+            {t("ui.log_retention")}
+          </p>
+          {following ? (
+            <span className="text-muted-foreground text-xs">
+              {t("ui.following")}
+            </span>
+          ) : (
+            <Button
+              variant="ghost"
+              onClick={() => {
+                follow.current = true;
+                setFollowing(true);
+                if (viewport.current)
+                  viewport.current.scrollTop = viewport.current.scrollHeight;
+              }}
+            >
+              {t("ui.follow")}
+            </Button>
+          )}
+        </div>
       </Panel>
-      <div className="flex flex-wrap items-center gap-3">
-        <p className="text-muted-foreground text-xs">
-          {t("ui.log_export_notice")}
-        </p>
-        {following ? (
-          <span className="text-muted-foreground text-xs">
-            {t("ui.following")}
-          </span>
-        ) : (
-          <Button
-            variant="ghost"
-            onClick={() => {
-              follow.current = true;
-              setFollowing(true);
-              if (viewport.current)
-                viewport.current.scrollTop = viewport.current.scrollHeight;
-            }}
-          >
-            {t("ui.follow")}
-          </Button>
-        )}
-      </div>
     </>
   );
 }

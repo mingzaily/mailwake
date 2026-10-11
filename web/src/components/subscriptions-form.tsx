@@ -1,22 +1,35 @@
+import {
+  FormActions,
+  useActionError,
+  BusyButton,
+  ErrorNotice,
+  useToast,
+} from "./common";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { connectionUsage, subscriptionsPayload } from "@/lib/forms";
 import { useI18n } from "@/lib/i18n";
-import type { Folder, Mailbox, Subscriptions } from "@/lib/types";
+import type {
+  Folder,
+  Mailbox,
+  Subscriptions,
+  FolderDiscovery,
+} from "@/lib/types";
 import { Budget } from "./shell";
 import { Button } from "./ui/button";
 import { FolderSelection } from "./folder-selection";
 import { Alert, AlertDescription } from "./ui/alert";
-import { BusyButton, ErrorNotice, useToast } from "./common";
 
 export function SubscriptionsEditor({
   mailbox,
   discovered = [],
+  roles = {},
   onSaved,
 }: {
   mailbox: Mailbox;
   discovered?: string[];
+  roles?: Record<string, string>;
   onSaved?: () => void;
 }) {
   const { t } = useI18n();
@@ -39,6 +52,7 @@ export function SubscriptionsEditor({
       mailbox={mailbox}
       initial={query.data}
       discovered={[...new Set([...discovered, ...available])]}
+      roles={roles}
       onDiscovered={setAvailable}
       onSaved={onSaved}
       reload={() => void query.refetch()}
@@ -49,6 +63,7 @@ function SubscriptionFields({
   mailbox,
   initial,
   discovered,
+  roles: initialRoles,
   onDiscovered,
   onSaved,
   reload,
@@ -56,6 +71,7 @@ function SubscriptionFields({
   mailbox: Mailbox;
   initial: Subscriptions;
   discovered: string[];
+  roles: Record<string, string>;
   onDiscovered: (folders: string[]) => void;
   onSaved?: () => void;
   reload: () => void;
@@ -63,18 +79,20 @@ function SubscriptionFields({
   const { t } = useI18n();
   const toast = useToast();
   const client = useQueryClient();
+  const [roles, setRoles] = useState(initialRoles);
   const [folders, setFolders] = useState<Folder[]>(initial.folders);
-  const [error, setError] = useState<unknown>();
+  const [error, setError] = useActionError();
   const [busy, setBusy] = useState(false);
   const over = connectionUsage(folders) > mailbox.connection_limit - 1;
   async function discover() {
     setError(undefined);
     setBusy(true);
     try {
-      const result = await api<{ folders: string[] }>(
+      const result = await api<FolderDiscovery>(
         `/mailboxes/${mailbox.id}/folders`,
       );
       onDiscovered(result.folders);
+      setRoles(result.folder_roles ?? {});
     } catch (error) {
       setError(error);
     } finally {
@@ -114,9 +132,10 @@ function SubscriptionFields({
       <FolderSelection
         folders={folders}
         available={discovered}
+        roles={roles}
         onChange={setFolders}
       />
-      <div className="flex flex-wrap items-center gap-3">
+      <FormActions>
         <BusyButton
           variant="outline"
           busy={busy}
@@ -125,9 +144,9 @@ function SubscriptionFields({
           {t("ui.discover")}
         </BusyButton>
         <Button disabled={busy || over} onClick={() => void save()}>
-          {t(onSaved ? "ui.save_continue" : "ui.save")}
+          {t(onSaved ? "ui.save_finish" : "ui.save")}
         </Button>
-      </div>
+      </FormActions>
     </div>
   );
 }

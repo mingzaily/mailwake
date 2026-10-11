@@ -39,7 +39,7 @@ func TestTokenLifecycle(t *testing.T) {
 		return w
 	}
 	w = call("POST", "/api/v1/test-push")
-	if w.Code != 202 {
+	if w.Code != 400 {
 		t.Fatal("token requires CSRF", w.Code, w.Body.String())
 	}
 	w = call("GET", "/api/v1/tokens")

@@ -80,9 +80,20 @@ func nativeFailure(err error) *delivery.Failure {
 	return &delivery.Failure{Code: "delivery_failed", Retryable: true}
 }
 
-// Send is called by the single outbox dispatcher, or directly for a test
-// notification with a fresh ID, so one event never has two concurrent senders.
-func (s *Service) Send(ctx context.Context, n event.Notification) (result error) {
+// Sender delivers encrypted mail through the selected pairing.
+type Sender struct {
+	*Service
+	pairingID string
+}
+
+func (s *Service) ForPairing(id string) *Sender { return &Sender{Service: s, pairingID: id} }
+func (s *Sender) Send(ctx context.Context, n event.Notification) error {
+	return s.Service.send(ctx, n, s.pairingID)
+}
+
+// Send resumes persisted deliveries. New deliveries require an explicitly selected pairing.
+func (s *Service) Send(ctx context.Context, n event.Notification) error { return s.send(ctx, n, "") }
+func (s *Service) send(ctx context.Context, n event.Notification, pairingID string) (result error) {
 	own, err := s.store.MarkNativeEvent(ctx, n.ID, n.Test)
 	if err != nil {
 		return err
@@ -107,13 +118,20 @@ func (s *Service) Send(ctx context.Context, n event.Notification) (result error)
 	}
 	var devices []storage.NativePairing
 	if len(items) == 0 {
-		devices, err = s.store.NativePairings(ctx, "active")
-		if err != nil {
-			return err
+		if pairingID == "" {
+			return &delivery.Failure{Code: "native_target_required"}
 		}
-		if len(devices) == 0 {
-			return &delivery.Failure{Code: "native_no_devices"}
+		device, lookupErr := s.store.NativePairing(ctx, pairingID)
+		if lookupErr != nil {
+			if fault.From(lookupErr, "database_unavailable").Code == "native_pairing_not_found" {
+				return &delivery.Failure{Code: "native_target_unavailable"}
+			}
+			return lookupErr
 		}
+		if device.State != "active" {
+			return &delivery.Failure{Code: "native_target_unavailable"}
+		}
+		devices = []storage.NativePairing{device}
 	}
 	info, err := s.ensure(ctx)
 	if err != nil {
@@ -196,9 +214,10 @@ func (s *Service) Send(ctx context.Context, n event.Notification) (result error)
 			if err = s.revoke(ctx, d.PairingID); err != nil {
 				return err
 			}
-			failure = &delivery.Failure{Code: "pairing_revoked"}
+			failure.Code = "pairing_revoked"
+			failure.Retryable = false
 		}
-		s.log.Warn("Native delivery failed", "event_id", n.ID, "pairing_id", d.PairingID, "channel", "native", "code", failure.Code)
+		s.log.Warn("Native delivery failed", "event_id", n.ID, "pairing_id", d.PairingID, "channel", "native", "code", failure.Code, "http_status", failure.HTTPStatus, "relay_code", failure.Params["relay_code"])
 		if failure.Retryable {
 			transient = failure
 			continue

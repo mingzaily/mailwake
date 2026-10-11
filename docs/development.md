@@ -44,7 +44,7 @@ internal/
   content/             message parsing, HTML to text and verification codes
   event/               notification values and stable identifiers
   fault/               language-independent error codes and parameters
-  i18n/locales/        en.json and zh-CN.json shared by backend and frontend
+  i18n/locales/        nine catalogs shared by backend and frontend
   storage/             revision CAS, scoped subscriptions/checkpoints, outbox and database baseline
   logging/             safe JSON logs, bounded memory ring and query snapshots
   delivery/            dispatch, retries, results, notification text and HTTP rules

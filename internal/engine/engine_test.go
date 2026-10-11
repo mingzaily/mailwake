@@ -44,7 +44,7 @@ func (testSession) Mode() string                                { return "idle" 
 
 type flappingSource struct{ opened chan time.Time }
 
-func (flappingSource) Folders(context.Context) ([]string, error) { return nil, nil }
+func (flappingSource) Folders(context.Context) (*mail.FolderDiscovery, error) { return nil, nil }
 func (s flappingSource) Open(context.Context, string) (mail.Session, error) {
 	s.opened <- time.Now()
 	return testSession{wait: func() error { return errors.New("IDLE failed") }}, nil
@@ -72,7 +72,7 @@ func TestFailedIdleKeepsExponentialBackoff(t *testing.T) {
 
 type rejectingSource struct{ opened chan time.Time }
 
-func (rejectingSource) Folders(context.Context) ([]string, error) { return nil, nil }
+func (rejectingSource) Folders(context.Context) (*mail.FolderDiscovery, error) { return nil, nil }
 func (s rejectingSource) Open(context.Context, string) (mail.Session, error) {
 	s.opened <- time.Now()
 	return nil, fault.New(mail.CodeAuthFailed)
@@ -105,7 +105,7 @@ func TestRejectedCredentialsPauseLoginAttempts(t *testing.T) {
 
 type steadySource struct{ opened chan time.Time }
 
-func (steadySource) Folders(context.Context) ([]string, error) { return nil, nil }
+func (steadySource) Folders(context.Context) (*mail.FolderDiscovery, error) { return nil, nil }
 func (s steadySource) Open(context.Context, string) (mail.Session, error) {
 	s.opened <- time.Now()
 	return testSession{wait: func() error { time.Sleep(time.Minute); return nil }}, nil

@@ -15,6 +15,7 @@ import (
 	"slices"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	protocol "github.com/emersion/go-imap/v2"
@@ -175,15 +176,16 @@ func loginError(err error) error {
 	return err
 }
 
-func (s *Source) Folders(ctx context.Context) ([]string, error) {
+func (s *Source) Folders(ctx context.Context) (*mail.FolderDiscovery, error) {
 	x, err := s.connect(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer x.Close()
 	folders := []string{}
+	roles := map[string]string{}
 	err = x.command(ctx, "imap_discovery_failed", func() error {
-		cmd := x.client.List("", "*", nil)
+		cmd := x.client.List("", "*", &protocol.ListOptions{ReturnSpecialUse: x.caps.Has(protocol.CapSpecialUse)})
 		defer cmd.Close()
 		for item := cmd.Next(); item != nil; item = cmd.Next() {
 			selectable := true
@@ -194,6 +196,9 @@ func (s *Source) Folders(ctx context.Context) ([]string, error) {
 			}
 			if selectable {
 				folders = append(folders, item.Mailbox)
+				if role := folderRole(item.Mailbox, item.Attrs); role != "" {
+					roles[item.Mailbox] = role
+				}
 			}
 			if len(folders) > 2000 {
 				x.conn.Close()
@@ -206,7 +211,7 @@ func (s *Source) Folders(ctx context.Context) ([]string, error) {
 		return nil, err
 	}
 	sort.Strings(folders)
-	return folders, nil
+	return &mail.FolderDiscovery{Folders: folders, FolderRoles: roles}, nil
 }
 
 func (s *Source) Open(ctx context.Context, folder string) (mail.Session, error) {
@@ -447,4 +452,29 @@ func (s *session) Wait(ctx context.Context, interval time.Duration) error {
 		}
 		return cmd.Wait()
 	})
+}
+
+func folderRole(name string, attrs []protocol.MailboxAttr) string {
+	if strings.EqualFold(name, "INBOX") {
+		return "inbox"
+	}
+	for _, attr := range attrs {
+		switch strings.ToLower(string(attr)) {
+		case "\\drafts":
+			return "drafts"
+		case "\\sent":
+			return "sent"
+		case "\\trash":
+			return "trash"
+		case "\\junk":
+			return "junk"
+		case "\\archive":
+			return "archive"
+		case "\\all":
+			return "all"
+		case "\\flagged":
+			return "flagged"
+		}
+	}
+	return ""
 }

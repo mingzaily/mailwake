@@ -8,6 +8,7 @@ import {
 import { api, APIError, configureAPI, setCSRF } from "./lib/api";
 import {
   I18nContext,
+  isLanguage,
   loadCatalog,
   readPreference,
   savePreference,
@@ -18,6 +19,7 @@ import { AuthScreen } from "./components/auth-screen";
 import { Shell } from "./components/shell";
 import { ErrorNotice, ToastProvider } from "./components/common";
 import { SetupWizard } from "./components/setup";
+import { AppSettings } from "./pages/app-settings";
 import { Settings } from "./pages/settings";
 import { Diagnostics } from "./pages/diagnostics";
 import { applyTheme } from "./lib/preferences";
@@ -43,7 +45,10 @@ function Console() {
   const [error, setError] = useState<unknown>();
   const session = useQuery({
     queryKey: ["session"],
-    queryFn: () => api<{ csrf_token: string }>("/session", { public: true }),
+    queryFn: () =>
+      api<{ csrf_token: string; username: string }>("/session", {
+        public: true,
+      }),
     refetchOnWindowFocus: false,
   });
   useEffect(() => {
@@ -94,6 +99,7 @@ function Console() {
             : undefined
         }
         onSuccess={() => {
+          void session.refetch();
           setAuthenticated(true);
           setWizard(setup);
           setSetup(false);
@@ -106,12 +112,17 @@ function Console() {
       <SetupWizard
         done={() => {
           setWizard(false);
-          navigate("overview");
+          navigate("notifications");
         }}
       />
     );
   return (
-    <Shell page={page} mailboxId={id} logout={() => void logout()}>
+    <Shell
+      username={session.data?.username}
+      page={page}
+      mailboxId={id}
+      logout={() => void logout()}
+    >
       <ErrorNotice error={error} />
       <ConsolePage page={page} id={id} view={view} />
     </Shell>
@@ -129,6 +140,8 @@ function ConsolePage({
   switch (page) {
     case "mailboxes":
       return <Mailboxes id={id} view={view} />;
+    case "app_settings":
+      return <AppSettings />;
     case "notifications":
       return <Notifications />;
     case "deliveries":
@@ -146,7 +159,7 @@ function ConsolePage({
 function LocalizedConsole() {
   const [language, setLanguage] = useState<Language | undefined>(() => {
     const saved = readPreference("language");
-    return saved === "en" || saved === "zh-CN" ? saved : undefined;
+    return isLanguage(saved) ? saved : undefined;
   });
   const catalog = useQuery({
     queryKey: ["catalog", language],
@@ -174,7 +187,7 @@ function LocalizedConsole() {
           onClick={() => void catalog.refetch()}
           aria-busy={catalog.isPending}
         >
-          Mailwake Core
+          Mailwake
         </button>
       </main>
     );

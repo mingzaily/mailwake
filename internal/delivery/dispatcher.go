@@ -188,6 +188,9 @@ func (d *Dispatcher) Configure(sender Sender, retryCount int, preview bool) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.sender = sender
+	if named, ok := sender.(interface{ Channel() string }); ok && named.Channel() == "native" {
+		d.nativeSender = sender
+	}
 	d.maxAttempts = 1 + retryCount
 	d.previewOff = !preview
 }

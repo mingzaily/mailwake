@@ -81,7 +81,7 @@ func TestRelayRevocationSignals(t *testing.T) {
 			revoked = addDevice(t, store, "revoked", v.Encryption.PublicKey)
 			n := event.Notification{ID: "signal", Test: true, ReceivedAt: time.Now()}
 			if signal == "status" {
-				if err := service.Send(ctx, n); err != nil {
+				if err := service.ForPairing(revoked).Send(ctx, n); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -94,7 +94,7 @@ func TestRelayRevocationSignals(t *testing.T) {
 				t.Fatal(err)
 			}
 			if signal == "push" {
-				_ = service.Send(ctx, n)
+				_ = service.ForPairing(revoked).Send(ctx, n)
 			} else {
 				time.Sleep(10010 * time.Millisecond)
 				if err := service.PollDeliveries(ctx); err != nil {
@@ -115,7 +115,7 @@ func TestRelayRevocationSignals(t *testing.T) {
 				}
 			}
 			next := event.Notification{ID: "next", Test: true, ReceivedAt: time.Now()}
-			if err := service.Send(ctx, next); err != nil {
+			if err := service.ForPairing(other).Send(ctx, next); err != nil {
 				t.Fatal(err)
 			}
 			rows, _ = store.NativeDeliveries(ctx, next.ID)

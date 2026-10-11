@@ -1,17 +1,12 @@
-import { useId } from "react";
+import { useState } from "react";
 import { Brand } from "./shell";
 import { useI18n } from "@/lib/i18n";
 import { AppearanceControls } from "./appearance-controls";
 import { AuthForm } from "./auth";
 import loginIllustration from "@/assets/login-mail.webp";
 import loginDarkIllustration from "@/assets/login-mail-dark.webp";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "./ui/card";
+import { SetupWelcome } from "./setup-welcome";
+import { SetupLayout } from "./setup-layout";
 
 export function AuthScreen({
   setup,
@@ -23,7 +18,7 @@ export function AuthScreen({
   onSuccess: () => void;
 }) {
   const { t } = useI18n();
-  const title = useId();
+  const [started, setStarted] = useState(false);
   if (!setup) {
     return (
       <div className="grid min-h-svh lg:grid-cols-2">
@@ -65,33 +60,10 @@ export function AuthScreen({
       </div>
     );
   }
+  if (!started) return <SetupWelcome onContinue={() => setStarted(true)} />;
   return (
-    <div className="flex min-h-svh items-center justify-center p-6 md:p-10">
-      <div className="flex w-full max-w-sm flex-col gap-6">
-        <header className="flex justify-center">
-          <Brand />
-        </header>
-        <main>
-          <Card role="region" aria-labelledby={title}>
-            <CardHeader className="text-center">
-              <CardTitle className="text-2xl">
-                <h1 id={title}>{t("ui.setup")}</h1>
-              </CardTitle>
-              <CardDescription>
-                {t("ui.setup_description")}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <AuthForm
-                setup={setup}
-                loadingError={error}
-                onSuccess={onSuccess}
-              />
-            </CardContent>
-          </Card>
-        </main>
-        <AppearanceControls compact />
-      </div>
-    </div>
+    <SetupLayout step={0}>
+      <AuthForm setup loadingError={error} onSuccess={onSuccess} />
+    </SetupLayout>
   );
 }

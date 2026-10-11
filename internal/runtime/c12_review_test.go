@@ -76,13 +76,13 @@ type discoverySource struct {
 	block   atomic.Bool
 }
 
-func (s *discoverySource) Folders(ctx context.Context) ([]string, error) {
+func (s *discoverySource) Folders(ctx context.Context) (*mail.FolderDiscovery, error) {
 	if s.block.Load() {
 		s.entered <- struct{}{}
 		<-ctx.Done()
 		return nil, ctx.Err()
 	}
-	return []string{"INBOX"}, nil
+	return &mail.FolderDiscovery{Folders: []string{"INBOX"}}, nil
 }
 func TestDiscoverySharedAdmissionAndCancellation(t *testing.T) {
 	source := &discoverySource{multiSource: &multiSource{}, entered: make(chan struct{}, 2)}

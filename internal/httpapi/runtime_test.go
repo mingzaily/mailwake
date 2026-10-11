@@ -15,7 +15,7 @@ type Monitor interface {
 	UpdateSubscriptions(context.Context, mail.Subscriptions) (mail.Subscriptions, error)
 }
 type FolderSource interface {
-	Folders(context.Context) ([]string, error)
+	Folders(context.Context) (*mail.FolderDiscovery, error)
 }
 
 // Focused transport tests provide their own monitor and discovery behavior.
@@ -40,7 +40,7 @@ func (r testRuntime) Subscriptions(string) (mail.Subscriptions, error) {
 func (r testRuntime) UpdateSubscriptions(ctx context.Context, _ string, state mail.Subscriptions) (mail.Subscriptions, error) {
 	return r.monitor.UpdateSubscriptions(ctx, state)
 }
-func (r testRuntime) Folders(ctx context.Context, _ string) ([]string, error) {
+func (r testRuntime) Folders(ctx context.Context, _ string) (*mail.FolderDiscovery, error) {
 	return r.source.Folders(ctx)
 }
 func (r testRuntime) Channel() string                { return r.channel }
@@ -69,7 +69,7 @@ func (r testRuntime) DeliveryView() map[string]any {
 func (testRuntime) UpdateMailbox(context.Context, string, settings.MailboxUpdate) error {
 	return fault.New("mailbox_required")
 }
-func (testRuntime) TestMailbox(context.Context, string, settings.MailboxUpdate) ([]string, error) {
+func (testRuntime) TestMailbox(context.Context, string, settings.MailboxUpdate) (*mail.FolderDiscovery, error) {
 	return nil, fault.New("mailbox_required")
 }
 func (testRuntime) TestSavedMailbox(context.Context, string) error {

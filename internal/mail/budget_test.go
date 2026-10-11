@@ -16,7 +16,9 @@ type budgetTestSource struct {
 	read func(context.Context) (Body, error)
 }
 
-func (b budgetTestSource) Folders(context.Context) ([]string, error) { return []string{"INBOX"}, nil }
+func (b budgetTestSource) Folders(context.Context) (*FolderDiscovery, error) {
+	return &FolderDiscovery{Folders: []string{"INBOX"}}, nil
+}
 func (b budgetTestSource) Open(context.Context, string) (Session, error) {
 	if b.fail {
 		return nil, errors.New("failed")

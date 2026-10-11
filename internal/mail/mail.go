@@ -36,7 +36,7 @@ type Batch struct {
 
 type Source interface {
 	ReadContent(context.Context, string, Location) (Body, error)
-	Folders(context.Context) ([]string, error)
+	Folders(context.Context) (*FolderDiscovery, error)
 	Open(context.Context, string) (Session, error)
 }
 
@@ -65,3 +65,9 @@ type FolderError struct{ Err error }
 
 func (e *FolderError) Error() string { return e.Err.Error() }
 func (e *FolderError) Unwrap() error { return e.Err }
+
+// FolderDiscovery preserves mailbox paths and optional server-declared special uses.
+type FolderDiscovery struct {
+	Folders     []string          `json:"folders"`
+	FolderRoles map[string]string `json:"folder_roles,omitempty"`
+}

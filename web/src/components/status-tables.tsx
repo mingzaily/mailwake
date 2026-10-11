@@ -1,4 +1,16 @@
+import {
+  useActionError,
+  BusyButton,
+  EmptyState,
+  ErrorNotice,
+  Time,
+  useToast,
+} from "./common";
+import { FolderName } from "./folder-name";
 import { useState } from "react";
+import { Button } from "./ui/button";
+import { DeliveryDetails } from "./delivery-details";
+import { useColumnWidths } from "./use-column-widths";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
@@ -12,7 +24,6 @@ import {
   TableHeader,
   TableRow,
 } from "./ui/table";
-import { BusyButton, EmptyState, ErrorNotice, Time, useToast } from "./common";
 function stateVariant(value: string) {
   if (["watching", "idle", "scheduled", "accepted"].includes(value))
     return "success";
@@ -32,15 +43,21 @@ export function State({ value }: { value: string }) {
     </Badge>
   );
 }
-export function FolderTable({ folders }: { folders: FolderStatus[] }) {
+export function FolderTable({
+  folders,
+  showMailbox = true,
+}: {
+  folders: FolderStatus[];
+  showMailbox?: boolean;
+}) {
   const { t } = useI18n();
   if (!folders.length) return <EmptyState message={t("ui.mailbox_missing")} />;
   return (
-    <Table>
+    <Table className="[&_th]:h-12 [&_th]:px-5 [&_td]:px-5 [&_td]:py-4">
       <TableHeader>
         <TableRow>
           {[
-            "mailbox",
+            ...(showMailbox ? ["mailbox"] : []),
             "folder",
             "state",
             "check",
@@ -55,12 +72,16 @@ export function FolderTable({ folders }: { folders: FolderStatus[] }) {
       <TableBody>
         {folders.map((folder) => (
           <TableRow key={`${folder.mailbox_id}/${folder.folder}`}>
+            {showMailbox && (
+              <TableCell>
+                <a href={`#/mailboxes/${folder.mailbox_id}`}>
+                  {folder.mailbox_label}
+                </a>
+              </TableCell>
+            )}
             <TableCell>
-              <a href={`#/mailboxes/${folder.mailbox_id}`}>
-                {folder.mailbox_label}
-              </a>
+              <FolderName name={folder.folder} />
             </TableCell>
-            <TableCell>{folder.folder}</TableCell>
             <TableCell>
               <State value={folder.state} />
             </TableCell>
@@ -84,8 +105,14 @@ export function DeliveryTable({ deliveries }: { deliveries: Delivery[] }) {
   const { t } = useI18n();
   const toast = useToast();
   const client = useQueryClient();
-  const [error, setError] = useState<unknown>();
+  const [error, setError] = useActionError();
   const [busy, setBusy] = useState("");
+  const [selected, setSelected] = useState<string>();
+  const columns = useColumnWidths(
+    [260, 180, 130, 100, 260, 180, 176],
+    [120, 120, 130, 100, 120, 180, 176],
+  );
+  const selectedDelivery = deliveries.find((item) => item.id === selected);
   async function retry(id: string) {
     setBusy(id);
     setError(undefined);
@@ -109,24 +136,47 @@ export function DeliveryTable({ deliveries }: { deliveries: Delivery[] }) {
   return (
     <>
       <ErrorNotice error={error} />
-      <Table className="min-w-5xl table-fixed">
+      <Table
+        ref={columns.ref}
+        style={{ width: columns.width }}
+        className="min-w-full table-fixed [&_th]:h-12 [&_th]:px-5 [&_td]:px-5 [&_td]:py-4"
+      >
+        <colgroup>
+          {columns.widths.map((width, index) => (
+            <col key={index} style={{ width }} />
+          ))}
+        </colgroup>
         <TableHeader>
           <TableRow>
             {[
-              { key: "subject", width: undefined },
-              { key: "delivery_source", width: "w-36" },
-              { key: "state", width: "w-28" },
-              { key: "attempts", width: "w-20" },
-              { key: "error", width: "w-44" },
-              { key: "time", width: "w-40" },
-            ].map(({ key, width }) => (
-              <TableHead key={key} className={width}>
-                {t(`ui.${key}`)}
+              "subject",
+              "delivery_source",
+              "state",
+              "attempts",
+              "error",
+              "time",
+              "actions",
+            ].map((key, index) => (
+              <TableHead
+                key={key}
+                aria-label={t(`ui.${key}`)}
+                className={index === 6 ? "relative text-center" : "relative"}
+              >
+                <span className="block truncate">{t(`ui.${key}`)}</span>
+                <button
+                  type="button"
+                  aria-label={t("ui.resize_column", { column: t(`ui.${key}`) })}
+                  title={t("ui.resize_column_hint")}
+                  className="absolute inset-y-2 right-0 w-2 cursor-col-resize touch-none rounded-sm hover:bg-primary/20 focus-visible:bg-primary/20 focus-visible:outline-2 focus-visible:outline-ring"
+                  {...columns.handle(index)}
+                >
+                  <span
+                    aria-hidden="true"
+                    className="mx-auto block h-4 w-px bg-border"
+                  />
+                </button>
               </TableHead>
             ))}
-            <TableHead className="w-24 text-center">
-              {t("ui.actions")}
-            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -143,25 +193,20 @@ export function DeliveryTable({ deliveries }: { deliveries: Delivery[] }) {
                       ? t("ui.subject_unavailable")
                       : item.message.subject || t("ui.subject_empty")}
                 </div>
-                <div
-                  className="font-mono text-[13px] tabular-nums text-xs text-muted-foreground truncate"
-                  title={item.id}
-                >
-                  {item.id.length > 16 ? `${item.id.slice(0, 16)}…` : item.id}
-                </div>
               </TableCell>
               <TableCell>
                 {item.message?.test ? (
                   "—"
                 ) : item.message ? (
-                  <div className="flex flex-col gap-0.5">
+                  <div className="truncate">
                     <span className="truncate" title={item.message.mailbox_id}>
                       {item.message.mailbox_label ||
                         item.message.mailbox_id ||
                         t("ui.source_unavailable")}
                     </span>
+                    <span> / </span>
                     <span
-                      className="text-xs text-muted-foreground truncate"
+                      className="text-muted-foreground"
                       title={item.message.folder}
                     >
                       {item.message.folder || "—"}
@@ -175,19 +220,6 @@ export function DeliveryTable({ deliveries }: { deliveries: Delivery[] }) {
               </TableCell>
               <TableCell>
                 <State value={item.state} />
-                {item.devices?.map((device) => (
-                  <div
-                    key={device.pairing_id}
-                    className="text-xs truncate"
-                    title={`${device.device_name || t("ui.phone_unnamed")}: ${t(`state.${device.status}`)}${device.error_code ? ` · ${t(device.error_code)}` : ""}`}
-                  >
-                    <span>{device.device_name || t("ui.phone_unnamed")}: </span>
-                    <State value={device.status} />
-                    {device.error_code && (
-                      <span> · {t(device.error_code)}</span>
-                    )}
-                  </div>
-                ))}
               </TableCell>
               <TableCell className="font-mono text-[13px] tabular-nums">
                 {item.attempts}
@@ -201,6 +233,13 @@ export function DeliveryTable({ deliveries }: { deliveries: Delivery[] }) {
                 <Time value={item.accepted_at ?? item.created_at} />
               </TableCell>
               <TableCell className="text-center">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelected(item.id)}
+                >
+                  {t("ui.details")}
+                </Button>
                 {item.state === "dead" && item.channel !== "native" && (
                   <BusyButton
                     variant="ghost"
@@ -217,6 +256,12 @@ export function DeliveryTable({ deliveries }: { deliveries: Delivery[] }) {
           ))}
         </TableBody>
       </Table>
+      {selectedDelivery && (
+        <DeliveryDetails
+          item={selectedDelivery}
+          onClose={() => setSelected(undefined)}
+        />
+      )}
     </>
   );
 }

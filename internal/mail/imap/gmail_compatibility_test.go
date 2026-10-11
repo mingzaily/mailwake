@@ -125,7 +125,7 @@ func gmailFixture(t *testing.T, namespace string) *gmailIMAPFixture {
 			f.mu.Unlock()
 			return &gmailIMAPSession{Session: backend.NewSession(), fixture: f, conn: conn.NetConn()}, nil, nil
 		},
-		Caps:   protocol.CapSet{protocol.CapIMAP4rev1: {}, protocol.CapIdle: {}},
+		Caps:   protocol.CapSet{protocol.CapIMAP4rev1: {}, protocol.CapIdle: {}, protocol.CapSpecialUse: {}},
 		Logger: log.New(io.Discard, "", 0),
 	})
 	done := make(chan struct{})
@@ -169,10 +169,18 @@ func TestGmailStyleFolderDiscovery(t *testing.T) {
 			folders, err := f.source.Folders(t.Context())
 			want := []string{"INBOX", "Label with spaces", "Projects/Clients", "Projects/Invoices/2026", namespace + "/All Mail", namespace + "/Drafts", namespace + "/Sent Mail", namespace + "/Spam", namespace + "/Trash", "重要/银行"}
 			slices.Sort(want)
-			if err != nil || !slices.Equal(folders, want) {
+			if err != nil || !slices.Equal(folders.Folders, want) {
 				t.Fatalf("selectable Label paths: got %v, want %v, error %v", folders, want, err)
 			}
-			for _, folder := range folders {
+			for name, role := range map[string]string{"INBOX": "inbox", namespace + "/Drafts": "drafts", namespace + "/Sent Mail": "sent", namespace + "/Spam": "junk", namespace + "/Trash": "trash", namespace + "/All Mail": "all"} {
+				if folders.FolderRoles[name] != role {
+					t.Fatalf("role for %q = %q, want %q", name, folders.FolderRoles[name], role)
+				}
+			}
+			if folders.FolderRoles["Projects/Clients"] != "" {
+				t.Fatal("custom folder acquired a special use")
+			}
+			for _, folder := range folders.Folders {
 				session, err := f.source.Open(t.Context(), folder)
 				if err != nil {
 					t.Fatalf("open discovered Label %q: %v", folder, err)

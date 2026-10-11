@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/gofrs/flock"
@@ -27,7 +28,17 @@ type Store struct {
 	lock *flock.Flock
 }
 
-func Open(ctx context.Context, dir string) (*Store, error) {
+func Open(ctx context.Context, dir string) (_ *Store, err error) {
+	defer func() {
+		switch {
+		case errors.Is(err, os.ErrPermission):
+			err = fault.New("data_directory_permission_denied")
+		case errors.Is(err, syscall.EROFS):
+			err = fault.New("data_directory_read_only")
+		case err != nil:
+			err = fault.From(err, "storage_open_failed")
+		}
+	}()
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, err
 	}

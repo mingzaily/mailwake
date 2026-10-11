@@ -1,9 +1,12 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"embed"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"io/fs"
 	"log/slog"
@@ -16,7 +19,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/mingzaily/mailwake/internal/auth"
 	"github.com/mingzaily/mailwake/internal/engine"
-	"github.com/mingzaily/mailwake/internal/event"
 	"github.com/mingzaily/mailwake/internal/fault"
 	"github.com/mingzaily/mailwake/internal/i18n"
 	"github.com/mingzaily/mailwake/internal/storage"
@@ -29,6 +31,7 @@ var assets embed.FS
 var placeholder []byte
 
 func New(authService *auth.Service, runtime Runtime, store *storage.Store, log *slog.Logger) http.Handler {
+	styleHashes := managementStyleHashes(assets)
 	r := gin.New()
 	_ = r.SetTrustedProxies([]string{"127.0.0.0/8", "::1/128", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7"})
 	r.HandleMethodNotAllowed = true
@@ -69,6 +72,19 @@ func New(authService *auth.Service, runtime Runtime, store *storage.Store, log *
 			respondError(c, 500, fault.New("request_failed"))
 			return
 		}
+		nonceBytes := make([]byte, 18)
+		if _, err := rand.Read(nonceBytes); err != nil {
+			respondError(c, 500, fault.New("request_failed"))
+			return
+		}
+		nonce := base64.StdEncoding.EncodeToString(nonceBytes)
+		policy := c.Writer.Header().Get("Content-Security-Policy")
+		sources := "style-src 'self' 'nonce-" + nonce + "'"
+		for _, hash := range styleHashes {
+			sources += " '" + hash + "'"
+		}
+		c.Header("Content-Security-Policy", strings.Replace(policy, "style-src 'self'", sources, 1))
+		data = bytes.Replace(data, []byte("<head>"), []byte(`<head><meta name="style-nonce" content="`+nonce+`">`), 1)
 		c.Data(200, "text/html; charset=utf-8", data)
 	})
 	r.GET("/assets/*file", func(c *gin.Context) {
@@ -134,13 +150,20 @@ func New(authService *auth.Service, runtime Runtime, store *storage.Store, log *
 	managementRoutes(api, runtime, store)
 	api.GET("/status", statusHandler(runtime, store))
 	api.GET("/deliveries", deliveriesHandler(store))
-	api.POST("/test-push", func(c *gin.Context) {
-		n := event.Notification{ID: "test_" + rand.Text(), Test: true, ReceivedAt: time.Now().UTC()}
-		if err := store.Enqueue(c.Request.Context(), n); err != nil {
+	api.DELETE("/deliveries", func(c *gin.Context) {
+		deleted, err := store.ClearDeliveryHistory(c.Request.Context())
+		if err != nil {
 			databaseError(c)
 			return
 		}
-		c.JSON(202, gin.H{"id": n.ID, "state": "pending"})
+		c.JSON(200, gin.H{"deleted": deleted})
+	})
+	api.POST("/test-push", func(c *gin.Context) {
+		if err := runtime.TestSavedDelivery(c.Request.Context()); err != nil {
+			respondFault(c, err)
+			return
+		}
+		c.Status(204)
 	})
 	api.POST("/deliveries/:id/retry", func(c *gin.Context) {
 		ok, err := store.Retry(c.Request.Context(), c.Param("id"))
@@ -232,8 +255,16 @@ func statusHandler(runtime Runtime, store *storage.Store) gin.HandlerFunc {
 				databaseError(c)
 				return
 			}
-			if len(devices) == 0 {
-				notices["delivery"] = localize(c, fault.New("native_no_devices"))
+			target, _ := runtime.DeliveryView()["native_pairing_id"].(string)
+			found := false
+			for _, device := range devices {
+				if device.ID == target {
+					found = true
+					break
+				}
+			}
+			if !found {
+				notices["delivery"] = localize(c, fault.New("native_target_unavailable"))
 			}
 		}
 		c.JSON(200, gin.H{"folders": folders, "delivery": summary, "channel": runtime.Channel(), "notices": notices})
@@ -262,4 +293,20 @@ func deliveriesHandler(store *storage.Store) gin.HandlerFunc {
 		}
 		c.JSON(200, gin.H{"deliveries": records})
 	}
+}
+
+// The manifest is generated with the embedded frontend, so hashes track dependency updates.
+func managementStyleHashes(files fs.FS) []string {
+	data, err := fs.ReadFile(files, "webdist/style-hashes.json")
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		panic(err)
+	}
+	var hashes []string
+	if err := json.Unmarshal(data, &hashes); err != nil {
+		panic(err)
+	}
+	return hashes
 }

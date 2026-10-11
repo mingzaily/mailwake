@@ -49,13 +49,13 @@ func TestSlowPollingDoesNotBlockSend(t *testing.T) {
 			})
 			defer close(release)
 			ctx := t.Context()
-			addDevice(t, store, "active", v.Encryption.PublicKey)
+			target := addDevice(t, store, "active", v.Encryption.PublicKey)
 			if err := service.StartCheck(ctx); err != nil {
 				t.Fatal(err)
 			}
 			if kind == "status" {
 				n := event.Notification{ID: "prior", Test: true, ReceivedAt: time.Now()}
-				if err := service.Send(ctx, n); err != nil {
+				if err := service.ForPairing(target).Send(ctx, n); err != nil {
 					t.Fatal(err)
 				}
 				time.Sleep(10010 * time.Millisecond)
@@ -83,7 +83,9 @@ func TestSlowPollingDoesNotBlockSend(t *testing.T) {
 				t.Fatal("poll did not reach Relay")
 			}
 			sent := make(chan error, 1)
-			go func() { sent <- service.Send(ctx, event.Notification{ID: "new", Test: true, ReceivedAt: time.Now()}) }()
+			go func() {
+				sent <- service.ForPairing(target).Send(ctx, event.Notification{ID: "new", Test: true, ReceivedAt: time.Now()})
+			}()
 			select {
 			case err := <-sent:
 				if err != nil {

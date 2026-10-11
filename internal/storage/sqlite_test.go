@@ -3,6 +3,8 @@ package storage
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -139,5 +141,52 @@ func TestRetryOnlyDeadTasks(t *testing.T) {
 	task, err := s.Due(ctx, time.Now().Add(time.Hour))
 	if err != nil || task == nil || task.Attempts != 0 {
 		t.Fatalf("重试应重置计数: %+v %v", task, err)
+	}
+}
+
+func TestOpenReportsDataDirectoryPermissions(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root can access restricted directories")
+	}
+	for _, name := range []string{"directory", "lock", "database"} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			switch name {
+			case "directory":
+				if err := os.Chmod(dir, 0500); err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = os.Chmod(dir, 0700) })
+			case "lock", "database":
+				filename := "core.lock"
+				mode := os.FileMode(0000)
+				if name == "database" {
+					filename = "mailwake.db"
+					mode = 0400
+				}
+				if err := os.WriteFile(filepath.Join(dir, filename), nil, mode); err != nil {
+					t.Fatal(err)
+				}
+			}
+			store, err := Open(t.Context(), dir)
+			if store != nil {
+				store.Close()
+				t.Fatal("storage opened with restricted permissions")
+			}
+			if got := fault.From(err, "unknown").Code; got != "data_directory_permission_denied" {
+				t.Fatalf("code = %s, err = %v", got, err)
+			}
+		})
+	}
+}
+
+func TestOpenReportsInvalidDataDirectory(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(path, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Open(t.Context(), path)
+	if got := fault.From(err, "unknown").Code; got != "storage_open_failed" {
+		t.Fatalf("code = %s", got)
 	}
 }

@@ -36,9 +36,27 @@ func TestEmbeddedManagementAssetsAndSecurityHeaders(t *testing.T) {
 		if w.Code != 200 {
 			t.Fatalf("%s: %d", path, w.Code)
 		}
-		if got := w.Header().Get("Content-Security-Policy"); got != "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; font-src 'self'; img-src 'self' data:" {
-			t.Fatal("CSP changed", got)
+		policy := w.Header().Get("Content-Security-Policy")
+		if !strings.Contains(policy, "script-src 'self';") || strings.Contains(policy, "unsafe-inline") || strings.Contains(policy, "unsafe-eval") {
+			t.Fatal("unexpected CSP", policy)
 		}
+		for _, directive := range []string{"default-src 'none'", "connect-src 'self'", "frame-ancestors 'none'", "base-uri 'none'", "form-action 'none'", "font-src 'self'", "img-src 'self' data:"} {
+			if !strings.Contains(policy, directive) {
+				t.Fatal("security directive missing", directive)
+			}
+		}
+		if path == "/" {
+			nonce := regexp.MustCompile(`name="style-nonce" content="([^"]+)"`).FindStringSubmatch(w.Body.String())
+			if len(nonce) != 2 || !strings.Contains(policy, "'nonce-"+nonce[1]+"'") {
+				t.Fatal("page nonce authorization missing")
+			}
+			for _, hash := range managementStyleHashes(assets) {
+				if !strings.Contains(policy, "'"+hash+"'") {
+					t.Fatal("bundled style authorization missing")
+				}
+			}
+		}
+
 		cache := "no-store"
 		if path != "/" {
 			cache = "public, max-age=31536000, immutable"
@@ -85,5 +103,21 @@ func TestManagementIndexFallback(t *testing.T) {
 	html, err := managementIndex(fstest.MapFS{"webdist/index.html": &fstest.MapFile{Data: []byte("built console")}})
 	if err != nil || string(html) != "built console" {
 		t.Fatalf("built index: %s %v", html, err)
+	}
+}
+
+func TestManagementPageNoncesAreUnique(t *testing.T) {
+	store, err := storage.Open(t.Context(), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	router := New(auth.New(store, slog.Default()), newTestRuntime("", nil, nil), store, slog.Default())
+	first := httptest.NewRecorder()
+	second := httptest.NewRecorder()
+	router.ServeHTTP(first, httptest.NewRequest("GET", "/", nil))
+	router.ServeHTTP(second, httptest.NewRequest("GET", "/", nil))
+	if first.Header().Get("Content-Security-Policy") == second.Header().Get("Content-Security-Policy") {
+		t.Fatal("page responses reused their nonce")
 	}
 }

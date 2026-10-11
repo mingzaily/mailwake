@@ -175,13 +175,13 @@ type admissionSource struct {
 	release chan struct{}
 }
 
-func (s admissionSource) Folders(ctx context.Context) ([]string, error) {
+func (s admissionSource) Folders(ctx context.Context) (*mail.FolderDiscovery, error) {
 	s.started <- struct{}{}
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case <-s.release:
-		return []string{"INBOX"}, nil
+		return &mail.FolderDiscovery{Folders: []string{"INBOX"}}, nil
 	}
 }
 func (admissionSource) Open(context.Context, string) (mail.Session, error) {

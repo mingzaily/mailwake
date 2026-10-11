@@ -62,7 +62,7 @@ type budgetSource struct {
 	budget *ConnectionBudget
 }
 
-func (s budgetSource) Folders(ctx context.Context) ([]string, error) {
+func (s budgetSource) Folders(ctx context.Context) (*FolderDiscovery, error) {
 	if err := s.budget.acquire(ctx, false); err != nil {
 		return nil, err
 	}

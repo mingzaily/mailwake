@@ -54,11 +54,6 @@ export function AuthForm({
   }
   return (
     <form onSubmit={handleSubmit(submit)} noValidate>
-      {setup && (
-        <p className="text-muted-foreground mb-5">
-          {t("ui.setup_step", { step: 1, total: 4 })}
-        </p>
-      )}
       <FieldGroup>
         <ErrorNotice error={submitted ? error : loadingError} />
         {setup && (
@@ -96,7 +91,11 @@ export function AuthForm({
               : {}),
           })}
         />
-        <BusyButton type="submit" busy={isSubmitting}>
+        <BusyButton
+          type="submit"
+          busy={isSubmitting}
+          className={setup ? "self-end" : undefined}
+        >
           {t(setup ? "ui.create_admin" : "ui.login")}
         </BusyButton>
       </FieldGroup>

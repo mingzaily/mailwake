@@ -1,5 +1,10 @@
 import { createContext, useContext } from "react";
 import type { Language } from "./types";
+import definitions from "../../../internal/i18n/languages.json";
+export const languages = definitions as { code: Language; label: string }[];
+export function isLanguage(value: string | null): value is Language {
+  return languages.some(({ code }) => code === value);
+}
 export type Catalog = Record<string, string>;
 export function format(
   catalog: Catalog,
@@ -16,9 +21,9 @@ export async function loadCatalog(
   // The server matches the browser's Accept-Language header on this first request.
   const response = await fetch(`/locales/${language ?? "default"}.json`);
   if (!response.ok) throw new Error("catalog_unavailable");
+  const resolved = response.headers.get("Content-Language");
   return {
-    language:
-      response.headers.get("Content-Language") === "zh-CN" ? "zh-CN" : "en",
+    language: isLanguage(resolved) ? resolved : "en",
     catalog: await response.json(),
   };
 }

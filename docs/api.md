@@ -4,12 +4,28 @@
 
 ## Languages and error codes
 
-English is the default. The only message catalogs are `internal/i18n/locales/en.json` and `zh-CN.json`, shared by the API, the management interface and notifications, and embedded in the binary.
+English is the default. The API, Web console and notification renderers share the embedded catalogs in `internal/i18n/locales/`. `internal/i18n/languages.json` defines these canonical codes and native names:
 
-- The page picks its language from `Accept-Language` and can switch between English and Simplified Chinese; only the language preference is stored in the browser, never the token.
-- The API negotiates the language from `Accept-Language` weights, returns `Content-Language` and `Vary: Accept-Language`, and falls back to `en`.
-- `language` in delivery settings (`en` or `zh-CN`) sets the notification language.
-- Logs and CLI output are in English. Business errors use stable English `snake_case` codes with named parameters; storage keeps codes and parameters, and messages are translated when displayed.
+| Code | Language |
+| --- | --- |
+| `en` | English |
+| `zh-CN` | 简体中文 |
+| `zh-Hant` | 繁體中文 |
+| `ja` | 日本語 |
+| `ko` | 한국어 |
+| `de` | Deutsch |
+| `fr` | Français |
+| `es` | Español |
+| `pt-BR` | Português (Brasil) |
+
+- On first visit, the console uses the browser’s `Accept-Language`. Its selector stores the chosen canonical code locally. Switching the console language leaves saved notification settings unchanged.
+- API requests, including App management requests, negotiate `Accept-Language` by quality weights. Responses include `Content-Language` and `Vary: Accept-Language`. Unsupported preferences are skipped; missing, invalid or entirely unsupported preferences fall back to `en`. A language with weight 0 is excluded from negotiation.
+- Regional variants map to their supported language: `fr-CA` → `fr`, `es-MX` → `es`, `pt` / `pt-PT` → `pt-BR`. Chinese script is respected: `zh-Hans` / `zh-CN` / `zh-SG` → `zh-CN`; `zh-Hant` / `zh-TW` / `zh-HK` / `zh-MO` → `zh-Hant`. An explicit script takes precedence over region; plain `zh` uses Simplified Chinese.
+- `GET /locales/default.json` serves the negotiated catalog; `GET /locales/{canonical-code}.json` serves that catalog explicitly. Unknown catalog paths return `locale_not_supported`.
+- Delivery settings `language` controls Core-rendered notifications independently of the request or console language. It accepts the canonical codes and supported regional variants, persists the canonical code, and defaults to `en` when omitted or empty. An unsupported explicit value returns 400 `config_language_invalid`.
+- Relay generates Native test notification text using the paired device’s language. The Core notification language does not override that language. Relay and App language support is implemented in their respective modules.
+- Standard folder roles and common folder names are localized in the console. Raw IMAP paths, custom names and `folder_roles` remain unchanged in APIs; Apps localize these roles with their own catalogs. Notification titles continue to use the original leaf folder name. User-entered names, email subjects, message bodies and verification codes remain literal.
+- Logs and CLI output use English. Business errors retain stable English `snake_case` codes and named parameters; storage keeps codes and parameters, and display layers translate messages. Dates and numbers in API responses keep their existing machine-readable formats; the console formats timestamps using its chosen locale.
 
 ```json
 {
@@ -59,7 +75,7 @@ All JSON bodies are limited to 64 KiB; unknown fields or trailing JSON return 40
 | GET | `/api/v1/diagnostics` | Download a redacted JSON report without runtime logs |
 | GET | `/api/v1/logs` | Authenticated operational logs; `after`, `level`, `mailbox_id`, `limit` filters (see below) |
 | GET | `/api/v1/deliveries` | Last 50 delivery records, including subject and mailbox/folder summary |
-| POST | `/api/v1/test-push` | Queue a test notification; 202 |
+| POST | `/api/v1/test-push` | Send a test using saved settings; 204 when accepted, configuration unchanged |
 | POST | `/api/v1/deliveries/:id/retry` | Requeue a `dead` task; 202 |
 
 Delivery records include an optional `message` object: `mailbox_id`, `mailbox_label`, `folder`, `subject` (string or null) and `test` (boolean). Names are snapshots from enqueue time and survive mailbox renaming or deletion. A null subject means it was not retained; an empty string means the mail had no subject. Test notifications have `test=true` and no mailbox source. The API omits sender and body from this summary.
@@ -87,7 +103,7 @@ Delivery PUT example for an initially unconfigured channel:
 
 Read `/settings/delivery` before each update and send its revision; the first save advances 0 to 1. Pushover uses `"pushover":{"token":"…","user":"…"}`; Webhook uses `"webhook":{"url":"https://hooks.example.org/mail","secret":"…"}`. Channel, preview and revision are required. Omitted language and retry count use defaults. Omitted credentials, including Webhook URL, keep saved values; an explicit empty active credential is rejected. GET replaces every credential with `{"configured":true|false}`. The separate test endpoint does not require revision.
 
-Mailbox creates and connection changes test connection/login before saving. If host, port, username and connection_limit match the saved values and password is omitted, PUT changes only the label: revision checking and persistence still apply, while tests and watcher replacement are skipped. Queued tasks retain their original label; future tasks use the new label. Creating or updating an identity already used by another mailbox returns 409 `mailbox_duplicate` (host and username compare case-insensitively, port exactly); concurrent creation can save that identity only once. Delivery PUT tests only changes to the channel type or active channel address/credentials; preview, retry and language edits save directly. Tests run outside configuration locks and keep existing watchers active. A failed test preserves the previous configuration. Stale settings revisions return 409 `settings_conflict`; a subscription change during a mailbox test also invalidates that test’s snapshot. Reload before retrying. Each mailbox and the global delivery settings have independent revisions, so edits to different mailboxes or to a mailbox and delivery do not conflict.
+Mailbox creates and connection changes test connection/login before saving. If host, port, username and connection_limit match the saved values and password is omitted, PUT changes only the label: revision checking and persistence still apply, while tests and watcher replacement are skipped. Queued tasks retain their original label; future tasks use the new label. Creating or updating an identity already used by another mailbox returns 409 `mailbox_duplicate` (host and username compare case-insensitively, port exactly); concurrent creation can save that identity only once. Delivery PUT saves all channels after field, address, selected pairing state and revision validation, without sending a test or contacting a provider. Explicit delivery tests leave the saved settings unchanged; their failure does not block a later save. Mailbox tests run outside configuration locks and keep existing watchers active; a failed mailbox test preserves its previous configuration. Stale settings revisions return 409 `settings_conflict`; a subscription change during a mailbox test also invalidates that test’s snapshot. Reload before retrying. Each mailbox and the global delivery settings have independent revisions, so edits to different mailboxes or to a mailbox and delivery do not conflict.
 
 A successful PUT returns the redacted view and applies immediately. A mailbox connection change stops its own watchers before the save and optional cursor reset; a failed save restores them. Other mailboxes continue running. Delivery changes preserve the snapshot of an in-flight attempt; subsequent attempts use the new one. Pending tasks wait while delivery is unconfigured.
 
@@ -105,9 +121,34 @@ Use `docker compose logs -f core` (or `docker logs <container>`) for JSON stderr
 The in-memory ring keeps the newest **2000** Info/Warn/Error entries and clears on restart. `after` is an exclusive non-negative sequence; `level` selects that level and above (`info` default); omitted `mailbox_id` includes all mailboxes and global operations. `limit` defaults to 200, range 1–500. Invalid parameters return 400 `logs_request_invalid`.
 
 ```json
-{"entries":[{"seq":42,"time":"2026-09-29T00:00:00Z","level":"info","message":"Folder connection established","attrs":{"mailbox_id":"mbx_example","folder":"INBOX","mode":"idle","check":"realtime"}}],"next":42}
+{"entries":[{"seq":42,"time":"2026-09-29T00:00:00Z","level":"info","message":"Folder connection established","attrs":{"mailbox_id":"mbx_example","folder":"INBOX","mode":"idle","check":"realtime"}}],"next":42,"cleared_through":0}
 ```
 
 Use `next` as the next request’s `after`. At the page limit it is the last returned sequence; after scanning the snapshot it advances to the snapshot tail, including when filters match nothing. Evicted entries are skipped. If restart returns `next < after`, reset the cursor to 0. Entries are ordered by sequence.
 
 Logs cover mailbox and Folder lifecycles, baseline/enqueue counts, delivery attempts, configuration changes and administrator actions. Global events use an empty `mailbox_id`. Only these scalar attributes are exposed: `mailbox_id`, `folder`, `mode`, `check`, `code`, `event_id`, `channel`, `attempt`, `duration_ms`, `http_status`, `next_attempt`, `backoff_seconds`, `count`, `revision`, `token_id`, `version`, `listen`. `http_status=0` means no HTTP response was received; `token_id` is a public record identifier, not the token value. Passwords, token/session values, setup codes, sender, subject, bodies and credential URLs are omitted. The setup-code line goes only to the console. Logs contain Folder names; the anonymous diagnostic export excludes logs and names.
+
+
+Folder discovery and administrator mailbox tests return `folders` as the original path array plus optional `folder_roles`, a map from path to `inbox`, `drafts`, `sent`, `trash`, `junk`, `archive`, `all` or `flagged`. Roles come from IMAP SPECIAL-USE attributes; INBOX is recognized by its protocol-defined name. The Web UI falls back to case-insensitive exact matches for common English folder names when roles are absent. Translated names show the original path in parentheses; other names remain unchanged. Display translations never change subscription paths. Notification titles use the final segment of slash-separated folder paths; structured folder fields retain the complete path. App mailbox tests continue returning only connection status.
+
+`GET /api/v1/session` includes `username` for an authenticated cookie session. Token authentication keeps its existing response.
+
+### App receiving device
+
+Delivery settings include `native_pairing_id`. For the `native` channel, select one active pairing from `/api/v1/native/devices`. Both test notifications and new events target that pairing only. Omitting the field on an update preserves the saved selection; an empty selection returns `native_target_required`. An unavailable selection returns `native_target_unavailable`. Revocation never selects another device automatically. Retries of an existing delivery retain their original target.
+
+App authorization manages administration and push permission independently. Revoking either permission leaves the other unchanged.
+
+### Native test notifications
+
+Core uses signed `POST /v1/pairing-tests` with `{pairing_id,test_id}` (a fresh UUID per explicit test). Relay generates fixed content and synchronously submits it to APNs without requiring Native Push entitlement. Form tests, App saved-setting tests and `/api/v1/test-push` use this same path. Tests are separate from the mail Outbox and have no automatic delivery retries.
+
+Only Relay `accepted` produces Core HTTP 204. APNs rejection, unknown outcomes and `sending` return a localized error; Relay rate limiting returns Core HTTP 429 with `Retry-After`. Safe logs include the Relay HTTP status and stable error code, excluding response bodies, tokens and notification contents. Core and App share the existing Relay per-device minute and per-subject daily quotas and `(device_id,test_id)` idempotency. A user starting another test creates a new test ID.
+
+Formal mail uses `/v1/push` and remains entitlement-gated regardless of event ID or client test flags. Deploy the Relay pairing-test route before this Core version; the Core does not fall back to paid mail delivery.
+
+## Clear delivery history and runtime logs
+
+- `DELETE /api/v1/deliveries` returns `200 {"deleted":N}`. It permanently removes finished records (`accepted` / `dead`) across the full history, including their associated Native records. Pending deliveries/retries, Native records still pending/queued/sending or scheduled for status checks, and pending Native activity updates are retained. Clearing failures removes their manual retry option. Mailbox checkpoints and configuration are preserved.
+- `DELETE /api/v1/logs` returns `200 {"cleared_through":N}` and clears the shared in-memory ring for all levels and mailboxes. Sequence numbers continue increasing; stderr/container logs and exported files remain. `GET /api/v1/logs` also returns `cleared_through`; clients discard cached entries with `seq <= cleared_through` before appending the returned entries.
+- Both endpoints require administrator session + Origin/CSRF, or an administrator API token. App device credentials do not grant these operations. Repeated clearing is safe; new work and log entries may appear after the operation.

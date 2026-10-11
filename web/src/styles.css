@@ -66,12 +66,12 @@
 }
 :root[data-theme="light"] {
   color-scheme: light;
-  --bg: #f5f6f9;
+  --bg: #f8f9fb;
   --panel: #fff;
   --panel-2: #f0f2f7;
   --hover: #eceff6;
   --line: #dde1ea;
-  --line-soft: #e8ebf1;
+  --line-soft: #edf0f4;
   --text: #11141b;
   --muted: #5a6175;
   --faint: #697187;
@@ -131,4 +131,56 @@
     transition: none !important;
     scroll-behavior: auto !important;
   }
+}
+
+@keyframes setup-welcome-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .setup-welcome-enter {
+    animation: setup-welcome-enter 240ms ease-out;
+  }
+}
+
+/* Keep Sonner's layout and colors; reserve space for the inset close control. */
+.toaster [data-sonner-toast].mailwake-toast {
+  padding-right: 44px;
+}
+.toaster [data-sonner-toast] .mailwake-toast-close[data-close-button] {
+  left: auto;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+}
+.toast-countdown {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  border-radius: 1px;
+  background: currentColor;
+  opacity: 0.35;
+  transform-origin: left;
+  pointer-events: none;
+  animation: toast-countdown linear forwards;
+}
+@keyframes toast-countdown {
+  to { transform: scaleX(0); }
+}
+/* Mirror Sonner's hover, pointer interaction and background-tab pauses. */
+.toaster [data-expanded="true"] .toast-countdown,
+.toaster:active .toast-countdown,
+.toaster.toast-paused .toast-countdown {
+  animation-play-state: paused;
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast-countdown { display: none; }
 }

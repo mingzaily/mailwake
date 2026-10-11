@@ -58,7 +58,7 @@ func TestHTTPSProxySetupLoginAndMutations(t *testing.T) {
 			t.Fatal(origin, w.Code)
 		}
 	}
-	if w := call("POST", "/api/v1/test-push", "", "https://mail.example.org", grant); w.Code != 202 {
+	if w := call("POST", "/api/v1/test-push", "", "https://mail.example.org", grant); w.Code != 400 {
 		t.Fatal(w.Code, w.Body.String())
 	}
 	w = call("DELETE", "/api/v1/session", "", "https://mail.example.org", grant)

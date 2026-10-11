@@ -1,3 +1,5 @@
+import { FolderName } from "./folder-name";
+import { folderLabel } from "@/lib/folders";
 import { useId } from "react";
 import { Checkbox } from "./ui/checkbox";
 import { NativeSelect, NativeSelectOption } from "./ui/native-select";
@@ -19,10 +21,12 @@ import { EmptyState } from "./common";
 export function FolderSelection({
   folders,
   available,
+  roles = {},
   onChange,
 }: {
   folders: Folder[];
   available: string[];
+  roles?: Record<string, string>;
   onChange: (folders: Folder[]) => void;
 }) {
   const { t } = useI18n();
@@ -46,6 +50,9 @@ export function FolderSelection({
           </TableHeader>
           <TableBody>
             {names.map((name, index) => {
+              const translated = folderLabel(name, roles, t);
+              const label =
+                translated === name ? name : `${translated} (${name})`;
               const selected = selectedFolders.get(name);
               return (
                 <TableRow key={name}>
@@ -57,7 +64,7 @@ export function FolderSelection({
                         onCheckedChange={(checked) =>
                           onChange(
                             checked === true
-                              ? [...folders, { name, check: "realtime" }]
+                              ? [...folders, { name, check: "5m" }]
                               : folders.filter(
                                   (folder) => folder.name !== name,
                                 ),
@@ -68,15 +75,15 @@ export function FolderSelection({
                         htmlFor={`${id}-${index}`}
                         className="min-w-0 break-all"
                       >
-                        {name}
+                        <FolderName name={name} roles={roles} />
                       </FieldLabel>
                     </Field>
                   </TableCell>
                   <TableCell>
                     <NativeSelect
                       className="min-w-36"
-                      aria-label={`${name} ${t("ui.check")}`}
-                      value={selected?.check ?? "realtime"}
+                      aria-label={`${label} ${t("ui.check")}`}
+                      value={selected?.check ?? "5m"}
                       disabled={!selected}
                       onChange={(event) =>
                         onChange(

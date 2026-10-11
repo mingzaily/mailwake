@@ -38,7 +38,7 @@ func addDevice(t *testing.T, store *storage.Store, id, key string) string {
 	}
 	return p.ID
 }
-func TestMultiDeviceRestartReusesEnvelopeAndClearsTerminalContent(t *testing.T) {
+func TestSelectedDeviceRestartReusesEnvelopeAndClearsTerminalContent(t *testing.T) {
 	ctx := context.Background()
 	v := vector(t)
 	dir := t.TempDir()
@@ -82,11 +82,11 @@ func TestMultiDeviceRestartReusesEnvelopeAndClearsTerminalContent(t *testing.T) 
 	if err = store.Enqueue(ctx, n); err != nil {
 		t.Fatal(err)
 	}
-	if err = service.Send(ctx, n); !temporary(err) {
+	if err = service.ForPairing(second).Send(ctx, n); !temporary(err) {
 		t.Fatal(err)
 	}
 	items, _ := store.NativeDeliveries(ctx, n.ID)
-	if len(items) != 2 {
+	if len(items) != 1 {
 		t.Fatal(len(items))
 	}
 	for _, d := range items {
@@ -111,10 +111,10 @@ func TestMultiDeviceRestartReusesEnvelopeAndClearsTerminalContent(t *testing.T) 
 	}
 	service, _ = New(store, vault, server.URL, log)
 	reject = false
-	if err = service.Send(ctx, n); err != nil {
+	if err = service.ForPairing(first).Send(ctx, n); err != nil {
 		t.Fatal(err)
 	}
-	if len(requests[first]) != 1 || len(requests[second]) != 2 || requests[second][0] != requests[second][1] {
+	if len(requests[first]) != 0 || len(requests[second]) != 2 || requests[second][0] != requests[second][1] {
 		t.Fatal("per-device idempotency changed")
 	}
 	if err = store.Attempt(ctx, n.ID); err != nil {
@@ -154,7 +154,7 @@ func TestMultiDeviceRestartReusesEnvelopeAndClearsTerminalContent(t *testing.T) 
 	if err = store.Enqueue(ctx, n); err != nil {
 		t.Fatal(err)
 	}
-	_ = service.Send(ctx, n)
+	_ = service.ForPairing(second).Send(ctx, n)
 	if err = store.Failed(ctx, n.ID, fault.New("attempts_exhausted"), time.Now(), true); err != nil {
 		t.Fatal(err)
 	}
@@ -189,7 +189,7 @@ func TestPlaintextLimitAndNativeNoDevices(t *testing.T) {
 	})
 	n = event.Notification{ID: "no-device", Test: true, ReceivedAt: time.Now()}
 	err = service.Send(context.Background(), n)
-	if safeCode(err) != "native_no_devices" || temporary(err) {
+	if safeCode(err) != "native_target_required" || temporary(err) {
 		t.Fatal(err)
 	}
 	records, _ := store.Recent(context.Background())

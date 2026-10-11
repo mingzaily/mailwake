@@ -19,6 +19,8 @@ docker compose logs core
 
 The first build downloads base images, Go modules and npm dependencies. Core uses a non-root user, a read-only container filesystem and the persistent `core-data` volume. The host listens on `127.0.0.1:8080`. Run subsequent commands from the same checkout and retain the Compose project name so they use the same volume.
 
+For startup failures, `data_directory_permission_denied` identifies filesystem permission errors, `data_directory_read_only` identifies a read-only mount, and `storage_open_failed` identifies other storage initialization failures. These diagnostics are available starting with `v1.0.0-rc.2`; `v1.0.0-rc.1` reports some of these errors as `request_failed`.
+
 ## 2. Set up your administrator and mailbox
 
 Open `http://127.0.0.1:8080` on the Docker host. For a remote server, first forward its port over SSH, replacing `user@server` with your SSH destination:
@@ -67,20 +69,29 @@ Core trusts proxy peers in `127.0.0.0/8`, `::1/128`, `10.0.0.0/8`, `172.16.0.0/1
 
 Free is ready after the steps above. The official App has not launched on the App Store yet. Use the download, production Relay URL and Platform public-key trust file supplied with the official launch.
 
-For App management, obtain and verify the official trust JSON. Follow the [environment example](../app-management.env.example) to set its absolute path and the official Relay address; the example hostname only illustrates the format. Save local settings in `app-management.env` and use the [Compose overlay](../compose.app-management.yaml):
+For App management, obtain and verify the official trust JSON. In your local `compose.yaml`, merge these entries into the existing `environment` and `volumes` under `services.core`, retaining the existing variables and `core-data:/data` volume. Replace `source` with the absolute path to the existing public-key file:
 
-```sh
-docker compose --env-file app-management.env \
-  -f compose.yaml -f compose.app-management.yaml up -d --build --pull never
+```yaml
+environment:
+  MAILWAKE_APP_MANAGEMENT_TRUST_FILE: /etc/mailwake/app-management-trust.json
+volumes:
+  - type: bind
+    source: /absolute/path/to/app-management-trust.json
+    target: /etc/mailwake/app-management-trust.json
+    read_only: true
+    bind:
+      create_host_path: false
 ```
 
-Keep the same `--env-file` and `-f` arguments for subsequent Compose commands. Create an invitation on Core's Phones page, granting management, native push and content access separately. Pro purchase, Core owner approval and device pairing are separate checks. See [App management](../internal/appmanagement/README.md) for scopes and key rotation.
+Run `docker compose up -d` to apply the configuration. After updating the public-key file, run `docker compose restart core`. To select a Relay, set `MAILWAKE_RELAY_URL` in your local `.env`; an empty value uses the default production Relay.
+
+Create an invitation on the Web console's App settings page, granting management, native push and content access separately. Pro purchase, Core owner approval and device pairing are separate checks. See [App management](../internal/appmanagement/README.md) for scopes and key rotation.
 
 ## 5. Back up, restore and upgrade
 
 Backups contain credentials and administrator/device authorizations. Store them with restricted access or encrypted storage. Copy the entire volume, including SQLite files and `secret.key`; both are required for recovery.
 
-Stop writes before copying. These examples use base Compose; when using the overlay, add the same arguments from the previous section to every Compose command:
+Stop writes before copying. Use the same `compose.yaml` for all operations:
 
 ```sh
 docker compose stop core

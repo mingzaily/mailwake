@@ -19,9 +19,9 @@ type Runtime interface {
 	CreateMailbox(context.Context, settings.MailboxUpdate) (map[string]any, error)
 	UpdateMailbox(context.Context, string, settings.MailboxUpdate) error
 	DeleteMailbox(context.Context, string) error
-	TestMailbox(context.Context, string, settings.MailboxUpdate) ([]string, error)
+	TestMailbox(context.Context, string, settings.MailboxUpdate) (*mail.FolderDiscovery, error)
 	TestSavedMailbox(context.Context, string) error
-	Folders(context.Context, string) ([]string, error)
+	Folders(context.Context, string) (*mail.FolderDiscovery, error)
 	Subscriptions(string) (mail.Subscriptions, error)
 	UpdateSubscriptions(context.Context, string, mail.Subscriptions) (mail.Subscriptions, error)
 	Channel() string

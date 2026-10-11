@@ -13,7 +13,7 @@ Configure the global channel through `/api/v1/settings/delivery`, sending its cu
 | `webhook` | HTTPS, query allowed | `webhook.url` and `webhook.secret` (at least 32 non-whitespace characters) |
 | `native` | Official production Relay by default; override with `MAILWAKE_RELAY_URL`; pair phones in Notifications | Locally generated encrypted Core identity |
 
-Webhook URLs are write-only because paths and queries may contain routing credentials. `preview` accepts `off` or `subject`; `retry_count` accepts 0–9 and defaults to 0; `language` accepts `en` or `zh-CN` and defaults to `en`. Bark and Pushover show only the subject with `subject`; Webhook retains structured sender and subject, while its `message` also contains only the subject. `off` (and an empty subject) uses “New mail” / “收到新邮件”. Titles stay `{display name} · {folder}`; Bark groups by that same truncated title. Test notification text is unchanged. API input `sender_subject` returns 400 `config_preview_invalid`. For third-party channels, switching from `subject` to `off` atomically removes sender and subject from all pending and failed records; later enqueues also follow the saved privacy policy. Native push always records sender and subject while preserving the third-party preview preference.
+Webhook URLs are write-only because paths and queries may contain routing credentials. `preview` accepts `off` or `subject`; `retry_count` accepts 0–9 and defaults to 0; `language` accepts the [nine catalog codes and their regional aliases](api.md#languages-and-error-codes) and defaults to `en`. Bark and Pushover show only the subject with `subject`; Webhook retains structured sender and subject, while its `message` also contains only the subject. `off` (and an empty subject) uses the localized “New mail” message. Titles stay `{display name} · {folder}`; Bark groups by that same truncated title. Test notification text is unchanged. API input `sender_subject` returns 400 `config_preview_invalid`. For third-party channels, switching from `subject` to `off` atomically removes sender and subject from all pending and failed records; later enqueues also follow the saved privacy policy. Native push always records sender and subject while preserving the third-party preview preference.
 
 Bark history retention follows the Bark app's save-history setting for both mail and test notifications.
 
@@ -58,3 +58,5 @@ def verify(secret: bytes, timestamp: str, body: bytes, signature: str) -> bool:
 ```
 
 Any 2xx response counts as accepted. 429 and 5xx follow the retry setting; other statuses end the attempt and record a failure.
+
+Saving notification settings validates fields, addresses, pairing state and revision without sending a test. Use the explicit test button after saving. Native tests use Relay’s fixed free test endpoint and share the App test quota; ordinary email notifications require Native Push entitlement.

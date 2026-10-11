@@ -26,11 +26,11 @@ type observedSource struct {
 	name   string
 }
 
-func (s observedSource) Folders(context.Context) ([]string, error) {
+func (s observedSource) Folders(context.Context) (*mail.FolderDiscovery, error) {
 	if s.name == "fail" {
 		return nil, errors.New("synthetic credential private")
 	}
-	return []string{"INBOX"}, nil
+	return &mail.FolderDiscovery{Folders: []string{"INBOX"}}, nil
 }
 func (s observedSource) Open(context.Context, string) (mail.Session, error) {
 	s.opened <- s.name

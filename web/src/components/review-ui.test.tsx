@@ -1,3 +1,4 @@
+import { ToastProvider } from "./common";
 import { afterEach, expect, test, vi } from "vitest";
 import {
   cleanup,
@@ -13,7 +14,6 @@ import catalog from "../../../internal/i18n/locales/zh-CN.json";
 import { Overview } from "@/pages/overview";
 import { Logs } from "@/pages/logs";
 import { AuthScreen } from "./auth-screen";
-import { AuthForm } from "./auth";
 import { SetupWizard } from "./setup";
 const mailbox = {
   id: "mbx_work",
@@ -35,7 +35,7 @@ function mount(child: ReactNode) {
       <I18nContext.Provider
         value={{ language: "zh-CN", catalog, setLanguage: () => {} }}
       >
-        {child}
+        <ToastProvider>{child}</ToastProvider>
       </I18nContext.Provider>
     </QueryClientProvider>,
   );
@@ -46,7 +46,7 @@ afterEach(() => {
 });
 function mockAPI(
   status: unknown = {},
-  logs: unknown = { entries: [], next: 0 },
+  logs: unknown = { entries: [], cleared_through: 0, next: 0 },
 ) {
   vi.stubGlobal(
     "fetch",
@@ -108,6 +108,7 @@ test("logs render rounded retry duration, mailbox labels and unknown IDs", async
   mockAPI(
     {},
     {
+      cleared_through: 0,
       next: 2,
       entries: [
         {
@@ -132,23 +133,26 @@ test("logs render rounded retry duration, mailbox labels and unknown IDs", async
   expect((await screen.findByTitle("mbx_work")).textContent).toBe("工作邮箱");
   expect(screen.getByText("mbx_deleted")).toBeTruthy();
 });
-test("setup shows step 1 of 4 and only the short password hint", () => {
-  mount(<AuthForm setup onSuccess={() => {}} />);
-  expect(screen.getByText("第 1 / 4 步")).toBeTruthy();
+test("setup shows step 1 of 3 and only the short password hint", () => {
+  mount(<AuthScreen setup onSuccess={() => {}} />);
+  fireEvent.click(screen.getByRole("button", { name: "继续" }));
+  expect(screen.getByText("第 1 / 3 步")).toBeTruthy();
   expect(screen.getByText("至少 12 个字符")).toBeTruthy();
   expect(screen.queryByText(/1024/)).toBeNull();
 });
-test("skipping mailbox setup advances from step 2 to step 4", async () => {
+test("skipping mailbox setup exits the three-step wizard", async () => {
   mockAPI();
-  mount(<SetupWizard done={() => {}} />);
-  expect(screen.getByText("第 2 / 4 步")).toBeTruthy();
+  const done = vi.fn();
+  mount(<SetupWizard done={done} />);
+  expect(screen.getByText("第 2 / 3 步")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "暂时跳过" }));
-  expect(await screen.findByText("第 4 / 4 步")).toBeTruthy();
+  expect(done).toHaveBeenCalledOnce();
 });
 test("an oversized UTF-8 password shows the limit only after validation", async () => {
   const fetchMock = vi.fn();
   vi.stubGlobal("fetch", fetchMock);
-  mount(<AuthForm setup onSuccess={() => {}} />);
+  mount(<AuthScreen setup onSuccess={() => {}} />);
+  fireEvent.click(screen.getByRole("button", { name: "继续" }));
   fireEvent.change(screen.getByLabelText("设置码"), {
     target: { value: "code" },
   });
@@ -176,4 +180,45 @@ test("login landmarks separate account entry from appearance preferences", () =>
   expect(within(main).queryByRole("combobox")).toBeNull();
   expect(screen.getByRole("button", { name: /^语言:/ })).toBeTruthy();
   expect(screen.getByRole("button", { name: /^主题:/ })).toBeTruthy();
+});
+
+test("logs localize summaries and keep original messages in collapsed technical details", async () => {
+  mockAPI(
+    {},
+    {
+      cleared_through: 0,
+      next: 1,
+      entries: [
+        {
+          seq: 1,
+          time: "2026-10-10T01:00:00Z",
+          level: "info",
+          message: "Administrator login succeeded",
+          attrs: { revision: 2 },
+        },
+      ],
+    },
+  );
+  mount(<Logs />);
+  expect(await screen.findByText("管理员登录成功")).toBeTruthy();
+  const details = screen.getByText("技术详情").closest("details")!;
+  expect(details.open).toBe(false);
+  expect(details.textContent).toContain("Administrator login succeeded");
+  expect(details.textContent).toContain('"revision": 2');
+});
+
+test("setup introduction opens administrator setup without making a request", () => {
+  const fetchMock = vi.fn();
+  vi.stubGlobal("fetch", fetchMock);
+  mount(<AuthScreen setup onSuccess={() => {}} />);
+  expect(
+    screen.getByRole("heading", { name: "欢迎使用 Mailwake" }),
+  ).toBeTruthy();
+  expect(screen.queryByLabelText("设置码")).toBeNull();
+  expect(screen.queryByText("第 1 / 3 步")).toBeNull();
+  expect(screen.getByText("开始介绍").getAttribute("aria-current")).toBe("step");
+  fireEvent.click(screen.getByRole("button", { name: "继续" }));
+  expect(screen.getByLabelText("设置码")).toBeTruthy();
+  expect(screen.getByText("第 1 / 3 步")).toBeTruthy();
+  expect(fetchMock).not.toHaveBeenCalled();
 });

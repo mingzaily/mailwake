@@ -74,7 +74,7 @@ func mailboxRoutes(api *gin.RouterGroup, runtime Runtime) {
 			c.JSON(200, gin.H{"status": "connected"})
 			return
 		}
-		c.JSON(200, gin.H{"folders": folders})
+		c.JSON(200, folders)
 	}
 	api.POST("/mailboxes/test", test)
 	api.POST("/mailboxes/:id/test", test)
@@ -90,7 +90,7 @@ func mailboxRoutes(api *gin.RouterGroup, runtime Runtime) {
 			}
 			return
 		}
-		c.JSON(200, gin.H{"folders": folders})
+		c.JSON(200, folders)
 	})
 	api.GET("/mailboxes/:id/subscriptions", func(c *gin.Context) {
 		state, err := runtime.Subscriptions(c.Param("id"))

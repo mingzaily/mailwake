@@ -2,6 +2,63 @@
 
 All notable changes to Mailwake Core are documented here. Versions follow [Semantic Versioning](https://semver.org); before 1.0.0, minor versions may change configuration.
 
+## [1.0.0-rc.8] - 2026-10-12
+
+- Add an introductory setup screen with a reduced-motion-aware entrance animation and consistent widths across the three setup steps.
+- Require an explicit successful connection test before saving a new mailbox, then show folder selection in the next setup step.
+- Align form actions to the right and use Sonner for transient operation feedback while retaining field validation and persistent conflict alerts.
+- Refine notifications with compact localized copy, status colors, an inset close button and a pause-aware countdown line.
+- Authorize component styles through per-response nonces and build-generated Sonner CSS hashes while preserving script restrictions.
+
+## [1.0.0-rc.7] - 2026-10-11
+
+- Add nine shared console and notification languages: English, Simplified Chinese, Traditional Chinese, Japanese, Korean, German, French, Spanish and Brazilian Portuguese.
+- Resolve browser and App language preferences with region and Chinese-script support while keeping notification language independent.
+- Add confirmed manual cleanup for finished delivery records and in-memory runtime logs, preserving active deliveries, mailbox progress and external logs.
+- Use compact language and theme menus consistently across login and settings.
+- Allow authorized Apps to read subscribed folder catalogs and Native notification recipients with the appropriate management scopes.
+
+## [1.0.0-rc.6] - 2026-10-10
+
+- Copy the App connection link by clicking the pairing QR code, with a manual-copy fallback when clipboard access is unavailable.
+- Refine the pairing dialog with centered status and countdown, balanced spacing, and compact fingerprint information.
+- Hide the QR code and copy action when pairing completes or expires.
+
+## [1.0.0-rc.5] - 2026-10-10
+
+- Separate push configuration saving from explicit notification tests across all channels.
+- Send Native tests through Relay's free pairing-test endpoint, with shared device test quotas and actionable APNs errors. Deploy Relay support before upgrading Core.
+- Select one paired App as the notification recipient; existing delivery retries retain their original target.
+- Refine App authorization with independent management and push permissions, default push and mail-content selections, and pairing completion feedback.
+- Add delivery detail dialogs and resizable, single-line delivery tables.
+- Default newly selected folders to five-minute checks while preserving saved subscriptions.
+- Simplify deployment documentation around the standard Compose file.
+
+## [1.0.0-rc.4] - 2026-10-10
+
+- Refine sidebar navigation with breadcrumbs, a GitHub link, a default avatar and a desktop sidebar toggle; keep connection budgets on mailbox pages.
+- Simplify panel headings, increase mailbox table spacing and align operation columns.
+- Expand IMAP quick-fill presets to ten providers, with compact common shortcuts and a grouped menu for additional providers.
+- Show configured-credential hints inside inputs and expand discovered folders by default.
+- Localize common folder names even when servers omit special-use metadata, retaining original names beside translated labels.
+- Use the final slash-separated folder segment in rendered notification titles while preserving full paths in structured payloads.
+- Show shared monitoring connection errors once in the console shell.
+
+## [1.0.0-rc.3] - 2026-10-10
+
+- Simplify initial setup to three steps and add IMAP quick-fill presets for QQ, 163, Yahoo and Gmail.
+- Localize standard mailbox folders using IMAP special-use metadata while preserving original subscription paths.
+- Separate App management from notification settings and guide users to pair a phone before testing App notifications.
+- Refine console layouts, account navigation, appearance controls, API token timestamps and diagnostic information.
+- Default new notification configurations to the console language and localize runtime log summaries.
+- Include the source commit in release binaries and container diagnostics.
+
+## [1.0.0-rc.2] - 2026-10-10
+
+- Add an optional 1Panel Compose example using root and a host data directory; retain the default non-root deployment.
+- Report actionable startup errors for data directory permissions, read-only filesystems, storage initialization and HTTP listener failures.
+- Use Mailwake consistently in the console loading screen and browser title.
+
 ## [1.0.0] - Unreleased
 
 First public release.

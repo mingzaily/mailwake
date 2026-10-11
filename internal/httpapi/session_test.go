@@ -55,7 +55,7 @@ func TestSessionSecurityAndPasswordChange(t *testing.T) {
 	if w := call("GET", "/api/v1/session", "", second, "", "", false); w.Code != 401 {
 		t.Fatal("other session survived", w.Code)
 	}
-	if w := call("GET", "/api/v1/session", "", first, "", "", false); w.Code != 200 || !strings.Contains(w.Body.String(), first.CSRF) {
+	if w := call("GET", "/api/v1/session", "", first, "", "", false); w.Code != 200 || !strings.Contains(w.Body.String(), first.CSRF) || !strings.Contains(w.Body.String(), `"username":"admin"`) {
 		t.Fatal("current session lost", w.Code)
 	}
 	if w := call("DELETE", "/api/v1/session", "", first, first.CSRF, "http://example.com", false); w.Code != 204 || w.Result().Cookies()[0].MaxAge != -1 {

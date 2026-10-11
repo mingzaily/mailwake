@@ -1,3 +1,5 @@
+import { FolderName } from "./folder-name";
+import type { FolderDiscovery } from "@/lib/types";
 import { useEffect, useId, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -43,6 +45,7 @@ export function FolderScanDialog({
   const [busy, setBusy] = useState<"scan" | "save" | "reload" | null>(null);
   const [error, setError] = useState<unknown>();
   const [subscriptions, setSubscriptions] = useState<Subscriptions>();
+  const [roles, setRoles] = useState<Record<string, string>>({});
   const [available, setAvailable] = useState<string[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const over = connectionUsage(folders) > mailbox.connection_limit - 1;
@@ -62,7 +65,7 @@ export function FolderScanDialog({
     setError(undefined);
     try {
       const [result, saved] = await Promise.all([
-        api<{ folders: string[] }>(`/mailboxes/${mailbox.id}/folders`, {
+        api<FolderDiscovery>(`/mailboxes/${mailbox.id}/folders`, {
           signal: controller.signal,
         }),
         subscriptions ??
@@ -72,6 +75,7 @@ export function FolderScanDialog({
       ]);
       if (controller.signal.aborted) return;
       setAvailable(result.folders);
+      setRoles(result.folder_roles ?? {});
       if (!subscriptions) {
         setSubscriptions(saved);
         setFolders(saved.folders);
@@ -233,6 +237,7 @@ export function FolderScanDialog({
                     <FolderSelection
                       folders={folders}
                       available={available}
+                      roles={roles}
                       onChange={setFolders}
                     />
                   </>
@@ -257,7 +262,9 @@ export function FolderScanDialog({
                         <TableBody>
                           {folders.map((folder) => (
                             <TableRow key={folder.name}>
-                              <TableCell>{folder.name}</TableCell>
+                              <TableCell title={folder.name}>
+                                <FolderName name={folder.name} roles={roles} />
+                              </TableCell>
                               <TableCell>
                                 {t(`ui.check_${folder.check}`)}
                               </TableCell>
@@ -272,7 +279,7 @@ export function FolderScanDialog({
             )}
           </div>
         </div>
-        <footer className="flex shrink-0 justify-between gap-3 border-t px-4 py-3 sm:px-6 sm:py-4">
+        <footer className="flex shrink-0 flex-wrap justify-end gap-3 border-t px-4 py-3 sm:px-6 sm:py-4">
           <Button
             variant="outline"
             disabled={!!busy && step !== "scan"}

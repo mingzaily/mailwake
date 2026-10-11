@@ -1,4 +1,4 @@
-// Package i18n serves the shared English and Simplified Chinese message catalogs.
+// Package i18n serves the shared message catalogs and language negotiation.
 package i18n
 
 import (
@@ -18,11 +18,51 @@ var files embed.FS
 
 var catalogs = load()
 var placeholder = regexp.MustCompile(`\{([a-z_]+)\}`)
-var matcher = language.NewMatcher([]language.Tag{language.English, language.SimplifiedChinese})
+
+//go:embed languages.json
+var languageData []byte
+
+type Language struct {
+	Code  string `json:"code"`
+	Label string `json:"label"`
+}
+
+// Languages returns the supported catalog identifiers and native names.
+func Languages() []Language {
+	var result []Language
+	if err := json.Unmarshal(languageData, &result); err != nil {
+		panic(err)
+	}
+	return result
+}
+
+// Resolve maps BCP 47 language variants to a catalog, keeping Chinese scripts distinct.
+func Resolve(value string) (string, bool) {
+	tag, err := language.Parse(value)
+	if err != nil || value == "" {
+		return "", false
+	}
+	base, _, _ := tag.Raw()
+	switch base.String() {
+	case "zh":
+		script, _ := tag.Script()
+		if script.String() == "Hant" {
+			return "zh-Hant", true
+		}
+		return "zh-CN", true
+	case "pt":
+		return "pt-BR", true
+	case "en", "ja", "ko", "de", "fr", "es":
+		return base.String(), true
+	default:
+		return "", false
+	}
+}
 
 func load() map[string]map[string]string {
 	result := make(map[string]map[string]string)
-	for _, locale := range []string{"en", "zh-CN"} {
+	for _, item := range Languages() {
+		locale := item.Code
 		data, err := files.ReadFile("locales/" + locale + ".json")
 		if err != nil {
 			panic(err)
@@ -44,11 +84,15 @@ func Match(header string) string {
 	if err != nil || len(tags) == 0 {
 		return Default
 	}
-	_, index, confidence := matcher.Match(tags...)
-	if confidence == language.No {
-		return Default
+	for _, tag := range tags {
+		if tag == language.Und {
+			return Default
+		}
+		if locale, ok := Resolve(tag.String()); ok {
+			return locale
+		}
 	}
-	return []string{"en", "zh-CN"}[index]
+	return Default
 }
 
 func Catalog(locale string) ([]byte, error) { return files.ReadFile("locales/" + locale + ".json") }

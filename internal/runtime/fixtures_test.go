@@ -49,10 +49,10 @@ func (s *singleMailboxService) UpdateMailbox(ctx context.Context, input settings
 	input.Revision = s.MailboxView()["revision"].(int64)
 	return s.Manager.UpdateMailbox(ctx, "mbx_primary", input)
 }
-func (s *singleMailboxService) TestMailbox(ctx context.Context, input settings.MailboxUpdate) ([]string, error) {
+func (s *singleMailboxService) TestMailbox(ctx context.Context, input settings.MailboxUpdate) (*mail.FolderDiscovery, error) {
 	return s.Manager.TestMailbox(ctx, "mbx_primary", input)
 }
-func (s *singleMailboxService) Folders(ctx context.Context) ([]string, error) {
+func (s *singleMailboxService) Folders(ctx context.Context) (*mail.FolderDiscovery, error) {
 	return s.Manager.Folders(ctx, "mbx_primary")
 }
 func (s *singleMailboxService) UpdateSubscriptions(ctx context.Context, input mail.Subscriptions) (mail.Subscriptions, error) {

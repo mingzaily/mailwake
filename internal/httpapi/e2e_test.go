@@ -173,7 +173,7 @@ func TestThreeServiceEndToEnd(t *testing.T) {
 		}
 		return false
 	})
-	call("PUT", "/settings/delivery", map[string]any{"revision": 0, "channel": "native", "preview": "off", "retry_count": 2, "language": "en"}, 200)
+	call("PUT", "/settings/delivery", map[string]any{"revision": 0, "channel": "native", "native_pairing_id": pairing.ID, "preview": "off", "retry_count": 2, "language": "en"}, 200)
 	sim("activity-preferences", state, "true")
 	subject := "Encrypted sign-in mail"
 	message := "From: Sender <sender@example.org>\r\nTo: test@example.org\r\nSubject: " + subject + "\r\n\r\nYour verification code is 482913\r\n"

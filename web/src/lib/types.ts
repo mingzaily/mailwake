@@ -1,4 +1,5 @@
-export type Language = "en" | "zh-CN";
+export type Language =
+  "en" | "zh-CN" | "zh-Hant" | "ja" | "ko" | "de" | "fr" | "es" | "pt-BR";
 export type Check = "realtime" | "5m" | "15m";
 export type Folder = { name: string; check: Check };
 export type Subscriptions = { revision: number; folders: Folder[] };
@@ -62,6 +63,7 @@ export type Delivery = {
   last_error?: Failure;
 };
 export type DeliverySettings = {
+  native_pairing_id?: string;
   native_available?: boolean;
   revision: number;
   channel: string;
@@ -85,7 +87,11 @@ export type LogEntry = {
   message: string;
   attrs: Record<string, unknown>;
 };
-export type LogPage = { entries: LogEntry[]; next: number };
+export type LogPage = {
+  entries: LogEntry[];
+  next: number;
+  cleared_through: number;
+};
 export type Diagnostics = {
   generated_at: string;
   build: {
@@ -95,4 +101,9 @@ export type Diagnostics = {
     os: string;
     arch: string;
   };
+};
+
+export type FolderDiscovery = {
+  folders: string[];
+  folder_roles?: Record<string, string>;
 };

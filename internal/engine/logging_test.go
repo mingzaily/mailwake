@@ -17,8 +17,8 @@ import (
 
 type failingLogSource struct{ err error }
 
-func (s failingLogSource) Folders(context.Context) ([]string, error)          { return nil, nil }
-func (s failingLogSource) Open(context.Context, string) (mail.Session, error) { return nil, s.err }
+func (s failingLogSource) Folders(context.Context) (*mail.FolderDiscovery, error) { return nil, nil }
+func (s failingLogSource) Open(context.Context, string) (mail.Session, error)     { return nil, s.err }
 func TestReconnectLogsKeepRawErrorsPrivate(t *testing.T) {
 	for _, tc := range []struct {
 		err   error
