@@ -1,62 +1,25 @@
-# Notifications
+# Delivery implementation
 
-[简体中文](notifications.zh-CN.md) · [Documentation](README.md)
+[Contributor index](README.md) · [User notification guide and webhook contract](https://mailwake.oritx.com/en/docs/notifications/)
+
+## Ownership
+
+`internal/delivery/` owns request attempts, retry policy, delivery states, notification rendering and shared HTTP rules. The Bark, Pushover and Webhook subpackages implement their adapters. `internal/runtime/` assembles channels; `internal/storage/` persists the outbox. Native delivery has its own [encrypted device plans](native-push.md).
+
+## Dispatch and retry invariants
+
+Persist an event and watcher progress transactionally before dispatch. Record attempts before network I/O so restart preserves retry accounting. One initial attempt is the default; `retry_count` explicitly permits 0–9 additional attempts. Retry transient network failures, HTTP 429 and 5xx under that policy. Treat a 2xx response as channel acceptance. Device display remains a separate outcome.
+
+Webhook requests preserve event identity across retries, sign the timestamp and exact raw body, and follow the published header contract. Keep redirect following disabled. Tests use local HTTPS endpoints and synthetic credentials; check observable requests and outcomes.
 
 ## Channel configuration
 
-Configure the global channel through `/api/v1/settings/delivery`, sending its current `revision`. Channel, preview, retry count and notification language apply to all mailboxes. All credentials are encrypted and write-only; omitted credential fields keep their saved values.
+Configuration updates use revisions. Channel, preview, language and retry settings apply to all mailboxes. Validate credentials and destinations at the configuration boundary, encrypt saved secrets, and preserve omitted write-only values. Saving validates configuration; only the explicit test operation sends a test notification.
 
-| Channel | Parameters | Credentials |
-| --- | --- | --- |
-| `bark` | `bark.endpoint`, default `https://api.day.app` | `bark.key` |
-| `pushover` | none | `pushover.token`, `pushover.user` |
-| `webhook` | HTTPS, query allowed | `webhook.url` and `webhook.secret` (at least 32 non-whitespace characters) |
-| `native` | Official production Relay by default; override with `MAILWAKE_RELAY_URL`; pair phones in Notifications | Locally generated encrypted Core identity |
+## Privacy and persistence
 
-Webhook URLs are write-only because paths and queries may contain routing credentials. `preview` accepts `off` or `subject`; `retry_count` accepts 0–9 and defaults to 0; `language` accepts the [nine catalog codes and their regional aliases](api.md#languages-and-error-codes) and defaults to `en`. Bark and Pushover show only the subject with `subject`; Webhook retains structured sender and subject, while its `message` also contains only the subject. `off` (and an empty subject) uses the localized “New mail” message. Titles stay `{display name} · {folder}`; Bark groups by that same truncated title. Test notification text is unchanged. API input `sender_subject` returns 400 `config_preview_invalid`. For third-party channels, switching from `subject` to `off` atomically removes sender and subject from all pending and failed records; later enqueues also follow the saved privacy policy. Native push always records sender and subject while preserving the third-party preview preference.
+Third-party previews default to `off`; `subject` permits the provider payload described in the public guide. Switching a third-party preview from `subject` to `off` atomically clears sender and subject from pending and failed records. Future enqueues use the saved policy. Native delivery always includes encrypted sender and subject and preserves the third-party preview preference.
 
-Bark history retention follows the Bark app's save-history setting for both mail and test notifications.
+Mailbox and folder labels are part of notification metadata. Message bodies remain outside outbox persistence, history and logs. Renaming or deleting a mailbox preserves identity metadata already captured for queued work. Terminal payload clearing and history retention follow [Storage](storage.md); native terminal records additionally clear device envelopes and signatures.
 
-### Webhook payload
-
-Core sends a `POST` with a JSON body and never follows redirects:
-
-```json
-{
-  "version": 1,
-  "id": "3f9c…",
-  "test": false,
-  "mailbox_id": "mbx_example",
-  "account": "Work mailbox",
-  "folder": "Clients",
-  "sender": "anna@example.org",
-  "subject": "Re: Q4 proposal",
-  "received_at": "2026-09-28T10:32:00Z",
-  "title": "Work mailbox · Clients",
-  "message": "Re: Q4 proposal"
-}
-```
-
-`mailbox_id` is the stable mailbox ID; `account` is its display name at enqueue time. Bark, Pushover and Webhook ordinary notifications use the title `{display name} · {folder}` in both languages. Renaming or deleting a mailbox preserves the identity metadata of already queued tasks. Test notifications use separate text and omit mailbox fields.
-
-`sender` and `subject` appear only with the `subject` preview. `title` and `message` are localized and ready to forward to ntfy, Gotify and similar services. The display name and folder are sent even with preview off; choose a label suitable for sharing with your notification provider.
-
-| Header | Meaning |
-| --- | --- |
-| `X-Mailwake-Event` | Event ID, equal to `id`; unchanged across retries, use it to deduplicate |
-| `X-Mailwake-Timestamp` | Send time in Unix seconds |
-| `X-Mailwake-Signature` | `sha256=` followed by the hex `HMAC-SHA256(secret, "<timestamp>.<raw body>")` |
-
-Verify the signature with the same secret using a constant-time comparison, and reject timestamps more than five minutes away:
-
-```python
-import hashlib, hmac, time
-
-def verify(secret: bytes, timestamp: str, body: bytes, signature: str) -> bool:
-    expected = "sha256=" + hmac.new(secret, timestamp.encode() + b"." + body, hashlib.sha256).hexdigest()
-    return abs(time.time() - int(timestamp)) <= 300 and hmac.compare_digest(expected, signature)
-```
-
-Any 2xx response counts as accepted. 429 and 5xx follow the retry setting; other statuses end the attempt and record a failure.
-
-Saving notification settings validates fields, addresses, pairing state and revision without sending a test. Use the explicit test button after saving. Native tests use Relay’s fixed free test endpoint and share the App test quota; ordinary email notifications require Native Push entitlement.
+Channel changes require focused adapter, dispatcher, storage and privacy tests for affected behavior. Keep user configuration steps and webhook examples on the documentation site.

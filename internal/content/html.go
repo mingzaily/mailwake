@@ -1,7 +1,6 @@
 package content
 
 import (
-	"net/url"
 	"strings"
 
 	"golang.org/x/net/html"
@@ -92,9 +91,5 @@ func htmlToText(source string) string {
 
 // safeLink keeps only absolute http(s) and mailto targets.
 func safeLink(href string) string {
-	u, err := url.Parse(strings.TrimSpace(href))
-	if err != nil || (u.Scheme != "https" && u.Scheme != "http" && u.Scheme != "mailto") {
-		return ""
-	}
-	return u.String()
+	return validURL(href, true)
 }

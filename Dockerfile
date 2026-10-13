@@ -34,7 +34,7 @@ RUN apk add --no-cache ca-certificates tzdata \
     && chown mailwake:mailwake /data
 WORKDIR /app
 COPY --from=build /out/mailwake /app/mailwake
-COPY --from=build /src/LICENSE /src/COPYRIGHT /usr/share/licenses/mailwake/
+COPY --from=build /src/LICENSE /src/COPYRIGHT /src/docs/html-content-third-party.txt /usr/share/licenses/mailwake/
 COPY --from=web /src/internal/httpapi/webdist/third-party-notices.txt /usr/share/licenses/mailwake/
 USER mailwake
 EXPOSE 8080

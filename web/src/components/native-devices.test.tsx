@@ -1,6 +1,7 @@
 import { ToastProvider } from "./common";
 import { afterEach, expect, test, vi } from "vitest";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -17,10 +18,11 @@ import {
 } from "./native-devices";
 import { DeliveryEditor } from "./delivery-form";
 import type { ReactNode } from "react";
-function mount(element: ReactNode, language: "en" | "zh-CN" = "en") {
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
+function mount(
+  element: ReactNode,
+  language: "en" | "zh-CN" = "en",
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+) {
   return render(
     <QueryClientProvider client={client}>
       <I18nContext.Provider
@@ -549,4 +551,472 @@ test("push revocation is independent and both permissions share one device row",
   await waitFor(() =>
     expect(requests).toEqual(["/api/v1/native/devices/pairing"]),
   );
+});
+
+test("notification editor refreshes a revoked target to unconfigured", async () => {
+  let revoked = false;
+  const settings = {
+    revision: 1,
+    channel: "native",
+    native_pairing_id: "phone-pair",
+    preview: "off",
+    language: "en",
+    retry_count: 0,
+    native_available: true,
+    bark: { endpoint: "https://api.day.app", key: { configured: true } },
+    pushover: { token: { configured: false }, user: { configured: false } },
+    webhook: { url: { configured: false }, secret: { configured: false } },
+  };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async (url: string) =>
+        new Response(
+          JSON.stringify(
+            url.endsWith("/native/devices")
+              ? {
+                  devices: [
+                    {
+                      id: "phone-pair",
+                      device_name: "Phone",
+                      status: revoked ? "revoked" : "active",
+                    },
+                  ],
+                }
+              : revoked
+                ? {
+                    ...settings,
+                    revision: 2,
+                    channel: "",
+                    native_pairing_id: "",
+                  }
+                : settings,
+          ),
+        ),
+    ),
+  );
+  mount(<DeliveryEditor />);
+  const channel = await screen.findByLabelText(catalog["ui.channel"]);
+  expect((channel as HTMLSelectElement).value).toBe("native");
+  revoked = true;
+  await waitFor(
+    () =>
+      expect(
+        (screen.getByLabelText(catalog["ui.channel"]) as HTMLSelectElement)
+          .value,
+      ).toBe(""),
+    { timeout: 7000 },
+  );
+  expect(
+    (
+      screen.getByRole("button", {
+        name: catalog["ui.test_notification"],
+      }) as HTMLButtonElement
+    ).disabled,
+  ).toBe(true);
+  expect(
+    screen.getByRole("option", { name: catalog["ui.channel_unconfigured"] }),
+  ).toBeTruthy();
+}, 10000);
+
+test("notification editor preserves a draft until explicit reload after revocation", async () => {
+  let revoked = false;
+  const settings = {
+    revision: 1,
+    channel: "native",
+    native_pairing_id: "phone-pair",
+    preview: "off",
+    language: "en",
+    retry_count: 0,
+    native_available: true,
+    bark: { endpoint: "https://api.day.app", key: { configured: true } },
+    pushover: { token: { configured: false }, user: { configured: false } },
+    webhook: { url: { configured: false }, secret: { configured: false } },
+  };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async (url: string) =>
+        new Response(
+          JSON.stringify(
+            url.endsWith("/native/devices")
+              ? {
+                  devices: [
+                    {
+                      id: "phone-pair",
+                      device_name: "Phone",
+                      status: revoked ? "revoked" : "active",
+                    },
+                  ],
+                }
+              : revoked
+                ? {
+                    ...settings,
+                    revision: 2,
+                    channel: "",
+                    native_pairing_id: "",
+                  }
+                : settings,
+          ),
+        ),
+    ),
+  );
+  mount(<DeliveryEditor />);
+  const channel = await screen.findByLabelText(catalog["ui.channel"]);
+  expect((channel as HTMLSelectElement).value).toBe("native");
+  fireEvent.change(channel, { target: { value: "bark" } });
+  fireEvent.change(screen.getByLabelText(catalog["ui.bark_key"]), {
+    target: { value: "synthetic-draft-key" },
+  });
+  revoked = true;
+  await screen.findByRole("alert", {}, { timeout: 7000 });
+  expect(
+    (screen.getByLabelText(catalog["ui.channel"]) as HTMLSelectElement).value,
+  ).toBe("bark");
+  expect(
+    (screen.getByLabelText(catalog["ui.bark_key"]) as HTMLInputElement).value,
+  ).toBe("synthetic-draft-key");
+  expect(
+    (
+      screen.getByRole("button", {
+        name: catalog["ui.save"],
+      }) as HTMLButtonElement
+    ).disabled,
+  ).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: catalog["ui.reload"] }));
+  await waitFor(() =>
+    expect(
+      (screen.getByLabelText(catalog["ui.channel"]) as HTMLSelectElement).value,
+    ).toBe(""),
+  );
+  expect(screen.queryByRole("alert")).toBeNull();
+  fireEvent.change(screen.getByLabelText(catalog["ui.channel"]), {
+    target: { value: "bark" },
+  });
+  expect(
+    (screen.getByLabelText(catalog["ui.bark_key"]) as HTMLInputElement).value,
+  ).toBe("");
+  fireEvent.change(screen.getByLabelText(catalog["ui.channel"]), {
+    target: { value: "" },
+  });
+  expect(
+    (
+      screen.getByRole("button", {
+        name: catalog["ui.test_notification"],
+      }) as HTMLButtonElement
+    ).disabled,
+  ).toBe(true);
+  expect(
+    screen.getByRole("option", { name: catalog["ui.channel_unconfigured"] }),
+  ).toBeTruthy();
+}, 10000);
+
+test.each([false, true])(
+  "notification saves retain revision after refresh failure %s and preserve conflicts",
+  async (refreshFails) => {
+    let settings = {
+      revision: 1,
+      channel: "bark",
+      native_pairing_id: "",
+      preview: "off",
+      language: "en",
+      retry_count: 0,
+      native_available: true,
+      bark: { endpoint: "https://api.day.app", key: { configured: true } },
+      pushover: { token: { configured: false }, user: { configured: false } },
+      webhook: { url: { configured: false }, secret: { configured: false } },
+    };
+    const revisions: number[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, options: RequestInit) => {
+        if (
+          options.method === "GET" &&
+          revisions.length === 1 &&
+          refreshFails
+        ) {
+          return new Response(
+            JSON.stringify({
+              error: { code: "database_unavailable", message: "Unavailable" },
+            }),
+            { status: 503 },
+          );
+        }
+        if (options.method === "PUT") {
+          const body = JSON.parse(options.body as string);
+          revisions.push(body.revision);
+          settings = { ...settings, revision: settings.revision + 1 };
+          if (revisions.length === 2) {
+            settings = { ...settings, channel: "" };
+            return new Response(
+              JSON.stringify({
+                error: {
+                  code: "settings_conflict",
+                  message: catalog.settings_conflict,
+                },
+              }),
+              { status: 409 },
+            );
+          }
+        }
+        return new Response(JSON.stringify(settings));
+      }),
+    );
+    mount(<DeliveryEditor />);
+    const key = await screen.findByLabelText(catalog["ui.bark_key"]);
+    fireEvent.change(key, { target: { value: "synthetic-first-key" } });
+    fireEvent.click(screen.getByRole("button", { name: catalog["ui.save"] }));
+    await waitFor(() =>
+      expect(
+        (screen.getByLabelText(catalog["ui.bark_key"]) as HTMLInputElement)
+          .value,
+      ).toBe(""),
+    );
+    expect(screen.queryByRole("alert")).toBeNull();
+    await waitFor(() =>
+      expect(
+        (
+          screen.getByRole("button", {
+            name: catalog["ui.save"],
+          }) as HTMLButtonElement
+        ).disabled,
+      ).toBe(false),
+    );
+    fireEvent.change(screen.getByLabelText(catalog["ui.bark_key"]), {
+      target: { value: "synthetic-second-key" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: catalog["ui.save"] }));
+    await screen.findByRole("alert");
+    expect(revisions).toEqual([1, 2]);
+    expect(
+      (screen.getByLabelText(catalog["ui.bark_key"]) as HTMLInputElement).value,
+    ).toBe("synthetic-second-key");
+    fireEvent.click(screen.getByRole("button", { name: catalog["ui.reload"] }));
+    await waitFor(() =>
+      expect(
+        (screen.getByLabelText(catalog["ui.channel"]) as HTMLSelectElement)
+          .value,
+      ).toBe(""),
+    );
+    expect(screen.queryByRole("alert")).toBeNull();
+  },
+);
+
+test.each([true, false])(
+  "notification form locks during saving and restores editing after success %s",
+  async (succeeds) => {
+    let settings = {
+      revision: 1,
+      channel: "bark",
+      native_pairing_id: "",
+      preview: "off",
+      language: "en",
+      retry_count: 0,
+      native_available: false,
+      bark: { endpoint: "https://api.day.app", key: { configured: true } },
+      pushover: { token: { configured: false }, user: { configured: false } },
+      webhook: { url: { configured: false }, secret: { configured: false } },
+    };
+    let finishSave!: () => void;
+    let submitted: { retry_count: number; bark: { key: string } } | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, options: RequestInit) => {
+        if (options.method === "PUT") {
+          submitted = JSON.parse(options.body as string);
+          await new Promise<void>((resolve) => {
+            finishSave = resolve;
+          });
+          if (!succeeds)
+            return new Response(
+              JSON.stringify({
+                error: {
+                  code: "database_unavailable",
+                  message: catalog.database_unavailable,
+                },
+              }),
+              { status: 503 },
+            );
+          settings = {
+            ...settings,
+            revision: 2,
+            retry_count: submitted!.retry_count,
+          };
+        }
+        return new Response(JSON.stringify(settings));
+      }),
+    );
+    const { container } = mount(<DeliveryEditor />);
+    const retry = (await screen.findByLabelText(
+      catalog["ui.retry_count"],
+    )) as HTMLInputElement;
+    const key = screen.getByLabelText(
+      catalog["ui.bark_key"],
+    ) as HTMLInputElement;
+    fireEvent.change(retry, { target: { value: "1" } });
+    fireEvent.change(key, { target: { value: "synthetic-saving-key" } });
+    fireEvent.click(screen.getByRole("button", { name: catalog["ui.save"] }));
+    await waitFor(() => expect(submitted).toBeDefined());
+    // Happy DOM's :disabled selector only checks the element's own attribute.
+    // HTML fieldsets also disable their descendant form controls.
+    for (const control of container.querySelectorAll(
+      "form input, form select, form button",
+    )) {
+      expect(control.closest("fieldset[disabled]")).not.toBeNull();
+    }
+    expect(submitted?.retry_count).toBe(1);
+    expect(submitted?.bark.key).toBe("synthetic-saving-key");
+    finishSave();
+    await waitFor(() => expect(retry.closest("fieldset[disabled]")).toBeNull());
+    expect(retry.value).toBe("1");
+    expect(key.value).toBe(succeeds ? "" : "synthetic-saving-key");
+    fireEvent.change(retry, { target: { value: "2" } });
+    expect(retry.value).toBe("2");
+  },
+);
+
+const authorizationReads = [
+  {
+    path: "/settings/delivery",
+    key: "delivery-settings",
+    data: { native_available: true },
+  },
+  {
+    path: "/management/devices",
+    key: "management-devices",
+    data: { devices: [] },
+  },
+  { path: "/native/devices", key: "native-devices", data: { devices: [] } },
+];
+
+test.each(authorizationReads)(
+  "authorized Apps wait for $path before showing empty",
+  async ({ path }) => {
+    let finishRead!: () => void;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const read = authorizationReads.find((read) =>
+          url.endsWith(read.path),
+        )!;
+        if (read.path === path)
+          await new Promise<void>((resolve) => {
+            finishRead = resolve;
+          });
+        return new Response(JSON.stringify(read.data));
+      }),
+    );
+    mount(<ManagementDevices />);
+    await waitFor(() => expect(finishRead).toBeDefined());
+    expect(screen.getByRole("status").textContent).toBe(catalog["ui.loading"]);
+    expect(screen.queryByText(catalog["ui.no_management_devices"])).toBeNull();
+    if (path === "/settings/delivery") {
+      fireEvent.change(screen.getByLabelText(catalog["ui.core_https_origin"]), {
+        target: { value: "https://core.test" },
+      });
+      expect(
+        (
+          screen.getByRole("button", {
+            name: catalog["ui.add_phone"],
+          }) as HTMLButtonElement
+        ).disabled,
+      ).toBe(true);
+    }
+    finishRead();
+    expect(
+      await screen.findByText(catalog["ui.no_management_devices"]),
+    ).toBeTruthy();
+    expect(screen.queryByText(catalog["ui.loading"])).toBeNull();
+  },
+);
+
+test.each(
+  authorizationReads.flatMap((read) =>
+    [false, true].map((cached) => ({ ...read, cached })),
+  ),
+)(
+  "authorized Apps show $path failure with cached data $cached and recover",
+  async ({ path, key, cached }) => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    if (cached)
+      for (const read of authorizationReads)
+        client.setQueryData([read.key], read.data);
+    let fails = true;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const read = authorizationReads.find((read) =>
+          url.endsWith(read.path),
+        )!;
+        if (read.path === path && fails)
+          return new Response(
+            JSON.stringify({
+              error: {
+                code: "database_unavailable",
+                message: catalog.database_unavailable,
+              },
+            }),
+            { status: 503 },
+          );
+        return new Response(JSON.stringify(read.data));
+      }),
+    );
+    mount(<ManagementDevices />, "en", client);
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      catalog.database_unavailable,
+    );
+    expect(screen.queryByText(catalog["ui.no_management_devices"])).toBeNull();
+    expect(screen.queryByText(catalog["ui.loading"])).toBeNull();
+    if (path === "/settings/delivery") {
+      fireEvent.change(screen.getByLabelText(catalog["ui.core_https_origin"]), {
+        target: { value: "https://core.test" },
+      });
+      expect(
+        (
+          screen.getByRole("button", {
+            name: catalog["ui.add_phone"],
+          }) as HTMLButtonElement
+        ).disabled,
+      ).toBe(true);
+    }
+    fails = false;
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: [key] });
+    });
+    expect(
+      await screen.findByText(catalog["ui.no_management_devices"]),
+    ).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+    if (path === "/settings/delivery")
+      expect(
+        (
+          screen.getByRole("button", {
+            name: catalog["ui.add_phone"],
+          }) as HTMLButtonElement
+        ).disabled,
+      ).toBe(false);
+  },
+);
+
+test("authorized Apps finish loading when native push is unavailable", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async (url: string) =>
+        new Response(
+          JSON.stringify(
+            url.endsWith("/settings/delivery")
+              ? { native_available: false }
+              : { devices: [] },
+          ),
+        ),
+    ),
+  );
+  mount(<ManagementDevices />);
+  expect(
+    await screen.findByText(catalog["ui.no_management_devices"]),
+  ).toBeTruthy();
+  expect(screen.queryByText(catalog["ui.loading"])).toBeNull();
 });

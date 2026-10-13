@@ -83,23 +83,30 @@ export function Overview() {
         ))}
       </div>
       <Panel title={t("ui.needs_attention")}>
-        {issues.length ? (
-          issues.map((issue) => (
-            <div
-              className="flex flex-wrap items-center gap-4 border-b border-border-subtle px-4 py-3 last:border-0"
-              key={issue.key}
-            >
-              <span>{issue.text}</span>
-              <a className="whitespace-nowrap md:ml-auto" href={issue.href}>
-                {t("ui.resolve")}
-              </a>
-            </div>
-          ))
-        ) : (
-          <p className="flex flex-wrap items-center gap-4 border-b border-border-subtle px-4 py-3 last:border-0 text-muted-foreground">
-            {t("ui.healthy")}
+        {status.isPending && (
+          <p className="px-4 py-3 text-muted-foreground" role="status">
+            {t("ui.loading")}
           </p>
         )}
+        {status.isError && <ErrorNotice error={status.error} />}
+        {status.isSuccess &&
+          (issues.length ? (
+            issues.map((issue) => (
+              <div
+                className="flex flex-wrap items-center gap-4 border-b border-border-subtle px-4 py-3 last:border-0"
+                key={issue.key}
+              >
+                <span>{issue.text}</span>
+                <a className="whitespace-nowrap md:ml-auto" href={issue.href}>
+                  {t("ui.resolve")}
+                </a>
+              </div>
+            ))
+          ) : (
+            <p className="flex flex-wrap items-center gap-4 border-b border-border-subtle px-4 py-3 last:border-0 text-muted-foreground">
+              {t("ui.healthy")}
+            </p>
+          ))}
       </Panel>
       <Panel
         title={t("ui.folders")}

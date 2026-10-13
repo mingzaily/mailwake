@@ -245,7 +245,9 @@ func (s *Service) send(ctx context.Context, n event.Notification, pairingID stri
 
 // pairingGone reports Relay's answer for a pairing the device already removed.
 func pairingGone(f *delivery.Failure) bool {
-	return f.Code == "pairing_revoked" || f.Params["relay_code"] == "pairing_revoked" || f.HTTPStatus == 404
+	return (f.HTTPStatus == 0 && f.Code == "pairing_revoked") ||
+		(f.HTTPStatus == 410 && f.Params["relay_code"] == "pairing_revoked") ||
+		(f.HTTPStatus == 404 && f.Params["relay_code"] == "not_found")
 }
 
 type relayDelivery struct {
@@ -335,12 +337,4 @@ func (s *Service) AlreadyAccepted(ctx context.Context, id string) (bool, error) 
 		}
 	}
 	return true, nil
-}
-
-func (s *Service) revoke(ctx context.Context, id string) error {
-	changed, err := s.store.RevokeNativePairing(ctx, id)
-	if err == nil && changed {
-		s.log.Info("Native pairing revoked on device", "pairing_id", id, "code", "pairing_revoked")
-	}
-	return err
 }

@@ -14,38 +14,32 @@ import (
 	"github.com/mingzaily/mailwake/internal/storage"
 )
 
-// appRoute declares the scope an App route needs and whether it requires a
-// Platform AppManagement qualification. Routes absent here are not exposed to the App.
-type appRoute struct {
-	scope string
-	paid  bool
-}
-
-var appRoutes = map[string]appRoute{
-	"GET /folder-mailboxes":              {"folders", false},
-	"GET /native/devices":                {"channels", false},
-	"POST /content":                      {"content", false},
-	"GET /mailboxes":                     {"mailboxes", false},
-	"POST /mailboxes":                    {"mailboxes", true},
-	"POST /mailboxes/test":               {"mailboxes", true},
-	"GET /mailboxes/:id":                 {"mailboxes", false},
-	"PUT /mailboxes/:id":                 {"mailboxes", true},
-	"DELETE /mailboxes/:id":              {"mailboxes", false},
-	"POST /mailboxes/:id/test":           {"mailboxes", true},
-	"POST /mailboxes/:id/test-saved":     {"mailboxes", false},
-	"GET /mailboxes/:id/folders":         {"folders", true},
-	"GET /mailboxes/:id/subscriptions":   {"folders", false},
-	"PUT /mailboxes/:id/subscriptions":   {"folders", true},
-	"GET /settings/delivery":             {"channels", false},
-	"PUT /settings/delivery":             {"channels", true},
-	"DELETE /settings/delivery":          {"channels", false},
-	"POST /settings/delivery/test":       {"channels", true},
-	"POST /settings/delivery/test-saved": {"channels", false},
-	"GET /status":                        {"diagnostics", false},
-	"GET /diagnostics":                   {"diagnostics", false},
-	"GET /deliveries":                    {"diagnostics", false},
-	"GET /controller":                    {"", false},
-	"DELETE /controller":                 {"", false},
+// App routes map directly to the owner-approved scope they require.
+var appRoutes = map[string]string{
+	"GET /folder-mailboxes":              "folders",
+	"GET /native/devices":                "channels",
+	"POST /content":                      "content",
+	"GET /mailboxes":                     "mailboxes",
+	"POST /mailboxes":                    "mailboxes",
+	"POST /mailboxes/test":               "mailboxes",
+	"GET /mailboxes/:id":                 "mailboxes",
+	"PUT /mailboxes/:id":                 "mailboxes",
+	"DELETE /mailboxes/:id":              "mailboxes",
+	"POST /mailboxes/:id/test":           "mailboxes",
+	"POST /mailboxes/:id/test-saved":     "mailboxes",
+	"GET /mailboxes/:id/folders":         "folders",
+	"GET /mailboxes/:id/subscriptions":   "folders",
+	"PUT /mailboxes/:id/subscriptions":   "folders",
+	"GET /settings/delivery":             "channels",
+	"PUT /settings/delivery":             "channels",
+	"DELETE /settings/delivery":          "channels",
+	"POST /settings/delivery/test":       "channels",
+	"POST /settings/delivery/test-saved": "channels",
+	"GET /status":                        "diagnostics",
+	"GET /diagnostics":                   "diagnostics",
+	"GET /deliveries":                    "diagnostics",
+	"GET /controller":                    "",
+	"DELETE /controller":                 "",
 }
 
 const appPrefix = "/api/v1/app"
@@ -124,7 +118,7 @@ func appManagementRoutes(r *gin.Engine, admin *gin.RouterGroup, runtime Runtime,
 		c.JSON(200, credential)
 	})
 
-	app := r.Group(appPrefix, appAuthenticate(service, store))
+	app := r.Group(appPrefix, appAuthenticate(store))
 	app.GET("/controller", func(c *gin.Context) { c.JSON(200, viewController(currentController(c))) })
 	app.DELETE("/controller", func(c *gin.Context) {
 		if err := store.DeleteAppController(c.Request.Context(), currentController(c).ID); err != nil {
@@ -200,8 +194,8 @@ func appManagementRoutes(r *gin.Engine, admin *gin.RouterGroup, runtime Runtime,
 }
 
 // appAuthenticate resolves the controller credential, then enforces the route's
-// scope and, for paid routes, the Platform qualification.
-func appAuthenticate(service *appmanagement.Service, store *storage.Store) gin.HandlerFunc {
+// owner-approved scope.
+func appAuthenticate(store *storage.Store) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		credential, ok := strings.CutPrefix(c.GetHeader("Authorization"), "Bearer ")
 		if !ok || !strings.HasPrefix(credential, "mwac_") {
@@ -213,33 +207,18 @@ func appAuthenticate(service *appmanagement.Service, store *storage.Store) gin.H
 			respondFault(c, err)
 			return
 		}
-		route, known := appRoutes[c.Request.Method+" "+strings.TrimPrefix(c.FullPath(), appPrefix)]
+		scope, known := appRoutes[c.Request.Method+" "+strings.TrimPrefix(c.FullPath(), appPrefix)]
 		if !known {
 			respondError(c, 404, fault.New("route_not_found"))
 			return
 		}
-		if route.scope != "" && !controller.HasScope(route.scope) {
+		if scope != "" && !controller.HasScope(scope) {
 			code := "forbidden"
-			if route.scope == "content" {
+			if scope == "content" {
 				code = "content_permission_required"
 			}
 			respondError(c, 403, fault.New(code))
 			return
-		}
-		if route.paid || route.scope == "content" {
-			identity, err := service.Native.CoreIdentity(c.Request.Context())
-			if err != nil {
-				respondFault(c, err)
-				return
-			}
-			purpose, header := "app_management", "X-Mailwake-App-Qualification"
-			if route.scope == "content" {
-				purpose, header = "native_push", "X-Mailwake-Native-Qualification"
-			}
-			if err = service.Trust.VerifyPurpose(c.GetHeader(header), identity.ID, controller.DeviceID, purpose); err != nil {
-				respondFault(c, err)
-				return
-			}
 		}
 		c.Set("app_controller", controller)
 		c.Next()

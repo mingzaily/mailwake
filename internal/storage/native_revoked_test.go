@@ -160,3 +160,111 @@ func TestOutboxFailurePreservesDeviceRevocation(t *testing.T) {
 		t.Fatal("outbox overwrote terminal device reason", rows)
 	}
 }
+
+func TestRevocationCommitsConfigurationAndCancelsActivitiesAtomically(t *testing.T) {
+	s, err := Open(t.Context(), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if _, err = s.db.Exec("INSERT INTO native_pairings(id,state,device_id,token_hash,expires_at,created_at) VALUES('p','active','phone','',0,0)"); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.SaveDelivery(t.Context(), []byte("old"), "subject", "native", false, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Enqueue(t.Context(), event.Notification{ID: "queued"}); err != nil {
+		t.Fatal(err)
+	}
+	activity := NativeActivity{EventID: "queued", PairingID: "p", Request: "cipher", ExpiresAt: time.Now().Unix() + 300}
+	if err = s.SaveNativePlan(t.Context(), []NativeDelivery{{EventID: "queued", PairingID: "p", Envelope: "cipher"}}, activity); err != nil {
+		t.Fatal(err)
+	}
+	change := &DeliveryChange{Encrypted: []byte("new"), Preview: "off", Channel: "", ClearPreview: true, Revision: 0}
+	if _, err = s.RevokeNativePairingWithDelivery(t.Context(), "p", false, change); fault.From(err, "").Code != "settings_conflict" {
+		t.Fatal(err)
+	}
+	p, _ := s.NativePairing(t.Context(), "p")
+	if p.State != "active" {
+		t.Fatal("pairing escaped revision rollback")
+	}
+	activities, _ := s.PendingNativeActivities(t.Context())
+	if len(activities) != 1 {
+		t.Fatal("activity escaped rollback")
+	}
+	change.Revision = 1
+	if _, err = s.RevokeNativePairingWithDelivery(t.Context(), "p", false, change); err != nil {
+		t.Fatal(err)
+	}
+	record, _ := s.ConfigurationRecord(t.Context(), "delivery")
+	if record.Revision != 2 || string(record.Encrypted) != "new" {
+		t.Fatal(record)
+	}
+	var channel string
+	s.db.QueryRow("SELECT value FROM settings WHERE name='delivery_channel'").Scan(&channel)
+	if channel != "" {
+		t.Fatal(channel)
+	}
+	activities, _ = s.PendingNativeActivities(t.Context())
+	if len(activities) != 0 {
+		t.Fatal("activity remained pending")
+	}
+	var state, request string
+	if err = s.db.QueryRow("SELECT state,request FROM native_activities WHERE event_id='queued'").Scan(&state, &request); err != nil || state != "failed" || request != "" {
+		t.Fatal(state, request, err)
+	}
+	// A plan made from an older in-memory snapshot follows the same terminal rule.
+	if err = s.Enqueue(t.Context(), event.Notification{ID: "late"}); err != nil {
+		t.Fatal(err)
+	}
+	activity.EventID = "late"
+	if err = s.SaveNativePlan(t.Context(), nil, activity); err != nil {
+		t.Fatal(err)
+	}
+	activities, _ = s.PendingNativeActivities(t.Context())
+	if len(activities) != 0 {
+		t.Fatal("late activity queued after revocation")
+	}
+	rows, _ := s.NativeDeliveries(t.Context(), "queued")
+	if len(rows) != 1 || rows[0].State != "cancelled" {
+		t.Fatal("history removed or pending", rows)
+	}
+}
+
+func TestPushAndManagementAuthorizationRevokeIndependently(t *testing.T) {
+	for _, first := range []string{"push", "management"} {
+		t.Run(first, func(t *testing.T) {
+			s, err := Open(t.Context(), t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer s.Close()
+			if _, err = s.db.Exec("INSERT INTO native_pairings(id,state,device_id,token_hash,expires_at,created_at) VALUES('p','active','phone','',0,0)"); err != nil {
+				t.Fatal(err)
+			}
+			now := time.Now().Unix()
+			if err = s.CreateAppInvitation(t.Context(), AppInvitation{ID: "inv", TokenHash: "hash", Management: true, Scopes: []string{"channels"}, ExpiresAt: now + 300, CreatedAt: now}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err = s.AcceptAppInvitation(t.Context(), "inv", "hash", AppController{ID: "controller", DeviceID: "phone", DeviceName: "Phone"}, "credential-hash"); err != nil {
+				t.Fatal(err)
+			}
+			if first == "push" {
+				if _, err = s.RevokeNativePairing(t.Context(), "p"); err != nil {
+					t.Fatal(err)
+				}
+				if _, err = s.AuthenticateAppController(t.Context(), "credential-hash"); err != nil {
+					t.Fatal("management authorization revoked", err)
+				}
+			} else {
+				if err = s.DeleteAppController(t.Context(), "controller"); err != nil {
+					t.Fatal(err)
+				}
+				p, err := s.NativePairing(t.Context(), "p")
+				if err != nil || p.State != "active" {
+					t.Fatal("push authorization revoked", p, err)
+				}
+			}
+		})
+	}
+}

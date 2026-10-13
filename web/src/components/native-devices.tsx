@@ -265,12 +265,23 @@ export function ManagementDevices() {
   const { t } = useI18n();
   const devices = useQuery({
     queryKey: ["management-devices"],
+    refetchInterval: 5000,
+    refetchIntervalInBackground: false,
     queryFn: ({ signal }) =>
       api<{ devices: ManagementDevice[] }>("/management/devices", { signal }),
   });
   const settings = useQuery({
     queryKey: ["delivery-settings"],
+    refetchInterval: 5000,
+    refetchIntervalInBackground: false,
     queryFn: () => api<DeliverySettings>("/settings/delivery"),
+  });
+  const push = useQuery({
+    queryKey: ["native-devices"],
+    refetchInterval: 5000,
+    refetchIntervalInBackground: false,
+    queryFn: () => api<{ devices: NativePairing[] }>("/native/devices"),
+    enabled: !!settings.data?.native_available,
   });
   const [management, setManagement] = useState(true);
   const [nativeSelected, setNative] = useState(true);
@@ -328,7 +339,7 @@ export function ManagementDevices() {
     <>
       <Panel>
         <div className="flex flex-col gap-6 p-5 md:p-6">
-          <ErrorNotice error={error ?? devices.error} />
+          <ErrorNotice error={error} />
           <FieldGroup className="gap-6">
             <FieldGroup className="gap-6">
               <FieldSet className="gap-4">
@@ -452,6 +463,7 @@ export function ManagementDevices() {
               disabled={
                 !!busy ||
                 !!pairing ||
+                !settings.isSuccess ||
                 (!management && !native) ||
                 (management && (!origin || scopes.length === 0))
               }
@@ -464,7 +476,17 @@ export function ManagementDevices() {
       </Panel>
       <AuthorizedApps
         management={devices.data?.devices}
-        loading={!devices.data}
+        push={settings.data?.native_available ? push.data?.devices : undefined}
+        loading={
+          devices.isPending ||
+          settings.isPending ||
+          (!!settings.data?.native_available && push.isPending)
+        }
+        loadError={
+          devices.error ??
+          settings.error ??
+          (settings.data?.native_available ? push.error : null)
+        }
       />
       {pairing && (
         <PairingDialog
@@ -478,22 +500,17 @@ export function ManagementDevices() {
 
 function AuthorizedApps({
   management,
+  push,
   loading,
+  loadError,
 }: {
   management?: ManagementDevice[];
+  push?: NativePairing[];
   loading: boolean;
+  loadError: unknown;
 }) {
   const { t } = useI18n();
   const client = useQueryClient();
-  const settings = useQuery({
-    queryKey: ["delivery-settings"],
-    queryFn: () => api<DeliverySettings>("/settings/delivery"),
-  });
-  const push = useQuery({
-    queryKey: ["native-devices"],
-    queryFn: () => api<{ devices: NativePairing[] }>("/native/devices"),
-    enabled: !!settings.data?.native_available,
-  });
   const [confirm, setConfirm] = useState<{
     kind: "management" | "push";
     id: string;
@@ -511,7 +528,7 @@ function AuthorizedApps({
       management: device,
       push: [],
     });
-  for (const device of push.data?.devices ?? []) {
+  for (const device of push ?? []) {
     const key = device.device_id || device.id;
     const row = rows.get(key) ?? { name: device.device_name, push: [] };
     row.push.push(device);
@@ -527,9 +544,12 @@ function AuthorizedApps({
         { method: "DELETE" },
       );
       await Promise.all(
-        ["management-devices", "native-devices", "status"].map((key) =>
-          client.invalidateQueries({ queryKey: [key] }),
-        ),
+        [
+          "management-devices",
+          "native-devices",
+          "delivery-settings",
+          "status",
+        ].map((key) => client.invalidateQueries({ queryKey: [key] })),
       );
       setConfirm(undefined);
     } catch (error) {
@@ -541,9 +561,10 @@ function AuthorizedApps({
   return (
     <Panel title={t("ui.management_devices")}>
       <div className="p-5 md:p-6">
-        <ErrorNotice error={push.error} />
-        {loading ? (
-          <p>{t("ui.loading")}</p>
+        {loadError ? (
+          <ErrorNotice error={loadError} />
+        ) : loading ? (
+          <p role="status">{t("ui.loading")}</p>
         ) : rows.size === 0 ? (
           <p className="text-sm text-muted-foreground">
             {t("ui.no_management_devices")}

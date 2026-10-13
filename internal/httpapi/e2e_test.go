@@ -23,7 +23,6 @@ import (
 	"github.com/emersion/go-imap/v2/imapserver"
 	"github.com/emersion/go-imap/v2/imapserver/imapmemserver"
 	"github.com/mingzaily/mailwake/internal/appmanagement"
-	"github.com/mingzaily/mailwake/internal/config"
 	"github.com/mingzaily/mailwake/internal/logging"
 	"github.com/mingzaily/mailwake/internal/native"
 	"github.com/mingzaily/mailwake/internal/runtime"
@@ -95,11 +94,6 @@ func TestThreeServiceEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer manager.Close()
-	configuration, err := config.Load()
-	if err != nil {
-		t.Fatal(err)
-	}
-	manager.AppManagement().Trust = configuration.AppManagementTrust
 	auth, grant := testAdministrator(t, store)
 	httpServer := httptest.NewTLSServer(New(auth, manager, store, logger))
 	defer httpServer.Close()
@@ -251,7 +245,7 @@ func TestThreeServiceEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	appCall := func(method, path string, body any, credential, qualification string, want int) []byte {
+	appCall := func(method, path string, body any, credential string, want int) []byte {
 		t.Helper()
 		raw, err := json.Marshal(body)
 		if err != nil {
@@ -264,13 +258,6 @@ func TestThreeServiceEndToEnd(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		if credential != "" {
 			req.Header.Set("Authorization", "Bearer "+credential)
-		}
-		if qualification != "" {
-			header := "X-Mailwake-App-Qualification"
-			if path == "/content" {
-				header = "X-Mailwake-Native-Qualification"
-			}
-			req.Header.Set(header, qualification)
 		}
 		response, err := httpServer.Client().Do(req)
 		if err != nil {
@@ -290,7 +277,7 @@ func TestThreeServiceEndToEnd(t *testing.T) {
 	if err = json.Unmarshal(appCall("POST", "/accept", map[string]any{
 		"invitation_id": inviteURI.Query().Get("inv"), "token": inviteURI.Query().Get("t"),
 		"signing_key": device.SigningKey, "device_name": "E2E phone",
-	}, "", "", 200), &credential); err != nil {
+	}, "", 200), &credential); err != nil {
 		t.Fatal(err)
 	}
 	coreID, err := native.KeyID(inviteURI.Query().Get("core"))
@@ -301,72 +288,24 @@ func TestThreeServiceEndToEnd(t *testing.T) {
 		t.Fatal("App credential identity differs from invitation/device")
 	}
 	route := "/mailboxes/" + mailboxID + "/folders"
-	var denied struct {
-		Error struct {
-			Code string `json:"code"`
-		} `json:"error"`
-	}
-	if err = json.Unmarshal(appCall("GET", route, nil, credential.Credential, "", 403), &denied); err != nil {
-		t.Fatal(err)
-	}
-	if denied.Error.Code != "app_management_required" {
-		t.Fatal("paid route error differs", denied.Error.Code)
-	}
-	body, err := json.Marshal(map[string]string{"core_id": credential.CoreID})
-	if err != nil {
-		t.Fatal(err)
-	}
-	req, err := http.NewRequestWithContext(ctx, "POST", platformURL+"/api/v1/app-management/grants", bytes.NewReader(body))
-	if err != nil {
-		t.Fatal(err)
-	}
-	req.Header.Set("Authorization", "Bearer "+device.AccessToken)
-	req.Header.Set("Content-Type", "application/json")
-	response, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer response.Body.Close()
-	var qualification struct {
-		Qualification string `json:"qualification"`
-	}
-	if response.StatusCode != 200 {
-		t.Fatalf("Platform grant status %d", response.StatusCode)
-	}
-	if err = json.NewDecoder(response.Body).Decode(&qualification); err != nil {
-		t.Fatal(err)
-	}
-	folders := appCall("GET", route, nil, credential.Credential, qualification.Qualification, 200)
+	folders := appCall("GET", route, nil, credential.Credential, 200)
 	if !bytes.Contains(folders, []byte(`"Clients"`)) {
-		t.Fatal("paid folder discovery omitted Clients")
+		t.Fatal("authorized folder discovery omitted Clients")
 	}
-	t.Log("PASS 6: owner invitation → mwac_ credential; paid route 403 without qualification, 200 with Platform grant")
+	t.Log("PASS 6: owner invitation → mwac_ credential → authorized folder discovery")
 	contentInput := map[string]any{"reference": decoded.Reference}
-	appCall("POST", "/content", contentInput, credential.Credential, "", 403)
+	appCall("POST", "/content", contentInput, credential.Credential, 403)
 	var contentInvitation appmanagement.Invitation
 	json.Unmarshal(call("POST", "/device-invitations", map[string]any{"management": true, "scopes": []string{"content"}, "core_origin": httpServer.URL}, 201), &contentInvitation)
 	contentURI, _ := url.Parse(contentInvitation.URI)
-	json.Unmarshal(appCall("POST", "/accept", map[string]any{"invitation_id": contentURI.Query().Get("inv"), "token": contentURI.Query().Get("t"), "signing_key": device.SigningKey, "device_name": "Content phone"}, "", "", 200), &credential)
-	appCall("POST", "/content", contentInput, credential.Credential, qualification.Qualification, 403)
-	req, _ = http.NewRequestWithContext(ctx, "POST", platformURL+"/api/v1/native-push/grants", bytes.NewReader(body))
-	req.Header.Set("Authorization", "Bearer "+device.AccessToken)
-	req.Header.Set("Content-Type", "application/json")
-	response, err = http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if response.StatusCode != 200 {
-		t.Fatal("NativePush qualification failed", response.StatusCode)
-	}
-	json.NewDecoder(response.Body).Decode(&qualification)
-	response.Body.Close()
-	contentResponse := appCall("POST", "/content", contentInput, credential.Credential, qualification.Qualification, 200)
+	json.Unmarshal(appCall("POST", "/accept", map[string]any{"invitation_id": contentURI.Query().Get("inv"), "token": contentURI.Query().Get("t"), "signing_key": device.SigningKey, "device_name": "Content phone"}, "", 200), &credential)
+	contentResponse := appCall("POST", "/content", contentInput, credential.Credential, 200)
 	if !bytes.Contains(contentResponse, []byte("482913")) {
 		t.Fatal("original content missing")
 	}
 	decoded.Reference.UID++
-	appCall("POST", "/content", map[string]any{"reference": decoded.Reference}, credential.Credential, qualification.Qualification, 404)
-	t.Log("PASS content: explicit owner scope + NativePush qualification, original IMAP text, wrong scope/purpose/tampering rejected")
+	appCall("POST", "/content", map[string]any{"reference": decoded.Reference}, credential.Credential, 404)
+	t.Log("PASS content: explicit owner scope and active device credential, original IMAP text, wrong scope/tampering rejected")
 	activityFile := filepath.Join(dir, "activity.json")
 	until(15*time.Second, func() bool {
 		_ = manager.Native().PollDeliveries(ctx)

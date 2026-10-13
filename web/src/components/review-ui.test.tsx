@@ -1,6 +1,7 @@
 import { ToastProvider } from "./common";
 import { afterEach, expect, test, vi } from "vitest";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -25,13 +26,12 @@ const mailbox = {
   revision: 1,
   password: { configured: true },
 };
-function mount(child: ReactNode) {
+function mount(
+  child: ReactNode,
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+) {
   return render(
-    <QueryClientProvider
-      client={
-        new QueryClient({ defaultOptions: { queries: { retry: false } } })
-      }
-    >
+    <QueryClientProvider client={client}>
       <I18nContext.Provider
         value={{ language: "zh-CN", catalog, setLanguage: () => {} }}
       >
@@ -216,9 +216,95 @@ test("setup introduction opens administrator setup without making a request", ()
   ).toBeTruthy();
   expect(screen.queryByLabelText("设置码")).toBeNull();
   expect(screen.queryByText("第 1 / 3 步")).toBeNull();
-  expect(screen.getByText("开始介绍").getAttribute("aria-current")).toBe("step");
+  expect(screen.getByText("开始介绍").getAttribute("aria-current")).toBe(
+    "step",
+  );
   fireEvent.click(screen.getByRole("button", { name: "继续" }));
   expect(screen.getByLabelText("设置码")).toBeTruthy();
   expect(screen.getByText("第 1 / 3 步")).toBeTruthy();
   expect(fetchMock).not.toHaveBeenCalled();
+});
+
+test.each([false, true])(
+  "overview shows failed status and recovers with cached data %s",
+  async (cached) => {
+    const healthy = {
+      channel: "bark",
+      folders: [],
+      delivery: { pending: 0, dead: 0 },
+      notices: {},
+    };
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    if (cached) client.setQueryData(["status", "zh-CN"], healthy);
+    let fails = true;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.endsWith("/status")) {
+          if (fails)
+            return new Response(
+              JSON.stringify({
+                error: {
+                  code: "database_unavailable",
+                  message: catalog.database_unavailable,
+                },
+              }),
+              { status: 503 },
+            );
+          return new Response(JSON.stringify(healthy));
+        }
+        return new Response(
+          JSON.stringify(
+            url.endsWith("/mailboxes") ? { mailboxes: [] } : { deliveries: [] },
+          ),
+        );
+      }),
+    );
+    mount(<Overview />, client);
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      catalog.database_unavailable,
+    );
+    expect(screen.queryByText(catalog["ui.healthy"])).toBeNull();
+    fails = false;
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: ["status"] });
+    });
+    expect(await screen.findByText(catalog["ui.healthy"])).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+  },
+);
+
+test("overview waits for status before reporting healthy", async () => {
+  let finishRead!: () => void;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      if (url.endsWith("/status")) {
+        await new Promise<void>((resolve) => {
+          finishRead = resolve;
+        });
+        return new Response(
+          JSON.stringify({
+            channel: "bark",
+            folders: [],
+            delivery: { pending: 0, dead: 0 },
+            notices: {},
+          }),
+        );
+      }
+      return new Response(
+        JSON.stringify(
+          url.endsWith("/mailboxes") ? { mailboxes: [] } : { deliveries: [] },
+        ),
+      );
+    }),
+  );
+  mount(<Overview />);
+  expect(screen.getByRole("status").textContent).toBe(catalog["ui.loading"]);
+  expect(screen.queryByText(catalog["ui.healthy"])).toBeNull();
+  finishRead();
+  expect(await screen.findByText(catalog["ui.healthy"])).toBeTruthy();
+  expect(screen.queryByText(catalog["ui.loading"])).toBeNull();
 });

@@ -21,6 +21,11 @@ import (
 )
 
 type Service struct {
+	revokePairing   func(context.Context, string, bool) error
+	activePolling   atomic.Bool
+	activeChecks    map[string]time.Time
+	activeRetryAt   time.Time
+	activeFailures  int
 	mu              sync.Mutex
 	info            *Info
 	pairingMu       sync.Mutex // serializes a waiting pairing's Relay exchange with local unlink
@@ -199,12 +204,11 @@ func (s *Service) CoreIdentity(ctx context.Context) (*Identity, error) { return 
 // Relay call stays queued and the poller retries it with backoff.
 func (s *Service) Unlink(ctx context.Context, id string) error {
 	s.pairingMu.Lock()
-	err := s.store.UnlinkNativePairing(ctx, id)
+	err := s.revokeLocal(ctx, id, true)
 	s.pairingMu.Unlock()
 	if err != nil {
 		return err
 	}
-	s.log.Info("Native pairing revoked", "pairing_id", id)
 	if s.Available() {
 		s.unlinkAtRelay(ctx, storage.NativeUnlink{ID: id})
 	}
@@ -458,7 +462,7 @@ func (s *Service) Run(ctx context.Context) {
 		interval time.Duration
 		poll     func(context.Context) error
 	}{
-		{time.Second, s.PollDeliveries}, {3 * time.Second, s.Poll},
+		{time.Second, s.PollDeliveries}, {3 * time.Second, s.Poll}, {5 * time.Second, s.PollActivePairings},
 	} {
 		wg.Add(1)
 		go func() {

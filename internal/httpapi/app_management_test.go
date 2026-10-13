@@ -4,7 +4,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -38,7 +37,6 @@ type appFixture struct {
 	router  http.Handler
 	grant   auth.Grant
 	coreID  string
-	issuer  *ecdsa.PrivateKey
 	service *appmanagement.Service
 }
 
@@ -59,9 +57,7 @@ func newAppFixture(t *testing.T, runtimes ...Runtime) appFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	issuer, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	spki, _ := x509.MarshalPKIXPublicKey(&issuer.PublicKey)
-	service := &appmanagement.Service{Store: store, Native: nativeService, Trust: appmanagement.Trust{Issuer: "mailwake-platform", Environment: "sandbox", Keys: map[string]string{"k1": b64.EncodeToString(spki)}}}
+	service := &appmanagement.Service{Store: store, Native: nativeService}
 	identity, err := nativeService.CoreIdentity(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -72,7 +68,7 @@ func newAppFixture(t *testing.T, runtimes ...Runtime) appFixture {
 		base = runtimes[0]
 	}
 	router := New(authService, appRuntime{base, service}, store, log)
-	return appFixture{router, grant, identity.ID, issuer, service}
+	return appFixture{router, grant, identity.ID, service}
 }
 
 func (f appFixture) do(t *testing.T, method, path string, body any, headers map[string]string) *httptest.ResponseRecorder {
@@ -148,22 +144,7 @@ func (f appFixture) invite(t *testing.T, scopes []string) (credential, deviceID 
 	return result.Credential, result.DeviceID
 }
 
-func (f appFixture) qualification(t *testing.T, deviceID string, claims map[string]any) string {
-	t.Helper()
-	base := map[string]any{"iss": "mailwake-platform", "aud": "mailwake-core", "sub": "s", "purpose": "app_management", "environment": "sandbox", "device_id": deviceID, "core_id": f.coreID, "iat": time.Now().Unix(), "exp": time.Now().Unix() + 300}
-	for k, v := range claims {
-		base[k] = v
-	}
-	header, _ := json.Marshal(map[string]string{"alg": "ES256", "typ": "JWT", "kid": "k1"})
-	payload, _ := json.Marshal(base)
-	input := b64.EncodeToString(header) + "." + b64.EncodeToString(payload)
-	digest := sha256.Sum256([]byte(input))
-	r, s, _ := ecdsa.Sign(rand.Reader, f.issuer, digest[:])
-	signature := append(r.FillBytes(make([]byte, 32)), s.FillBytes(make([]byte, 32))...)
-	return input + "." + b64.EncodeToString(signature)
-}
-
-func TestAppControllerAuthorizesFreeRoutesByScope(t *testing.T) {
+func TestAppControllerAuthorizesRoutesByScope(t *testing.T) {
 	f := newAppFixture(t)
 	credential, _ := f.invite(t, []string{"diagnostics"})
 	bearer := map[string]string{"Authorization": "Bearer " + credential}
@@ -187,38 +168,18 @@ func TestAppControllerAuthorizesFreeRoutesByScope(t *testing.T) {
 	}
 }
 
-func TestPaidRoutesRequireAQualificationForThisCoreAndDevice(t *testing.T) {
+func TestAppConfigurationRequiresOwnerScope(t *testing.T) {
 	f := newAppFixture(t)
-	credential, deviceID := f.invite(t, []string{"channels"})
-	revision := 0
-	body := map[string]any{"revision": revision, "channel": "bark", "preview": "off", "language": "en"}
-	call := func(qualification string) int {
-		headers := map[string]string{"Authorization": "Bearer " + credential}
-		if qualification != "" {
-			headers["X-Mailwake-App-Qualification"] = qualification
-		}
-		return f.do(t, "PUT", "/api/v1/app/settings/delivery", body, headers).Code
+	credential, _ := f.invite(t, []string{"channels"})
+	body := map[string]any{"revision": 0, "channel": "bark", "preview": "off", "language": "en"}
+	// The runtime rejects incomplete settings after device authorization succeeds.
+	bearer := map[string]string{"Authorization": "Bearer " + credential}
+	if w := f.do(t, "PUT", "/api/v1/app/settings/delivery", body, bearer); w.Code != 400 {
+		t.Fatal(w.Code, w.Body.String())
 	}
-	if code := call(""); code != 403 {
-		t.Fatal("paid route without qualification", code)
-	}
-	for name, claims := range map[string]map[string]any{
-		"another device": {"device_id": strings.Repeat("0", 64)},
-		"another Core":   {"core_id": strings.Repeat("0", 64)},
-		"expired":        {"exp": time.Now().Unix() - 60},
-		"another issuer": {"iss": "someone-else"},
-	} {
-		if code := call(f.qualification(t, deviceID, claims)); code != 403 {
-			t.Fatal(name, code)
-		}
-	}
-	// The runtime fixture rejects the update itself; reaching it proves authorization passed.
-	if code := call(f.qualification(t, deviceID, nil)); code != 400 {
-		t.Fatal("valid qualification", code)
-	}
-	// Free routes in the same scope need no qualification.
-	if w := f.do(t, "GET", "/api/v1/app/settings/delivery", nil, map[string]string{"Authorization": "Bearer " + credential}); w.Code != 200 {
-		t.Fatal(w.Code)
+	other, _ := f.invite(t, []string{"diagnostics"})
+	if w := f.do(t, "PUT", "/api/v1/app/settings/delivery", body, map[string]string{"Authorization": "Bearer " + other}); w.Code != 403 {
+		t.Fatal(w.Code, w.Body.String())
 	}
 }
 
@@ -256,21 +217,10 @@ func TestAdministratorListsAndRevokesControllers(t *testing.T) {
 	}
 }
 
-func TestContentRequiresOwnerScopeAndNativeQualification(t *testing.T) {
+func TestContentRequiresOwnerScopeAndActiveCredential(t *testing.T) {
 	f := newAppFixture(t)
-	credential, device := f.invite(t, []string{"content"})
+	credential, _ := f.invite(t, []string{"content"})
 	headers := map[string]string{"Authorization": "Bearer " + credential}
-	for _, claims := range []map[string]any{
-		{"purpose": "app_management"}, {"purpose": "native_push", "core_id": "other"},
-		{"purpose": "native_push", "device_id": "other"}, {"purpose": "native_push", "environment": "production"},
-		{"purpose": "native_push", "exp": time.Now().Unix() - 1}, {"purpose": "native_push", "exp": time.Now().Unix() + 301},
-	} {
-		headers["X-Mailwake-Native-Qualification"] = f.qualification(t, device, claims)
-		if w := f.do(t, "POST", "/api/v1/app/content", map[string]any{"reference": map[string]any{}}, headers); w.Code != 403 {
-			t.Fatal(w.Code, w.Body.String())
-		}
-	}
-	headers["X-Mailwake-Native-Qualification"] = f.qualification(t, device, map[string]any{"purpose": "native_push"})
 	w := f.do(t, "POST", "/api/v1/app/content", map[string]any{"reference": map[string]any{}}, headers)
 	if w.Code != 200 || w.Header().Get("Cache-Control") != "no-store" {
 		t.Fatal(w.Code, w.Body.String())
@@ -330,7 +280,7 @@ func TestFolderOnlyControllerCanReadMailboxDirectoryWithoutMailboxAccess(t *test
 	}
 }
 
-func TestChannelControllerCanListReceivingDevicesWithoutCommercialQualification(t *testing.T) {
+func TestChannelControllerCanListReceivingDevices(t *testing.T) {
 	f := newAppFixture(t)
 	for _, id := range []string{"active-phone", "revoked-phone"} {
 		pairing := storage.NativePairing{ID: id, DeviceID: id, DeviceName: "iPhone", TokenHash: id, CreatedAt: time.Now().Unix(), ExpiresAt: time.Now().Add(time.Hour).Unix()}

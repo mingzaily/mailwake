@@ -72,7 +72,7 @@ func (s *Store) NativeDevices(ctx context.Context) ([]NativePairing, error) {
 	return s.nativePairings(ctx, "state IN ('active','revoked')")
 }
 func (s *Store) nativePairings(ctx context.Context, where string, args ...any) ([]NativePairing, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT "+pairingColumns+" FROM native_pairings WHERE "+where+" ORDER BY created_at,id", args...)
+	rows, err := s.db.QueryContext(ctx, "SELECT "+pairingColumns+" FROM native_pairings WHERE "+where+" ORDER BY created_at,id LIMIT 16", args...)
 	if err != nil {
 		return nil, err
 	}
@@ -107,9 +107,18 @@ func (s *Store) FinishNativePairing(ctx context.Context, id, state, code string)
 
 const cancelPairingDeliveries = "UPDATE native_deliveries SET state='cancelled',error_code='pairing_revoked',envelope='',content_signature='',next_check=0 WHERE pairing_id=? AND relay_id='' AND state='pending'"
 
-// RevokeNativePairing records a revocation the device already made at Relay and
-// cancels unsent work. The first observed revocation time is kept.
+// RevokeNativePairing records a device revocation and cancels unsent work.
 func (s *Store) RevokeNativePairing(ctx context.Context, id string) (bool, error) {
+	return s.RevokeNativePairingWithDelivery(ctx, id, false, nil)
+}
+func (s *Store) UnlinkNativePairing(ctx context.Context, id string) error {
+	_, err := s.RevokeNativePairingWithDelivery(ctx, id, true, nil)
+	return err
+}
+
+// RevokeNativePairingWithDelivery commits revocation, pending cancellation and
+// the selected notification target together. unlink also queues Relay deletion.
+func (s *Store) RevokeNativePairingWithDelivery(ctx context.Context, id string, unlink bool, change *DeliveryChange) (bool, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return false, err
@@ -123,39 +132,37 @@ func (s *Store) RevokeNativePairing(ctx context.Context, id string) (bool, error
 	if err != nil {
 		return false, err
 	}
+	if unlink {
+		var deviceID string
+		err := tx.QueryRowContext(ctx, "SELECT device_id FROM native_pairings WHERE id=?", id).Scan(&deviceID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, fault.New("native_pairing_not_found")
+		}
+		if err != nil {
+			return false, err
+		}
+		if deviceID == "" {
+			_, err = tx.ExecContext(ctx, "DELETE FROM native_pairings WHERE id=?", id)
+		} else {
+			_, err = tx.ExecContext(ctx, `UPDATE native_pairings SET state='revoked',revoked_at=CASE WHEN revoked_at=0 THEN ? ELSE revoked_at END,error_code='pairing_revoked',
+ encrypted_token=NULL,token_hash='',device_signature='',unlink_pending=1 WHERE id=?`, time.Now().Unix(), id)
+		}
+		if err != nil {
+			return false, err
+		}
+	}
 	if _, err = tx.ExecContext(ctx, cancelPairingDeliveries, id); err != nil {
 		return false, err
 	}
+	if _, err = tx.ExecContext(ctx, "UPDATE native_activities SET state='failed',request='' WHERE pairing_id=? AND state='pending'", id); err != nil {
+		return false, err
+	}
+	if change != nil {
+		if err = saveDelivery(ctx, tx, *change); err != nil {
+			return false, err
+		}
+	}
 	return count == 1, tx.Commit()
-}
-
-// UnlinkNativePairing revokes a pairing locally and, when a device was selected,
-// queues the Relay DELETE. A pairing without a device never reached Relay and is removed.
-func (s *Store) UnlinkNativePairing(ctx context.Context, id string) error {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	result, err := tx.ExecContext(ctx, "DELETE FROM native_pairings WHERE id=? AND device_id=''", id)
-	if err != nil {
-		return err
-	}
-	if n, _ := result.RowsAffected(); n == 1 {
-		return tx.Commit()
-	}
-	result, err = tx.ExecContext(ctx, `UPDATE native_pairings SET state='revoked',revoked_at=CASE WHEN revoked_at=0 THEN ? ELSE revoked_at END,error_code='pairing_revoked',
- encrypted_token=NULL,token_hash='',device_signature='',unlink_pending=1,unlink_attempts=0,unlink_next_at=0 WHERE id=?`, time.Now().Unix(), id)
-	if err != nil {
-		return err
-	}
-	if n, _ := result.RowsAffected(); n == 0 {
-		return fault.New("native_pairing_not_found")
-	}
-	if _, err = tx.ExecContext(ctx, cancelPairingDeliveries, id); err != nil {
-		return err
-	}
-	return tx.Commit()
 }
 
 type NativeUnlink struct {

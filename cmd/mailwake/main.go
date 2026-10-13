@@ -94,7 +94,6 @@ func run(log *slog.Logger) error {
 		return err
 	}
 	defer configuration.Close()
-	configuration.AppManagement().Trust = c.AppManagementTrust
 	gin.SetMode(gin.ReleaseMode)
 	server := &http.Server{Handler: httpapi.New(authService, configuration, store, log), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 40 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10}
 	listener, err := net.Listen("tcp", c.Listen)

@@ -1,26 +1,35 @@
 # Mailwake
 
-**Notifications for the email folders that matter.**
+**A quiet inbox. A signal when it matters.**
+
+Self-hosted notifications for the IMAP folders you choose. Route important mail into a folder, let Mailwake watch it, and keep reading and replying in your usual email client.
+
+[Documentation](https://mailwake.oritx.com/en/docs/) · [中文文档](https://mailwake.oritx.com/zh-cn/docs/) · [Releases](https://github.com/mingzaily/mailwake/releases) · [Contributing](CONTRIBUTING.md)
 
 [![CI](https://github.com/mingzaily/mailwake/actions/workflows/ci.yml/badge.svg)](https://github.com/mingzaily/mailwake/actions/workflows/ci.yml)
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSE)
 
-English · [简体中文](README.zh-CN.md) · [Documentation](docs/README.md) · [Releases](https://github.com/mingzaily/mailwake/releases)
+![Mailwake console showing mailbox connections and recent notifications](docs/images/overview.en.jpg)
 
-Mailwake monitors IMAP folders on your own server. When a mail rule moves a message into a folder, receive a notification through Bark, Pushover or a signed webhook. Keep reading and replying in your usual email client.
+## Your folders, your server, your notifications
 
-## What you can do
+| Capability | How it works |
+| --- | --- |
+| Focused monitoring | Up to 20 mailboxes, with realtime IMAP IDLE or scheduled checks per folder |
+| Your delivery channel | Bark, Pushover, signed webhooks, or the official Mailwake App |
+| Browser management | A responsive console in nine languages, with connection status and delivery history |
+| Durable state | Encrypted credentials, SQLite checkpoints and a persistent notification queue |
 
-- **Choose the folders that matter.** Connect up to 20 mailboxes and choose realtime IMAP IDLE or scheduled checks for each folder.
-- **Use your preferred notification channel.** Configure notification previews and retries for Bark, Pushover or webhooks.
-- **Manage everything in your browser.** Set up mailboxes, inspect delivery history and diagnose issues in nine languages: English, Simplified Chinese, Traditional Chinese, Japanese, Korean, German, French, Spanish and Brazilian Portuguese.
-- **Keep state on your server.** Credentials are encrypted; SQLite preserves monitoring progress and pending notifications across restarts.
+```text
+Your mailbox → Your Mailwake Core → Bark / Pushover / Webhook
+                                 → Encrypted Relay → Mailwake App
+```
 
-The self-hosted service, Web console and script API are free to use. The official App and Pro services are separate integrations; see [App integration](docs/native-push.md).
+The self-hosted console and script API are free. The official App's management features and ordinary native pushes use separate Pro entitlements; owner-approved body reading is free. See [App connection and permissions](https://mailwake.oritx.com/en/docs/connect-app/).
 
-## Quick start
+## Run from source
 
-You need Git, Docker Compose v2 and a mailbox with TLS IMAP enabled. Use an app password or authorization code when your email provider requires one.
+Install Git, Docker and Docker Compose v2, then run:
 
 ```sh
 git clone https://github.com/mingzaily/mailwake.git
@@ -29,43 +38,35 @@ docker compose up -d --build --pull never
 docker compose logs core
 ```
 
-1. Open **http://127.0.0.1:8080** on the Docker host.
-2. Enter the setup code from the logs and create an administrator account with a password of at least 12 characters.
-3. Add a mailbox and select the folders to monitor.
-4. Open notification settings, configure a channel and send a test notification.
+Open **http://127.0.0.1:8080** on the Docker host. Enter the setup code from the logs, create an administrator password of at least 12 characters, and connect a TLS IMAP mailbox. Subscribe to a folder, save a notification channel, then send a **new** message to verify delivery.
 
-The commands above build the current `main` source. **v1.0.0-rc.8** is the current release candidate for 1.0.0. The default port binds to localhost, and data persists in a Docker volume. For remote access, HTTPS, backups and upgrades, follow the [deployment guide](docs/deployment.md).
+This builds the current source. The default port is local to the host; the `core-data` volume preserves state. Prefer a released image or binary? Follow the [installation guide](https://mailwake.oritx.com/en/docs/deploy/) and select a published version from [Releases](https://github.com/mingzaily/mailwake/releases).
 
-Prefer a prebuilt package? [Download macOS/Linux binaries](https://github.com/mingzaily/mailwake/releases/tag/v1.0.0-rc.8) or use the container image `ghcr.io/mingzaily/mailwake:v1.0.0-rc.8` (amd64 and arm64). The `main` branch tracks ongoing development. Changes are recorded in [CHANGELOG.md](CHANGELOG.md).
+## Make it yours
 
-## A look inside
-
-Monitor mailbox connections and folder activity from the overview.
-
-![Mailwake overview](docs/images/overview.en.jpg)
+| Next step | Guide |
+| --- | --- |
+| Install on a server or NAS | [Deployment](https://mailwake.oritx.com/en/docs/deploy/) |
+| Reach Core from your phone | [HTTPS](https://mailwake.oritx.com/en/docs/https/) · [Connect the App](https://mailwake.oritx.com/en/docs/connect-app/) |
+| Fine-tune monitoring | [Mailboxes](https://mailwake.oritx.com/en/docs/mailboxes/) · [Folders](https://mailwake.oritx.com/en/docs/folders/) |
+| Configure delivery and automation | [Notifications](https://mailwake.oritx.com/en/docs/notifications/) · [HTTP API](https://mailwake.oritx.com/en/docs/api/) |
+| Keep Core healthy | [Backup and upgrades](https://mailwake.oritx.com/en/docs/backup/) · [Troubleshooting](https://mailwake.oritx.com/en/docs/troubleshooting/) |
 
 <details>
-<summary>Folder selection and connection budget</summary>
+<summary>See folder selection and connection budgets</summary>
 
-![Folder selection and connection budget](docs/images/folders.en.jpg)
+![Folder selection with realtime and scheduled checks](docs/images/folders.en.jpg)
 
 </details>
 
-*Screenshots use demonstration mailboxes and synthetic messages; appearance may vary by version.*
+Screenshots use demonstration mailboxes and synthetic messages.
 
-## Documentation
+## Build with us
 
-| I want to… | Guide |
-| --- | --- |
-| Deploy, upgrade or back up Mailwake | [Deployment](docs/deployment.md) |
-| Check provider compatibility and folder behavior | [Mailbox monitoring](docs/monitoring.md) |
-| Configure notification channels and webhooks | [Notifications](docs/notifications.md) |
-| Connect the official App | [App integration](docs/native-push.md) |
-| Automate management tasks | [HTTP API](docs/api.md) |
-| Build locally or contribute a change | [Contributing](CONTRIBUTING.md) |
+Start with [CONTRIBUTING.md](CONTRIBUTING.md) for the development environment and verification workflow. [docs/](docs/README.md) contains English contributor references for monitoring, delivery, storage, API implementation and the console. [AGENTS.md](AGENTS.md) maps development tasks to those references. User tutorials are maintained on the documentation site.
 
-See the [documentation index](docs/README.md) for console and storage references. Report bugs through [GitHub Issues](https://github.com/mingzaily/mailwake/issues); report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
+Report reproducible bugs in [Issues](https://github.com/mingzaily/mailwake/issues). Follow [SECURITY.md](SECURITY.md) for private vulnerability reports. Release history is in [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
-The self-hosted Core in this repository is licensed under **AGPL-3.0-only**. See [LICENSE](LICENSE) and [COPYRIGHT](COPYRIGHT). Third-party components retain their own licenses; notices are included in builds.
+Mailwake Core is **AGPL-3.0-only**; see [LICENSE](LICENSE) and [COPYRIGHT](COPYRIGHT). Third-party components retain their licenses and notices. The Mailwake iOS App, Platform and Relay are separate proprietary modules and are distributed independently.

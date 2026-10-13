@@ -63,6 +63,11 @@ func (s *Service) Test(ctx context.Context, pairingID string) (result error) {
 	}
 	err = s.client.call(ctx, identity, info.Audience, "POST", "/v1/pairing-tests", map[string]string{"pairing_id": pairingID, "test_id": testID}, &response, 200)
 	if err != nil {
+		if pairingGone(nativeFailure(err)) {
+			if revokeErr := s.revoke(ctx, pairingID); revokeErr != nil {
+				return revokeErr
+			}
+		}
 		return err
 	}
 	if response.TestID != testID {

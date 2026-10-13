@@ -26,7 +26,7 @@ func respondFault(c *gin.Context, err error) {
 		status = http.StatusNotFound
 	case "invitation_used", "invitation_expired":
 		status = http.StatusGone
-	case "native_push_required", "content_permission_required", "app_management_required", "forbidden":
+	case "content_permission_required", "forbidden":
 		status = http.StatusForbidden
 	case "message_timeout":
 		status = http.StatusGatewayTimeout
@@ -34,7 +34,7 @@ func respondFault(c *gin.Context, err error) {
 		status = http.StatusUnprocessableEntity
 	case "message_too_large":
 		status = http.StatusRequestEntityTooLarge
-	case "message_unavailable", "app_management_unavailable", "native_push_unavailable":
+	case "message_unavailable", "native_push_unavailable":
 		status = http.StatusServiceUnavailable
 	case "mailbox_duplicate", "setup_complete", "settings_conflict", "subscriptions_conflict":
 		status = http.StatusConflict

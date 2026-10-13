@@ -9,6 +9,9 @@
 **/*_test.mjs
 !LICENSE
 !COPYRIGHT
+!docs/
+docs/**
+!docs/html-content-third-party.txt
 
 !web/
 !web/**

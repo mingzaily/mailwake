@@ -1,6 +1,6 @@
 # Development guide
 
-[简体中文](development.zh-CN.md) · [Documentation](README.md)
+[Contributor documentation](README.md) · [User guides](https://mailwake.oritx.com/en/docs/)
 
 ## Local development
 
@@ -27,7 +27,7 @@ Open `http://127.0.0.1:5173`. Vite proxies `/api` and `/locales` to `127.0.0.1:8
 
 Generated `internal/httpapi/webdist/` assets are excluded from commits. Git tracks only `webdist/.gitkeep`; `go:embed all:webdist` supports plain Go builds. When the built index is absent, `/` serves the separately embedded `internal/httpapi/placeholder.html`, which asks you to run `make web`. `make check-build` runs the build and checks that tracked files under webdist remain unchanged; `make check-webdist` runs only the Git check. Docker builds the UI in a separate Node stage; the final image contains no Node runtime.
 
-All locked dependency licenses are audited against MIT, ISC, Apache-2.0, BSD, OFL and BlueOak-1.0.0. The minimatch build dependency uses [Blue Oak 1.0.0](https://blueoakcouncil.org/license/1.0.0); its full license text is included in generated notices. Tailwind's MIT compiler and scanner are used directly to keep its MPL build adapter outside the dependency graph. Static toast markup replaces sonner's injected styles. The shadcn source attribution is retained in `web/SHADCN-LICENSE` and generated notices.
+All locked dependency licenses are audited against MIT, ISC, Apache-2.0, BSD, OFL and BlueOak-1.0.0. The minimatch build dependency uses [Blue Oak 1.0.0](https://blueoakcouncil.org/license/1.0.0); its full license text is included in generated notices. Tailwind's MIT compiler and scanner are used directly to keep its MPL build adapter outside the dependency graph. Sonner's fixed injected styles are authorized by the build-generated CSP hashes described in [Console](console.md#csp-component-authorization). The shadcn source attribution is retained in `web/SHADCN-LICENSE` and generated notices.
 
 Tests use local TLS IMAP servers, real SQLite databases and local HTTPS notification receivers. They cover folder monitoring and restart recovery, mailbox isolation, concurrent configuration updates, delivery retries, webhook signatures, authentication and log privacy. Real provider rules and device display require manual validation with your own accounts.
 
@@ -62,7 +62,7 @@ Current scope includes password or app-password login, up to 20 IMAP mailboxes a
 
 The selfhost process accepts explicit test CA files for local TLS IMAP, Native Relay and BYO delivery integration. Configure `MAILWAKE_LOCAL_TEST_TLS=1`, then independently set `MAILWAKE_LOCAL_TEST_IMAP_CA_FILE`, `MAILWAKE_LOCAL_TEST_RELAY_CA_FILE` and/or `MAILWAKE_LOCAL_TEST_DELIVERY_CA_FILE` to an absolute PEM CA file path. With the switch absent or `0`, CA-file configuration is rejected; with the switch `1`, at least one valid CA file is required. Files must be regular files up to 64 KiB and contain CA certificate PEM blocks; symlinks, private keys, leaf certificates and unrelated data fail startup with `config_local_test_tls_invalid`.
 
-These startup snapshots use separate IMAP, Relay and Delivery pools. IMAP test roots apply only to `localhost`, loopback IPs and `.test` names; other IMAP hosts retain system trust. A Relay test pool requires an HTTPS Relay URL in the same host range. Delivery test roots apply only to HTTPS test hosts for Bark, Pushover and Webhook; public targets retain system trust. Pushover's user-facing endpoint stays fixed at its official URL. Every adapter verifies the certificate against the exact configured hostname/IP and keeps TLS 1.2 or later. The process keeps system trust unchanged and installs fixture roots through explicit files on Darwin. Test trust for outbound connections is separate from Core App HTTPS origin and Platform qualification trust.
+These startup snapshots use separate IMAP, Relay and Delivery pools. IMAP test roots apply only to `localhost`, loopback IPs and `.test` names; other IMAP hosts retain system trust. A Relay test pool requires an HTTPS Relay URL in the same host range. Delivery test roots apply only to HTTPS test hosts for Bark, Pushover and Webhook; public targets retain system trust. Pushover's user-facing endpoint stays fixed at its official URL. Every adapter verifies the certificate against the exact configured hostname/IP and keeps TLS 1.2 or later. The process keeps system trust unchanged and installs fixture roots through explicit files on Darwin. Test trust for outbound connections is separate from the Core App HTTPS origin.
 
 ```sh
 MAILWAKE_LOCAL_TEST_TLS=1

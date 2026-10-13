@@ -1,10 +1,8 @@
 # Mailbox monitoring
 
-[简体中文](monitoring.zh-CN.md) · [Documentation](README.md)
+[Contributor documentation](README.md) · [User guides](https://mailwake.oritx.com/en/docs/)
 
-## Mailbox compatibility
-
-Gmail accounts that permit IMAP and app passwords use the same mailbox fields as other IMAP accounts: `imap.gmail.com`, port `993`, the complete account address and an app password. Google requires two-step verification for app passwords, and some account policies prevent their use. Changing the Google account password revokes its app passwords; replace the saved IMAP credential to reconnect. See Google's [app-password requirements](https://support.google.com/accounts/answer/185833?hl=en).
+## Provider adapter behavior
 
 Gmail Labels appear as IMAP folders. Core keeps selectable paths, including nested Labels and `[Gmail]` or `[GoogleMail]` system folders, and filters `\Noselect` entries. Each subscribed folder has its own UID cursor and event identity; one message appearing in two subscribed Labels can produce two folder notifications. New subscriptions establish a baseline, while reconnects resume their saved cursor and apply the existing 24-hour age limit.
 

@@ -48,14 +48,14 @@ The binary is written to `bin/mailwake`. The `nomsgpack` build tag is used by th
 | `internal/httpapi/webdist/` | Ignored generated resources; only .gitkeep is tracked |
 | `internal/logging/` | Whitelisted structured events, JSON stderr, 2000-entry memory ring and filtered snapshots |
 | `internal/fault/` | Safe, language-independent error codes and parameters |
-| `internal/i18n/locales/` | Shared English and Simplified Chinese messages |
+| `internal/i18n/locales/` | Shared nine-language messages |
 | `internal/buildinfo/` | Release version reported by logs and diagnostics |
 
 Keep tests beside the code they exercise. Introduce packages when a concrete responsibility needs its own boundary. Provider-specific protocol types stay inside their adapters.
 
 ## Changing behavior
 
-Fix the rule at its owning layer and update the corresponding guide in `docs/`. Cover lifecycle, cancellation, persistence and concurrent updates when they are affected. Review business behavior first, then review code design and dependencies.
+Fix the rule at its owning layer and update the corresponding technical reference in `docs/` and user procedures on the [documentation site](https://mailwake.oritx.com/en/docs/). Cover lifecycle, cancellation, persistence and concurrent updates when they are affected. Review business behavior first, then review code design and dependencies.
 
 Notification attempts default to one request. Automatic retries require explicit configuration. Preserve this boundary when adding providers or changing delivery logic.
 
@@ -106,7 +106,7 @@ Push a version tag such as `v1.0.0` after release acceptance. The Release workfl
 
 - Multi-platform images for `linux/amd64` and `linux/arm64` to `ghcr.io/mingzaily/mailwake`, authenticated with the workflow's `GITHUB_TOKEN` and `packages: write`.
 - Version tags (`v1.0.0`, `v1.0`) and `latest` for stable releases; prerelease tags keep their prerelease version and leave `latest` unchanged.
-- Linux/macOS amd64/arm64 binaries with the embedded Web console, deployment documents, license notices and SHA256 checksums in GitHub Releases.
+- Linux/macOS amd64/arm64 binaries with the embedded Web console, project README and contributor documents, license notices and SHA256 checksums in GitHub Releases.
 
 GHCR is the only image publication destination. The Dockerfile downloads its upstream base images from Docker Hub. After the first GHCR publication, set the package visibility to Public in GitHub package settings and verify an anonymous pull of the versioned image. Public repository visibility and package visibility are separate settings.
 

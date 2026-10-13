@@ -1,6 +1,8 @@
 # Management console
 
-[简体中文](console.zh-CN.md) · [Documentation](README.md)
+[Contributor documentation](README.md) · [User guides](https://mailwake.oritx.com/en/docs/)
+
+The browser favicon is an envelope and notification dot using the console’s indigo primary (#3F5BD8), pale-blue accent (#8FA8FF) and white, independent of the iOS App icon. Its SVG source and 32×32 PNG fallback live in `web/src/assets/core-icon.*`; Vite fingerprints both and the existing `/assets/*` route serves them locally.
 
 ## Management interface
 
@@ -23,7 +25,7 @@ Use the new-york / Radix / lucide / Tailwind v4 configuration in `web/components
 - Compose forms with FieldGroup / Field. Use NativeSelect for selects and Checkbox for folder selection. Put validation errors in FieldError, hints in FieldDescription, and associate errors through `aria-describedby` / `aria-invalid`. BusyButton uses Spinner with `data-icon="inline-start"`, `disabled` and `aria-busy`.
 - Use DropdownMenu radio groups for language and theme controls with `modal={false}`; preserve preference storage and theme application. Use Card for panels, Separator for dividers, Badge variants for statuses, Empty for empty states and Alert for notices.
 - Share Sidebar navigation components between desktop and narrow screens. Use `collapsible="none"` with the native drawer described below, preserving mailbox names, counts, the skip link and existing keyboard behavior.
-- Keep fonts local and dependencies pinned to exact versions; `node scripts/licenses.mjs` audits licenses. All visible strings, including generated component labels, use the English and Simplified Chinese catalogs with matching placeholders.
+- Keep fonts local and dependencies pinned to exact versions; `node scripts/licenses.mjs` audits licenses. All visible strings, including generated component labels, use the nine shared language catalogs with matching placeholders.
 
 ### CSP component authorization
 
@@ -68,3 +70,7 @@ Runtime logs provides **Clear logs**, which clears the shared Core memory ring a
 Form footers align actions to the right of their own card, with the primary save or finish action last. Tests and other secondary actions precede it. Inline input actions and table-row actions stay with their content. Footers wrap on narrow screens.
 
 Successful operations and transient failures use the shared toast. Validation messages remain beside fields; configuration conflicts retain their reload action in the form. Query failures and ongoing connection problems use persistent page alerts. Native modal failures stay inside the modal so they remain visible above the browser's top layer. Multiple messages use Sonner’s toast stack.
+
+Notification settings lock their form controls while a save is pending. Successful saves apply the returned revision and values; failed saves preserve the draft and restore editing. The overview reports healthy status only after a successful status read. Initial loading shows a loading state, and failed reads show an error even when cached status data exists.
+
+The authorized App list combines management devices, notification capability and available push devices. It shows loading until all required reads finish, shows query failures before an empty state, and refreshes errors and cached data through the existing foreground polling. Creating an invitation requires a successful notification capability read.

@@ -2,6 +2,20 @@
 
 All notable changes to Mailwake Core are documented here. Versions follow [Semantic Versioning](https://semver.org); before 1.0.0, minor versions may change configuration.
 
+## [1.0.0-rc.10] - 2026-10-13
+
+- Return sanitized HTML, a plain-text fallback and a remote-image flag from the owner-authorized App content endpoint. Select MIME body parts with BODYSTRUCTURE and BODY.PEEK, preserve safe image references for iOS, and embed validated same-message CID images. Apply the 1 MiB read budget to selected body/CID payloads so messages with large ordinary attachments remain readable.
+- Enforce HTML and encoded-response budgets with complete text fallback. Keep body/image data transient and remote image requests on the client.
+- Update the HTML parser and WebP decoder to patched versions; document real-mail integration checks and third-party licenses.
+- Include the content dependency license file in the Docker build context and container distribution.
+- Publish this candidate for real-mail integration testing. Automated checks pass; actual mailbox-to-iOS HTML rendering and image-permission acceptance remains pending.
+
+## [1.0.0-rc.9] - 2026-10-13
+
+- Authorize App requests with device credentials, owner-approved scopes and resource permissions. The official iOS App checks Pro for folder discovery and management changes.
+- Make owner-authorized mail body reading free while retaining content scope, signed message references and immediate device revocation.
+- Remove Platform qualification verification and its trust configuration from Core. Update App integration and deployment documentation.
+
 ## [1.0.0-rc.8] - 2026-10-12
 
 - Add an introductory setup screen with a reduced-motion-aware entrance animation and consistent widths across the three setup steps.
@@ -82,5 +96,5 @@ First public release.
 - React + shadcn console with first-run setup codes, Argon2id administrator login, CSRF-protected sessions, light/dark themes and English/Simplified Chinese.
 - REST API for mailboxes, folder subscriptions, delivery settings, deliveries, logs and redacted diagnostics; revocable `mwk_` API tokens stored as hashes.
 - Offline `admin reset-password`, `admin reset-setup` and `admin reset-native-push` commands.
-- Optional official App management: one-time invitations with scopes, `mwac_` device credentials, and Platform qualifications for paid changes.
+- Optional official App management: one-time invitations with scopes, `mwac_` device credentials, and owner-approved resource permissions; the official App enforces Pro for management changes.
 - Single static binary and container image for `linux/amd64` and `linux/arm64`; embedded assets with strict CSP and bundled third-party notices.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+
 	"github.com/mingzaily/mailwake/internal/fault"
 )
 
@@ -33,6 +34,23 @@ func (s *Store) SaveDelivery(ctx context.Context, encrypted []byte, preview, cha
 		return err
 	}
 	defer tx.Rollback()
+	if err := saveDelivery(ctx, tx, DeliveryChange{Encrypted: encrypted, Preview: preview, Channel: channel, ClearPreview: clearPreview, Revision: revision}); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// DeliveryChange carries the encrypted configuration and its enqueue policy in one transaction.
+type DeliveryChange struct {
+	Encrypted        []byte
+	Preview, Channel string
+	ClearPreview     bool
+	Revision         int64
+}
+
+func saveDelivery(ctx context.Context, tx *sql.Tx, change DeliveryChange) error {
+	encrypted, preview, channel, clearPreview, revision := change.Encrypted, change.Preview, change.Channel, change.ClearPreview, change.Revision
+	var err error
 	var current int64
 	err = tx.QueryRowContext(ctx, "SELECT revision FROM configuration WHERE name='delivery'").Scan(&current)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
@@ -55,7 +73,7 @@ func (s *Store) SaveDelivery(ctx context.Context, encrypted []byte, preview, cha
 			return err
 		}
 	}
-	return tx.Commit()
+	return nil
 }
 
 func (s *Store) SetDeliveryChannel(ctx context.Context, channel string) error {

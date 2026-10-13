@@ -135,6 +135,7 @@ func newManagerWithOptions(ctx context.Context, store *storage.Store, vault *set
 	if err != nil {
 		return nil, err
 	}
+	m.native.SetPairingRevoker(m.revokeNativePairing)
 	m.appManagement = &appmanagement.Service{Store: store, Native: m.native}
 	m.ctx, m.cancel = context.WithCancel(ctx)
 	var channel delivery.Sender
@@ -587,6 +588,14 @@ func (m *Manager) UpdateDelivery(ctx context.Context, input settings.DeliveryUpd
 	if next.Channel == "native" && !m.native.Available() {
 		return fault.New("native_push_unavailable")
 	}
+	m.deliveryMu.Lock()
+	defer m.deliveryMu.Unlock()
+	if err := m.ctx.Err(); err != nil {
+		return err
+	}
+	if m.delivery.Revision != current.Revision {
+		return fault.New("settings_conflict")
+	}
 	if next.Channel == "native" {
 		target, err := m.store.NativePairing(ctx, next.NativePairingID)
 		if err != nil {
@@ -599,19 +608,16 @@ func (m *Manager) UpdateDelivery(ctx context.Context, input settings.DeliveryUpd
 			return fault.New("native_target_unavailable")
 		}
 	}
-	channel := m.deliverySender(next)
-	m.deliveryMu.Lock()
-	defer m.deliveryMu.Unlock()
-	if err := m.ctx.Err(); err != nil {
-		return err
-	}
-	if m.delivery.Revision != current.Revision {
-		return fault.New("settings_conflict")
-	}
 	if err := m.settings.SaveDelivery(ctx, current, next, current.Revision); err != nil {
 		return err
 	}
 	next.Revision = current.Revision + 1
+	m.applyDelivery(next)
+	return nil
+}
+
+// applyDelivery publishes a committed configuration while deliveryMu is held.
+func (m *Manager) applyDelivery(next settings.Delivery) {
 	m.delivery = next
 	m.deliveryInvalid = false
 	// Membership and the preview policy change together: a newly added mailbox
@@ -627,8 +633,20 @@ func (m *Manager) UpdateDelivery(ctx context.Context, input settings.DeliveryUpd
 			state.monitor.SetDetectCodes(m.detectCodes.Load())
 		}
 	}
-	m.dispatcher.Configure(channel, next.RetryCount, m.preview.Load())
+	m.dispatcher.Configure(m.deliverySender(next), next.RetryCount, m.preview.Load())
 	m.log.Info("Delivery settings updated", "mailbox_id", "", "channel", next.Channel, "revision", next.Revision)
+}
+
+func (m *Manager) revokeNativePairing(ctx context.Context, id string, unlink bool) error {
+	m.deliveryMu.Lock()
+	defer m.deliveryMu.Unlock()
+	next, err := m.settings.RevokeNativePairing(ctx, id, unlink, m.delivery)
+	if err != nil {
+		return err
+	}
+	if next.Revision != m.delivery.Revision {
+		m.applyDelivery(next)
+	}
 	return nil
 }
 
@@ -675,6 +693,9 @@ func (m *Manager) endDiscovery() { <-m.discovery }
 func (m *Manager) Native() *native.Service { return m.native }
 
 func (m *Manager) deliverySender(d settings.Delivery) delivery.Sender {
+	if d.Channel == "" {
+		return nil
+	}
 	if d.Channel == "native" {
 		return m.native.ForPairing(d.NativePairingID)
 	}
@@ -700,19 +721,6 @@ func (m *Manager) DeleteDelivery(ctx context.Context, revision int64) error {
 		return e
 	}
 	next.Revision++
-	m.delivery = next
-	m.deliveryInvalid = false
-	m.mu.Lock()
-	m.preview.Store(false)
-	m.detectCodes.Store(false)
-	boxes := m.snapshotLocked()
-	m.mu.Unlock()
-	for _, b := range boxes {
-		if state := b.state.Load(); state != nil {
-			state.monitor.SetPreview(false)
-			state.monitor.SetDetectCodes(false)
-		}
-	}
-	m.dispatcher.Configure(nil, 0, false)
+	m.applyDelivery(next)
 	return nil
 }

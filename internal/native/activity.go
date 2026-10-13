@@ -81,7 +81,7 @@ func (s *Service) pollActivities(ctx context.Context) error {
 	}
 	for _, item := range items {
 		pairing, err := s.store.NativePairing(ctx, item.PairingID)
-		if err != nil {
+		if err != nil && safeCode(err) != "native_pairing_not_found" {
 			return err
 		}
 		if item.ExpiresAt <= time.Now().Unix() || pairing.State != "active" {
@@ -94,6 +94,11 @@ func (s *Service) pollActivities(ctx context.Context) error {
 			ID string `json:"id"`
 		}
 		err = s.client.call(ctx, identity, info.Audience, "POST", "/v1/activities", json.RawMessage(item.Request), &result, 202)
+		if err != nil && nativeFailure(err).HTTPStatus == 410 && pairingGone(nativeFailure(err)) {
+			if err := s.revoke(ctx, item.PairingID); err != nil {
+				return err
+			}
+		}
 		if err != nil && nativeFailure(err).Retryable {
 			continue
 		}

@@ -1,16 +1,13 @@
 // Package appmanagement lets the administrator invite the official App to
-// manage this Core, and verifies the Platform qualification for paid actions.
+// manage this Core within the approved resource scopes.
 package appmanagement
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
-	"math/big"
 	"net/url"
 	"slices"
 	"strings"
@@ -66,7 +63,6 @@ func Scopes(values []string) ([]string, error) {
 type Service struct {
 	Store  *storage.Store
 	Native *native.Service
-	Trust  Trust
 }
 
 type InvitationInput struct {
@@ -204,78 +200,4 @@ func (s *Service) Cancel(ctx context.Context, id string) error {
 		return s.Native.Unlink(ctx, invitation.PairingID)
 	}
 	return nil
-}
-
-// Trust is the operator-installed set of Platform qualification keys.
-type Trust struct {
-	Issuer      string            `json:"issuer"`
-	Environment string            `json:"environment"`
-	Keys        map[string]string `json:"keys"`
-}
-
-type qualification struct {
-	Subject     string `json:"sub"`
-	Purpose     string `json:"purpose"`
-	IssuedAt    int64  `json:"iat"`
-	Issuer      string `json:"iss"`
-	Audience    string `json:"aud"`
-	Environment string `json:"environment"`
-	DeviceID    string `json:"device_id"`
-	CoreID      string `json:"core_id"`
-	ExpiresAt   int64  `json:"exp"`
-}
-
-// Verify checks a Platform AppManagement qualification for this Core and device.
-func (t Trust) Verify(token, coreID, deviceID string) error {
-	return t.VerifyPurpose(token, coreID, deviceID, "app_management")
-}
-
-// VerifyPurpose binds a commercial qualification to its intended operation.
-func (t Trust) VerifyPurpose(token, coreID, deviceID, purpose string) error {
-	if len(t.Keys) == 0 {
-		return fault.New(purpose + "_unavailable")
-	}
-	invalid := fault.New(purpose + "_required")
-	parts := strings.Split(token, ".")
-	if len(parts) != 3 {
-		return invalid
-	}
-	var header struct {
-		Algorithm string `json:"alg"`
-		KeyID     string `json:"kid"`
-	}
-	raw, err := encoding.DecodeString(parts[0])
-	if err != nil || json.Unmarshal(raw, &header) != nil || header.Algorithm != "ES256" {
-		return invalid
-	}
-	key, ok := t.Keys[header.KeyID]
-	if !ok || !verifyES256(key, parts[0]+"."+parts[1], parts[2]) {
-		return invalid
-	}
-	var claims qualification
-	if raw, err = encoding.DecodeString(parts[1]); err != nil || json.Unmarshal(raw, &claims) != nil {
-		return invalid
-	}
-	// Allow future issuance clock skew while enforcing the entitlement deadline.
-	now := time.Now().Unix()
-	if claims.Subject == "" || claims.Purpose != purpose || claims.IssuedAt > now+30 || claims.IssuedAt <= 0 || claims.ExpiresAt <= claims.IssuedAt || claims.ExpiresAt-claims.IssuedAt > 300 {
-		return invalid
-	}
-	if claims.Issuer != t.Issuer || claims.Audience != "mailwake-core" || claims.Environment != t.Environment || claims.CoreID != coreID || claims.DeviceID != deviceID || claims.ExpiresAt <= now {
-		return invalid
-	}
-	return nil
-}
-
-func verifyES256(spki, input, signature string) bool {
-	key, err := native.PublicKey(spki)
-	if err != nil {
-		return false
-	}
-	raw, err := encoding.DecodeString(signature)
-	if err != nil || len(raw) != 64 {
-		return false
-	}
-	digest := sha256.Sum256([]byte(input))
-	return ecdsa.Verify(key, digest[:], new(big.Int).SetBytes(raw[:32]), new(big.Int).SetBytes(raw[32:]))
 }

@@ -61,3 +61,20 @@ func (r *Repository) DeliveryRevision(ctx context.Context) (int64, error) {
 	record, err := r.store.ConfigurationRecord(ctx, "delivery")
 	return record.Revision, err
 }
+
+// RevokeNativePairing resets the selected native target while retaining other channel settings.
+func (r *Repository) RevokeNativePairing(ctx context.Context, id string, unlink bool, current Delivery) (Delivery, error) {
+	next := current
+	var change *storage.DeliveryChange
+	if current.Channel == "native" && current.NativePairingID == id {
+		next.Channel, next.NativePairingID = "", ""
+		encrypted, err := r.encrypt("delivery", next)
+		if err != nil {
+			return current, err
+		}
+		change = &storage.DeliveryChange{Encrypted: encrypted, Preview: next.Preview, Channel: next.Channel, ClearPreview: current.RecordsPreview() && !next.RecordsPreview(), Revision: current.Revision}
+		next.Revision++
+	}
+	_, err := r.store.RevokeNativePairingWithDelivery(ctx, id, unlink, change)
+	return next, err
+}

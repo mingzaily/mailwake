@@ -1,6 +1,6 @@
 # Storage and backups
 
-[简体中文](storage.zh-CN.md) · [Documentation](README.md)
+[Contributor documentation](README.md) · [User guides](https://mailwake.oritx.com/en/docs/)
 
 ## Data directory
 
@@ -20,4 +20,4 @@ Before the first release, schema changes update the baseline directly. Developme
 
 ## Backup and recovery
 
-Stop Core, back up the complete directory, then restart it. Restore the database and `secret.key` from the same backup while Core is stopped. See the [deployment guide](deployment.md) for Docker backup commands, upgrades and administrator recovery.
+Stop Core, back up the complete directory, then restart it. Restore the database and `secret.key` from the same backup while Core is stopped. See the [deployment guide](https://mailwake.oritx.com/en/docs/backup/) for Docker backup commands, upgrades and administrator recovery.

@@ -78,7 +78,9 @@ func (s *Store) SaveNativePlan(ctx context.Context, items []NativeDelivery, acti
 		}
 	}
 	for _, item := range activities {
-		if _, err = tx.ExecContext(ctx, `INSERT INTO native_activities(event_id,pairing_id,request,expires_at) VALUES(?,?,?,?)`, item.EventID, item.PairingID, item.Request, item.ExpiresAt); err != nil {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO native_activities(event_id,pairing_id,request,expires_at,state)
+ SELECT ?,?,CASE WHEN state='active' THEN ? ELSE '' END,?,CASE WHEN state='active' THEN 'pending' ELSE 'failed' END
+ FROM native_pairings WHERE id=?`, item.EventID, item.PairingID, item.Request, item.ExpiresAt, item.PairingID); err != nil {
 			return err
 		}
 	}

@@ -8,10 +8,12 @@ require (
 	github.com/gin-gonic/gin v1.12.0
 	github.com/gofrs/flock v0.12.1
 	github.com/google/uuid v1.6.0
-	golang.org/x/crypto v0.48.0
-	golang.org/x/net v0.51.0
-	golang.org/x/term v0.40.0
-	golang.org/x/text v0.34.0
+	github.com/tdewolff/parse/v2 v2.8.16
+	golang.org/x/crypto v0.51.0
+	golang.org/x/image v0.45.0
+	golang.org/x/net v0.55.0
+	golang.org/x/term v0.43.0
+	golang.org/x/text v0.41.0
 	modernc.org/sqlite v1.59.0
 )
 

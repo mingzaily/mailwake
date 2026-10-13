@@ -85,11 +85,11 @@ export function DeliveryDetails({
               </p>
             )}
             <p className="break-all text-muted-foreground">
-              {device.pairing_id}
+              {t("ui.pairing_id")}: {device.pairing_id}
             </p>
             {device.relay_id && (
               <p className="break-all text-muted-foreground">
-                {device.relay_id}
+                {t("ui.relay_delivery_id")}: {device.relay_id}
               </p>
             )}
           </section>
