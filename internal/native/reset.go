@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/mingzaily/mailwake/internal/coreidentity"
 	"github.com/mingzaily/mailwake/internal/fault"
 	"github.com/mingzaily/mailwake/internal/settings"
 	"github.com/mingzaily/mailwake/internal/storage"
@@ -58,7 +59,7 @@ func ResetPush(ctx context.Context, store *storage.Store, vault *settings.Vault)
 // unlinkOldRelay deletes each pairing at the bound Relay. 404 and 410 mean it is already gone.
 func unlinkOldRelay(ctx context.Context, store *storage.Store, vault *settings.Vault, client *Client, expected Info, ids []string) (ResetReport, error) {
 	report := ResetReport{Remaining: len(ids)}
-	service := &Service{store: store, vault: vault, identity: identityStore{store: store, vault: vault}, client: client, log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	service := &Service{store: store, vault: vault, identity: coreidentity.New(store, vault), client: client, log: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	checkCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	info, err := service.refreshInfo(checkCtx, false)
 	cancel()

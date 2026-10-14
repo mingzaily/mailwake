@@ -22,7 +22,7 @@ func TestHTTPSProxySetupLoginAndMutations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	router := New(service, newTestRuntime("", nil, nil), store, nil)
+	router := New(service, newTestRuntime("", nil, nil), store, nil, Integrations{})
 	call := func(method, path, body, origin string, g auth.Grant) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, "http://mail.example.org"+path, strings.NewReader(body))
 		req.RemoteAddr = "10.0.0.2:1234"
@@ -76,7 +76,7 @@ func TestProxyFailureBudgets(t *testing.T) {
 			}
 			defer store.Close()
 			service, _ := testAdministrator(t, store)
-			router := New(service, newTestRuntime("", nil, nil), store, nil)
+			router := New(service, newTestRuntime("", nil, nil), store, nil, Integrations{})
 			call := func(client string) int {
 				req := httptest.NewRequest("POST", "/api/v1/session", strings.NewReader(`{"username":"admin","password":"`+strings.Repeat("x", 1025)+`"}`))
 				req.RemoteAddr = peer

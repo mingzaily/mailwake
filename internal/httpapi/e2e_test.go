@@ -22,20 +22,21 @@ import (
 	protocol "github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapserver"
 	"github.com/emersion/go-imap/v2/imapserver/imapmemserver"
+	"github.com/mingzaily/mailwake/internal/application"
 	"github.com/mingzaily/mailwake/internal/appmanagement"
+	"github.com/mingzaily/mailwake/internal/coreidentity"
 	"github.com/mingzaily/mailwake/internal/logging"
 	"github.com/mingzaily/mailwake/internal/native"
-	"github.com/mingzaily/mailwake/internal/runtime"
 	"github.com/mingzaily/mailwake/internal/settings"
 	"github.com/mingzaily/mailwake/internal/storage"
 )
 
-// scripts/e2e.mjs owns the local Platform, Relay, device identity and APNs receiver.
+// The integration harness supplies local services, a device simulator and fixture state.
 func TestThreeServiceEndToEnd(t *testing.T) {
 	relayURL := os.Getenv("MAILWAKE_E2E_RELAY")
 	platformURL := os.Getenv("MAILWAKE_E2E_PLATFORM")
 	if relayURL == "" || platformURL == "" {
-		t.Skip("requires isolated local services from scripts/e2e.mjs")
+		t.Skip("requires isolated local integration fixtures")
 	}
 	for _, endpoint := range []string{relayURL, platformURL, os.Getenv("MAILWAKE_E2E_APNS")} {
 		u, err := url.Parse(endpoint)
@@ -89,13 +90,13 @@ func TestThreeServiceEndToEnd(t *testing.T) {
 	}
 	var logs bytes.Buffer
 	logger := logging.New(&logs)
-	manager, err := runtime.New(ctx, store, vault, logger, relayURL)
+	manager, err := application.New(ctx, store, vault, logger, relayURL, application.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer manager.Close()
 	auth, grant := testAdministrator(t, store)
-	httpServer := httptest.NewTLSServer(New(auth, manager, store, logger))
+	httpServer := httptest.NewTLSServer(New(auth, manager.Manager, store, logger, Integrations{Native: manager.Native, Management: manager.Management}))
 	defer httpServer.Close()
 	call := func(method, path string, body any, want int) []byte {
 		t.Helper()
@@ -118,9 +119,9 @@ func TestThreeServiceEndToEnd(t *testing.T) {
 		return data
 	}
 	state := os.Getenv("MAILWAKE_E2E_DEVICE")
-	simPath, err := filepath.Abs("../../../relay/scripts/device-sim")
-	if err != nil {
-		t.Fatal(err)
+	simPath := os.Getenv("MAILWAKE_E2E_DEVICE_SIM")
+	if !filepath.IsAbs(simPath) {
+		t.Fatal("MAILWAKE_E2E_DEVICE_SIM must identify an absolute device simulator path")
 	}
 	sim := func(args ...string) []byte {
 		t.Helper()
@@ -213,7 +214,7 @@ func TestThreeServiceEndToEnd(t *testing.T) {
 	plain := sim("decrypt", state, envelopeFile)
 	var decoded struct {
 		Subject, Account, Folder, Sender, Code string
-		Reference                              native.MessageReference `json:"message_ref"`
+		Reference                              coreidentity.MessageReference `json:"message_ref"`
 	}
 	if json.Unmarshal(plain, &decoded) != nil || decoded.Subject != subject || decoded.Account != "Work" || decoded.Folder != "Clients" || !strings.Contains(decoded.Sender, "sender@example.org") {
 		t.Fatal("decrypted mail fields differ")
@@ -280,7 +281,7 @@ func TestThreeServiceEndToEnd(t *testing.T) {
 	}, "", 200), &credential); err != nil {
 		t.Fatal(err)
 	}
-	coreID, err := native.KeyID(inviteURI.Query().Get("core"))
+	coreID, err := coreidentity.KeyID(inviteURI.Query().Get("core"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -308,7 +309,7 @@ func TestThreeServiceEndToEnd(t *testing.T) {
 	t.Log("PASS content: explicit owner scope and active device credential, original IMAP text, wrong scope/tampering rejected")
 	activityFile := filepath.Join(dir, "activity.json")
 	until(15*time.Second, func() bool {
-		_ = manager.Native().PollDeliveries(ctx)
+		_ = manager.Native.PollDeliveries(ctx)
 		response, err := http.Get(os.Getenv("MAILWAKE_E2E_APNS") + "/activity/" + pairing.ID + "/" + eventID)
 		if err != nil {
 			t.Fatal(err)

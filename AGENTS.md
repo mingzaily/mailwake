@@ -11,8 +11,8 @@ Start with [README.md](README.md) and [CONTRIBUTING.md](CONTRIBUTING.md). This r
 | Notification channels and retries | [Delivery](docs/notifications.md), [Storage](docs/storage.md) | `internal/delivery/`, `internal/storage/` |
 | HTTP, sessions, tokens or localization | [API implementation](docs/api.md) | `internal/httpapi/`, `internal/auth/`, `internal/i18n/` |
 | Console views or components | [Console](docs/console.md), [Development](docs/development.md) | `web/` |
-| App authorization or native push | [App management](internal/appmanagement/README.md), [Native integration](docs/native-push.md) | `internal/appmanagement/`, `internal/native/` |
-| Message content and verification codes | [HTML content](docs/html-content.md) | `internal/content/`, `internal/native/message_reference.go` |
+| App authorization or native push | [App management](internal/appmanagement/README.md), [Native integration](docs/native-push.md) | `internal/application/`, `internal/coreidentity/`, `internal/appmanagement/`, `internal/native/` |
+| Message content and verification codes | [HTML content](docs/html-content.md) | `internal/content/`, `internal/coreidentity/message_reference.go` |
 | Persistence or schema | [Storage](docs/storage.md) | `internal/storage/`, `internal/settings/` |
 
 ## Implementation rules
@@ -34,6 +34,16 @@ Review each development change twice: first business behavior, authorization, li
 Tests assert observable behavior: HTTP status, error codes and persisted results. Name tests after behavior. Use the checks in [CONTRIBUTING.md](CONTRIBUTING.md), including focused tests and appropriate `make test`, `make check` or build verification. End-to-end smoke scripts cover the integration path. Test success complements manual contract review.
 
 Install gitleaks and set `git config core.hooksPath .githooks` after cloning. Resolve true secrets at their source; allowlist only justified synthetic values. Report business review, design review, verification and remaining risks separately.
+
+### Feature quality gate
+
+- Every new feature or behavior change must reach **9.0/10 in both business logic and code design** before development is marked complete. The lower score determines whether the change meets the gate.
+- Business logic covers contract completeness, lifecycle and failure semantics, ownership and security, concurrency and data consistency, and regressions. Code design covers responsibilities and dependency direction, readable control flow and naming, reuse and duplication, and abstractions proportional to the problem.
+- **9.0–10** means the applicable criteria have been reviewed, required development checks have passed, and remaining improvements have a documented low impact. **8.0–8.9** means a concrete correctness, maintainability or verification gap still needs work. **Below 8.0** means substantial behavior or design problems remain. Justify each score and deduction with evidence and impact.
+- Score the actual result. Below 9.0, fix the root cause and repeat the affected review and verification. Open correctness, security, data-loss or contract defects, failed required checks, and missing evidence for critical changed behavior keep the gate open. Record the actual score or pending assessment until evidence supports completion.
+- Assess changed behavior and affected call chains each time. Earlier scores establish a baseline. Prefer targeted fixes and measured improvements, with abstractions based on demonstrated responsibilities or extension needs.
+- Report scope, both scores with reasons, checks actually run and their results, reused evidence with its revision and applicability, and remaining risks. External dependencies require explicit pending acceptance items with completion criteria. Report code readiness and release readiness separately; release-critical acceptance must pass before release.
+- Update affected contracts and documentation. Preserve dated acceptance evidence in the change or release record, including the revision, environment, coverage and limitations. Keep all contributor-facing records independently readable within this repository.
 
 ## Publication boundary
 

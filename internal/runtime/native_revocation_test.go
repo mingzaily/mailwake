@@ -95,7 +95,7 @@ func runtimePair(t *testing.T, s *storage.Store) string {
 }
 func selectRuntimePair(t *testing.T, m *Manager, id string) {
 	t.Helper()
-	rev := m.DeliveryView()["revision"].(int64)
+	rev := m.DeliveryView().Revision
 	if err := m.UpdateDelivery(t.Context(), DeliveryUpdate{Revision: &rev, Channel: "native", NativePairingID: &id, Preview: "off"}); err != nil {
 		t.Fatal(err)
 	}
@@ -106,10 +106,10 @@ func TestRevokedCurrentTargetClearsConfigurationAndSurvivesRestart(t *testing.T)
 			m, s, restart := revocationManager(t)
 			id := runtimePair(t, s)
 			selectRuntimePair(t, m, id)
-			before := m.DeliveryView()["revision"].(int64)
+			before := m.DeliveryView().Revision
 			var err error
 			if source == "web" {
-				err = m.Native().Unlink(t.Context(), id)
+				err = m.native.Unlink(t.Context(), id)
 			} else if source == "delivery" {
 				n := event.Notification{ID: "revoked-delivery", ReceivedAt: time.Now()}
 				if err := s.Enqueue(t.Context(), n); err != nil {
@@ -118,19 +118,19 @@ func TestRevokedCurrentTargetClearsConfigurationAndSurvivesRestart(t *testing.T)
 				if err := s.SaveNativePlan(t.Context(), []storage.NativeDelivery{{EventID: n.ID, PairingID: id, Envelope: `{}`, Signature: "fixture", ExpiresAt: time.Now().Unix() + 300}}); err != nil {
 					t.Fatal(err)
 				}
-				sendErr := m.Native().ForPairing(id).Send(t.Context(), n)
+				sendErr := m.native.ForPairing(id).Send(t.Context(), n)
 				if sendErr == nil {
 					t.Fatal("expected revoked delivery")
 				}
 			} else {
-				err = m.Native().PollActivePairings(t.Context())
+				err = m.native.PollActivePairings(t.Context())
 			}
 			if err != nil {
 				t.Fatal(err)
 			}
 			check := func(m *Manager) {
 				v := m.DeliveryView()
-				if m.Channel() != "" || v["native_pairing_id"] != "" || v["revision"] != before+1 {
+				if m.Channel() != "" || v.NativePairingID != "" || v.Revision != before+1 {
 					t.Fatalf("stale configuration: %+v", v)
 				}
 				saved, err := m.settings.LoadDelivery(t.Context())
@@ -155,7 +155,7 @@ func TestRevokingAnotherTargetPreservesNotificationConfiguration(t *testing.T) {
 			other := runtimePair(t, s)
 			selectRuntimePair(t, m, other)
 			if channel == "bark" {
-				rev := m.DeliveryView()["revision"].(int64)
+				rev := m.DeliveryView().Revision
 				key := "synthetic-key"
 				input := DeliveryUpdate{Revision: &rev, Channel: "bark", Preview: "off"}
 				input.Bark.Endpoint = "https://api.day.app"
@@ -184,7 +184,7 @@ func TestRevocationAndTargetSwitchUseRevisionConflict(t *testing.T) {
 		old := runtimePair(t, s)
 		next := runtimePair(t, s)
 		selectRuntimePair(t, m, old)
-		rev := m.DeliveryView()["revision"].(int64)
+		rev := m.DeliveryView().Revision
 		var revokeErr, switchErr error
 		var wg sync.WaitGroup
 		wg.Add(2)

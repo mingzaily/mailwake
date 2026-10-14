@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/mingzaily/mailwake/internal/coreidentity"
 	"github.com/mingzaily/mailwake/internal/delivery"
 	"github.com/mingzaily/mailwake/internal/event"
 	"github.com/mingzaily/mailwake/internal/fault"
@@ -77,7 +78,7 @@ func TestSelectedDeviceRestartReusesEnvelopeAndClearsTerminalContent(t *testing.
 	}))
 	defer server.Close()
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	service, _ := New(store, vault, server.URL, log)
+	service, _ := New(store, vault, coreidentity.New(store, vault), server.URL, log)
 	n := event.Notification{ID: "restart-event", Account: "Work", Folder: "Clients", Sender: "Alice", Subject: "secret subject", ReceivedAt: time.Now()}
 	if err = store.Enqueue(ctx, n); err != nil {
 		t.Fatal(err)
@@ -109,7 +110,7 @@ func TestSelectedDeviceRestartReusesEnvelopeAndClearsTerminalContent(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	service, _ = New(store, vault, server.URL, log)
+	service, _ = New(store, vault, coreidentity.New(store, vault), server.URL, log)
 	reject = false
 	if err = service.ForPairing(first).Send(ctx, n); err != nil {
 		t.Fatal(err)

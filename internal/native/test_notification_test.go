@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/mingzaily/mailwake/internal/coreidentity"
 	"github.com/mingzaily/mailwake/internal/fault"
 	"github.com/mingzaily/mailwake/internal/logging"
 	"github.com/mingzaily/mailwake/internal/settings"
@@ -64,12 +65,12 @@ func TestFixedNotificationUsesSignedPairingTestAndReportsOutcomes(t *testing.T) 
 				if _, err := uuid.Parse(body["test_id"]); err != nil {
 					t.Error(err)
 				}
-				identity, _ := service.CoreIdentity(t.Context())
+				identity, _ := service.identity.Load(t.Context())
 				h := r.Header
 				if h.Get("X-Relay-Role") != "core" || h.Get("X-Relay-ID") != identity.ID {
 					t.Error("missing Core identity")
 				}
-				if err := verify(identity.PublicKey, h.Get("X-Relay-Signature"), requestText("test-relay", "core", identity.ID, r.Method, r.URL.Path, h.Get("X-Relay-Timestamp"), h.Get("X-Relay-Nonce"), raw, "")); err != nil {
+				if err := coreidentity.Verify(identity.PublicKey, h.Get("X-Relay-Signature"), requestText("test-relay", "core", identity.ID, r.Method, r.URL.Path, h.Get("X-Relay-Timestamp"), h.Get("X-Relay-Nonce"), raw, "")); err != nil {
 					t.Error(err)
 				}
 				w.Header().Set("Retry-After", "60")
@@ -81,7 +82,7 @@ func TestFixedNotificationUsesSignedPairingTestAndReportsOutcomes(t *testing.T) 
 				json.NewEncoder(w).Encode(map[string]string{"test_id": body["test_id"], "status": tc.status, "error_code": tc.relayCode})
 			}))
 			defer server.Close()
-			service, err = New(store, vault, server.URL, logging.New(&logs))
+			service, err = New(store, vault, coreidentity.New(store, vault), server.URL, logging.New(&logs))
 			if err != nil {
 				t.Fatal(err)
 			}

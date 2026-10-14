@@ -12,6 +12,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/mingzaily/mailwake/internal/coreidentity"
 	"github.com/mingzaily/mailwake/internal/delivery"
 )
 
@@ -53,7 +54,7 @@ func TestExplicitLocalRelayTrustKeepsHostnameAndProductionBoundary(t *testing.T)
 
 func TestClientSignaturesNoncesAndRedirects(t *testing.T) {
 	v := vector(t)
-	identity := &Identity{Key: fixedKey(t, v.Core), PublicKey: v.Core.PublicKey, ID: v.Core.ID}
+	identity := &coreidentity.Identity{Key: fixedKey(t, v.Core), PublicKey: v.Core.PublicKey, ID: v.Core.ID}
 	var mu sync.Mutex
 	seen := map[string]bool{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -70,7 +71,7 @@ func TestClientSignaturesNoncesAndRedirects(t *testing.T) {
 			b, _ := io.ReadAll(r.Body)
 			h := r.Header
 			text := requestText(v.Audience, "core", identity.ID, r.Method, r.URL.Path, h.Get("X-Relay-Timestamp"), h.Get("X-Relay-Nonce"), b, "")
-			if err := verify(identity.PublicKey, h.Get("X-Relay-Signature"), text); err != nil {
+			if err := coreidentity.Verify(identity.PublicKey, h.Get("X-Relay-Signature"), text); err != nil {
 				t.Error(err)
 			}
 			mu.Lock()

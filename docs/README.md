@@ -7,6 +7,7 @@ This directory contains English technical references for contributors. Installat
 | Work area | Read first |
 | --- | --- |
 | Build, fixtures and acceptance | [Development](development.md) |
+| Release baselines and verification | [Release records](releases.md) |
 | IMAP adapters, workers and checkpoints | [Monitoring](monitoring.md) |
 | Dispatcher, retry and preview invariants | [Delivery](notifications.md) |
 | HTTP boundaries, authentication and localization | [API implementation](api.md) |

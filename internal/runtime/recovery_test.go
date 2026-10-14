@@ -66,7 +66,7 @@ func TestInvalidConfigurationStartsAndCanBeRepaired(t *testing.T) {
 				t.Fatal("invalid configuration leaked into logs")
 			}
 			if name == "mailbox" {
-				if s.MailboxView()["host"] != "" {
+				if s.MailboxView().Host != "" {
 					t.Fatal("invalid mailbox remains configured")
 				}
 				err = s.UpdateMailbox(t.Context(), MailboxUpdate{Host: "valid", Port: 993, Username: "user", Password: ptr("valid-password")})
@@ -158,7 +158,7 @@ func TestDecryptionFailureStillRejectsStartup(t *testing.T) {
 			if err := store.SaveMailboxRecord(t.Context(), "mbx_primary", 0, encrypted, false); err != nil {
 				t.Fatal(err)
 			}
-			s, err := New(t.Context(), store, vault, slog.Default(), "")
+			s, err := newManager(t.Context(), store, vault, slog.Default(), "", nil, nil)
 			if s != nil {
 				s.Close()
 			}

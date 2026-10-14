@@ -7,6 +7,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/mingzaily/mailwake/internal/coreidentity"
 	"github.com/mingzaily/mailwake/internal/delivery"
 	"github.com/mingzaily/mailwake/internal/event"
 	"github.com/mingzaily/mailwake/internal/fault"
@@ -16,21 +17,21 @@ import (
 func (s *Service) Channel() string { return "native" }
 
 type plaintext struct {
-	MessageRef *MessageReference `json:"message_ref,omitempty"`
-	V          int               `json:"v"`
-	MailboxID  string            `json:"mailbox_id,omitempty"`
-	Account    string            `json:"account"`
-	Folder     string            `json:"folder"`
-	Sender     string            `json:"sender"`
-	Subject    string            `json:"subject"`
-	Code       string            `json:"code,omitempty"`
-	ReceivedAt string            `json:"received_at"`
+	MessageRef *coreidentity.MessageReference `json:"message_ref,omitempty"`
+	V          int                            `json:"v"`
+	MailboxID  string                         `json:"mailbox_id,omitempty"`
+	Account    string                         `json:"account"`
+	Folder     string                         `json:"folder"`
+	Sender     string                         `json:"sender"`
+	Subject    string                         `json:"subject"`
+	Code       string                         `json:"code,omitempty"`
+	ReceivedAt string                         `json:"received_at"`
 }
 
 func notificationPlain(n event.Notification) ([]byte, error) {
 	return notificationPlainWithReference(n, nil)
 }
-func notificationPlainWithReference(n event.Notification, reference *MessageReference) ([]byte, error) {
+func notificationPlainWithReference(n event.Notification, reference *coreidentity.MessageReference) ([]byte, error) {
 	p := plaintext{MessageRef: reference, V: 1, MailboxID: n.MailboxID, Account: n.Account, Folder: n.Folder, Sender: n.Sender, Subject: n.Subject, Code: n.Code, ReceivedAt: n.ReceivedAt.UTC().Format(time.RFC3339Nano)}
 	return fitPlaintext(&p, func() ([]byte, error) { return json.Marshal(p) })
 }
@@ -137,12 +138,12 @@ func (s *Service) send(ctx context.Context, n event.Notification, pairingID stri
 	if err != nil {
 		return nativeFailure(err)
 	}
-	identity, err := s.identity.load(ctx)
+	identity, err := s.identity.Load(ctx)
 	if err != nil {
 		return err
 	}
 	if len(items) == 0 {
-		reference, err := messageReference(identity, n)
+		reference, err := identity.MessageReference(n)
 		if err != nil {
 			return err
 		}
@@ -157,7 +158,7 @@ func (s *Service) send(ctx context.Context, n event.Notification, pairingID stri
 			if err != nil {
 				return nativeFailure(err)
 			}
-			signature, err := sign(identity.Key, contentText(info.Audience, p.ID, n.ID, envelope))
+			signature, err := coreidentity.Sign(identity.Key, contentText(info.Audience, p.ID, n.ID, envelope))
 			if err != nil {
 				return err
 			}
@@ -286,7 +287,7 @@ func (s *Service) PollDeliveries(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	identity, err := s.identity.load(ctx)
+	identity, err := s.identity.Load(ctx)
 	if err != nil {
 		return err
 	}

@@ -16,7 +16,7 @@ import type {
   Subscriptions,
   FolderDiscovery,
 } from "@/lib/types";
-import { Budget } from "./shell";
+import { Budget } from "./budget";
 import { Button } from "./ui/button";
 import { FolderSelection } from "./folder-selection";
 import { Alert, AlertDescription } from "./ui/alert";
@@ -34,6 +34,7 @@ export function SubscriptionsEditor({
 }) {
   const { t } = useI18n();
   const [available, setAvailable] = useState<string[]>(discovered);
+  const [busy, setBusy] = useState(false);
   const query = useQuery({
     queryKey: ["subscriptions", mailbox.id],
     queryFn: () => api<Subscriptions>(`/mailboxes/${mailbox.id}/subscriptions`),
@@ -50,6 +51,8 @@ export function SubscriptionsEditor({
     <SubscriptionFields
       key={`${mailbox.id}-${query.data.revision}`}
       mailbox={mailbox}
+      busy={busy}
+      setBusy={setBusy}
       initial={query.data}
       discovered={[...new Set([...discovered, ...available])]}
       roles={roles}
@@ -62,6 +65,8 @@ export function SubscriptionsEditor({
 function SubscriptionFields({
   mailbox,
   initial,
+  busy,
+  setBusy,
   discovered,
   roles: initialRoles,
   onDiscovered,
@@ -70,6 +75,8 @@ function SubscriptionFields({
 }: {
   mailbox: Mailbox;
   initial: Subscriptions;
+  busy: boolean;
+  setBusy: (busy: boolean) => void;
   discovered: string[];
   roles: Record<string, string>;
   onDiscovered: (folders: string[]) => void;
@@ -82,7 +89,6 @@ function SubscriptionFields({
   const [roles, setRoles] = useState(initialRoles);
   const [folders, setFolders] = useState<Folder[]>(initial.folders);
   const [error, setError] = useActionError();
-  const [busy, setBusy] = useState(false);
   const over = connectionUsage(folders) > mailbox.connection_limit - 1;
   async function discover() {
     setError(undefined);
@@ -130,6 +136,7 @@ function SubscriptionFields({
         </Alert>
       )}
       <FolderSelection
+        disabled={busy}
         folders={folders}
         available={discovered}
         roles={roles}

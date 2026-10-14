@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/mingzaily/mailwake/internal/coreidentity"
 	"github.com/mingzaily/mailwake/internal/fault"
 	"github.com/mingzaily/mailwake/internal/native"
 	"github.com/mingzaily/mailwake/internal/settings"
@@ -47,7 +48,7 @@ func TestAdminNativeResetOfflineOutputAndRePair(t *testing.T) {
 		t.Fatal(err)
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	service, err := native.New(s, vault, server.URL, log)
+	service, err := native.New(s, vault, coreidentity.New(s, vault), server.URL, log)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +83,7 @@ func TestAdminNativeResetOfflineOutputAndRePair(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	service, err = native.New(s, vault, nextServer.URL, log)
+	service, err = native.New(s, vault, coreidentity.New(s, vault), nextServer.URL, log)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +104,7 @@ func TestAdminNativeResetOfflineOutputAndRePair(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	service, err = native.New(s, vault, nextServer.URL, log)
+	service, err = native.New(s, vault, coreidentity.New(s, vault), nextServer.URL, log)
 	if err != nil {
 		t.Fatal(err)
 	}

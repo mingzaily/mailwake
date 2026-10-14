@@ -54,7 +54,7 @@ func TestLocalizedAPIAndDiagnosticCodes(t *testing.T) {
 		t.Fatal(err)
 	}
 	authService, grant := testAdministrator(t, store)
-	router := New(authService, newTestRuntime("webhook", monitor, source), store, logger)
+	router := New(authService, newTestRuntime("webhook", monitor, source), store, logger, Integrations{})
 	for _, locale := range []string{"en", "zh-CN", "zh-Hant", "ja", "ko", "de", "fr", "es", "pt-BR", "fr-FR", "zh-Hans", "zh-TW", "it-IT"} {
 		t.Run(locale, func(t *testing.T) {
 			call := func(method, path string, auth bool) *httptest.ResponseRecorder {
@@ -129,7 +129,7 @@ func TestLocalizedAPIAndDiagnosticCodes(t *testing.T) {
 		})
 	}
 	// Raw upstream error text stays private even when it contains credentials.
-	router = New(authService, newTestRuntime("bark", monitor, failingSource{err: errors.New("password=private-secret")}), store, logger)
+	router = New(authService, newTestRuntime("bark", monitor, failingSource{err: errors.New("password=private-secret")}), store, logger, Integrations{})
 	req := httptest.NewRequest("GET", "/api/v1/mailboxes/mbx_test/folders", nil)
 	authorizeSession(req, grant)
 	w := httptest.NewRecorder()
@@ -161,7 +161,7 @@ func TestAuthenticationAndDurableTestPush(t *testing.T) {
 	monitor := engine.New(source, s, "private-account", mail.Subscriptions{Revision: 1, Folders: mail.RealtimeFolders([]string{"Clients"})}, time.Minute, false, log)
 	token := strings.Repeat("secret", 8)
 	authService, grant := testAdministrator(t, s)
-	router := New(authService, newTestRuntime("bark", monitor, source), s, log)
+	router := New(authService, newTestRuntime("bark", monitor, source), s, log, Integrations{})
 	discoveryRequest := httptest.NewRequest("GET", "/api/v1/mailboxes/mbx_test/folders", nil)
 	authorizeSession(discoveryRequest, grant)
 	discoveryResponse := httptest.NewRecorder()

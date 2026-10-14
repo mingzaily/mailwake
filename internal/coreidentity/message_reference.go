@@ -1,4 +1,4 @@
-package native
+package coreidentity
 
 import (
 	"context"
@@ -25,23 +25,23 @@ func (r MessageReference) signingText() string {
 	return string(raw)
 }
 
-func messageReference(identity *Identity, n event.Notification) (*MessageReference, error) {
+func (identity *Identity) MessageReference(n event.Notification) (*MessageReference, error) {
 	if n.Location == nil {
 		return nil, nil
 	}
 	r := &MessageReference{CoreID: identity.ID, MailboxID: n.MailboxID, AccountID: n.AccountID, Folder: n.Folder, Location: *n.Location}
-	signature, err := sign(identity.Key, r.signingText())
+	signature, err := Sign(identity.Key, r.signingText())
 	r.Signature = signature
 	return r, err
 }
 
 // VerifyMessageReference validates untrusted references before any mailbox connection.
-func (s *Service) VerifyMessageReference(ctx context.Context, r MessageReference) error {
-	identity, err := s.identity.load(ctx)
+func (s *Store) VerifyMessageReference(ctx context.Context, r MessageReference) error {
+	identity, err := s.Load(ctx)
 	if err != nil {
 		return err
 	}
-	if r.CoreID != identity.ID || r.UID == 0 || r.UIDValidity == 0 || verify(identity.PublicKey, r.Signature, r.signingText()) != nil {
+	if r.CoreID != identity.ID || r.UID == 0 || r.UIDValidity == 0 || Verify(identity.PublicKey, r.Signature, r.signingText()) != nil {
 		return fault.New("message_not_found")
 	}
 	return nil

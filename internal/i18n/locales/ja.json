@@ -136,6 +136,7 @@
   "ui.skip_content": "本文へ移動",
   "ui.logout": "ログアウト",
   "ui.loading": "読み込み中…",
+  "ui.page_load_failed": "ページを読み込めませんでした。再読み込みしてお試しください。",
   "ui.reload": "再読み込み",
   "ui.conflict": "別のセッションで変更されました。保存前に最新の値を読み込んでください。",
   "ui.wait_seconds": "{seconds} 秒後に再試行してください。",

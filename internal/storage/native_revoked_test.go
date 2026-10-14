@@ -188,7 +188,7 @@ func TestRevocationCommitsConfigurationAndCancelsActivitiesAtomically(t *testing
 	if p.State != "active" {
 		t.Fatal("pairing escaped revision rollback")
 	}
-	activities, _ := s.PendingNativeActivities(t.Context())
+	activities, _ := s.DueNativeActivities(t.Context(), time.Now())
 	if len(activities) != 1 {
 		t.Fatal("activity escaped rollback")
 	}
@@ -205,7 +205,7 @@ func TestRevocationCommitsConfigurationAndCancelsActivitiesAtomically(t *testing
 	if channel != "" {
 		t.Fatal(channel)
 	}
-	activities, _ = s.PendingNativeActivities(t.Context())
+	activities, _ = s.DueNativeActivities(t.Context(), time.Now())
 	if len(activities) != 0 {
 		t.Fatal("activity remained pending")
 	}
@@ -221,7 +221,7 @@ func TestRevocationCommitsConfigurationAndCancelsActivitiesAtomically(t *testing
 	if err = s.SaveNativePlan(t.Context(), nil, activity); err != nil {
 		t.Fatal(err)
 	}
-	activities, _ = s.PendingNativeActivities(t.Context())
+	activities, _ = s.DueNativeActivities(t.Context(), time.Now())
 	if len(activities) != 0 {
 		t.Fatal("late activity queued after revocation")
 	}

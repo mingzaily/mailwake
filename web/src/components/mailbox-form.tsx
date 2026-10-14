@@ -26,18 +26,18 @@ import { useQueryClient } from "@tanstack/react-query";
 import { api, APIError } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import {
-  connectionUsage,
-  errorFields,
   mailboxPayload,
   mailboxSchema,
   type MailboxForm,
-} from "@/lib/forms";
+} from "@/lib/mailbox-schema";
+import { connectionUsage, errorFields } from "@/lib/forms";
 import type { Folder, Mailbox, FolderDiscovery } from "@/lib/types";
 import {
   Field,
   FieldDescription,
   FieldError,
   FieldGroup,
+  FieldSet,
   FieldLabel,
 } from "./ui/field";
 
@@ -217,137 +217,143 @@ export function MailboxEditor({
       onSubmit={handleSubmit(save)}
     >
       <ErrorNotice error={error} reload={reload} />
-      <FieldGroup className="gap-5">
-        <TextField
-          label={t("ui.label")}
-          placeholder={t("ui.label_example")}
-          autoComplete="off"
-          error={message("label")}
-          {...register("label")}
-        />
-        <div className="grid grid-cols-1 gap-5 @md/field-group:grid-cols-[minmax(0,1fr)_120px]">
-          <div className="flex flex-col gap-2">
+      <FieldSet disabled={busy || isSubmitting}>
+        <FieldGroup className="gap-5">
+          <TextField
+            label={t("ui.label")}
+            placeholder={t("ui.label_example")}
+            autoComplete="off"
+            error={message("label")}
+            {...register("label")}
+          />
+          <div className="grid grid-cols-1 gap-5 @md/field-group:grid-cols-[minmax(0,1fr)_120px]">
+            <div className="flex flex-col gap-2">
+              <TextField
+                label={t("ui.imap_host")}
+                className="font-mono text-[13px] tabular-nums"
+                autoComplete="off"
+                spellCheck={false}
+                error={message("host")}
+                {...register("host")}
+              />
+              <div
+                role="group"
+                aria-label={t("ui.imap_quick_fill")}
+                className="flex flex-wrap gap-2"
+              >
+                {imapPresets
+                  .filter((preset) => preset.group === "common")
+                  .map((preset) => (
+                    <Button
+                      key={preset.host}
+                      type="button"
+                      variant="preset"
+                      size="xs"
+                      aria-pressed={selectedPreset === preset}
+                      disabled={busy || isSubmitting}
+                      onClick={() => applyPreset(preset.host)}
+                    >
+                      {t(preset.label)}
+                    </Button>
+                  ))}
+                <DropdownMenu modal={false}>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="preset"
+                      size="xs"
+                      disabled={busy || isSubmitting}
+                    >
+                      {selectedPreset && selectedPreset.group !== "common"
+                        ? t(selectedPreset.label)
+                        : t("ui.more_mail_providers")}
+                      <ChevronDown />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start">
+                    {["personal", "business"].map((group, index) => (
+                      <DropdownMenuGroup key={group}>
+                        {index > 0 && <DropdownMenuSeparator />}
+                        <DropdownMenuLabel>
+                          {t(`ui.mail_providers_${group}`)}
+                        </DropdownMenuLabel>
+                        {imapPresets
+                          .filter((preset) => preset.group === group)
+                          .map((preset) => (
+                            <DropdownMenuItem
+                              key={preset.host}
+                              disabled={busy || isSubmitting}
+                              onSelect={() => applyPreset(preset.host)}
+                            >
+                              {t(preset.label)}
+                            </DropdownMenuItem>
+                          ))}
+                      </DropdownMenuGroup>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
             <TextField
-              label={t("ui.imap_host")}
+              label={t("ui.imap_port")}
               className="font-mono text-[13px] tabular-nums"
+              type="number"
+              min={1}
+              max={65535}
+              error={message("port")}
+              {...register("port", { valueAsNumber: true })}
+            />
+          </div>
+          <div className="grid grid-cols-1 gap-5 @md/field-group:grid-cols-2">
+            <TextField
+              label={t("ui.mailbox_username")}
               autoComplete="off"
               spellCheck={false}
-              error={message("host")}
-              {...register("host")}
+              error={message("username")}
+              {...register("username")}
             />
-            <div
-              role="group"
-              aria-label={t("ui.imap_quick_fill")}
-              className="flex flex-wrap gap-2"
-            >
-              {imapPresets
-                .filter((preset) => preset.group === "common")
-                .map((preset) => (
-                  <Button
-                    key={preset.host}
-                    type="button"
-                    variant="preset"
-                    size="xs"
-                    aria-pressed={selectedPreset === preset}
-                    disabled={busy || isSubmitting}
-                    onClick={() => applyPreset(preset.host)}
-                  >
-                    {t(preset.label)}
-                  </Button>
-                ))}
-              <DropdownMenu modal={false}>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="preset"
-                    size="xs"
-                    disabled={busy || isSubmitting}
-                  >
-                    {selectedPreset && selectedPreset.group !== "common"
-                      ? t(selectedPreset.label)
-                      : t("ui.more_mail_providers")}
-                    <ChevronDown />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  {["personal", "business"].map((group, index) => (
-                    <DropdownMenuGroup key={group}>
-                      {index > 0 && <DropdownMenuSeparator />}
-                      <DropdownMenuLabel>
-                        {t(`ui.mail_providers_${group}`)}
-                      </DropdownMenuLabel>
-                      {imapPresets
-                        .filter((preset) => preset.group === group)
-                        .map((preset) => (
-                          <DropdownMenuItem
-                            key={preset.host}
-                            disabled={busy || isSubmitting}
-                            onSelect={() => applyPreset(preset.host)}
-                          >
-                            {t(preset.label)}
-                          </DropdownMenuItem>
-                        ))}
-                    </DropdownMenuGroup>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
+            <TextField
+              label={t("ui.mailbox_password")}
+              type="password"
+              autoComplete="new-password"
+              placeholder={
+                mailbox?.password.configured
+                  ? t("ui.credential_kept")
+                  : undefined
+              }
+              error={message("password")}
+              {...register("password")}
+            />
+          </div>
+          <Field data-invalid={overBudget || !!message("connection_limit")}>
+            <FieldLabel htmlFor={limitId}>
+              {t("ui.connection_limit")}
+            </FieldLabel>
+            <div className="flex flex-col gap-3 @md/field-group:flex-row @md/field-group:items-center">
+              <Input
+                id={limitId}
+                type="number"
+                className="w-30 shrink-0"
+                min={2}
+                max={100}
+                aria-invalid={overBudget || !!message("connection_limit")}
+                aria-describedby={`${limitId}-hint${overBudget || message("connection_limit") ? ` ${limitId}-error` : ""}`}
+                {...register("connection_limit", { valueAsNumber: true })}
+              />
+              <FieldDescription id={`${limitId}-hint`}>
+                {t("ui.reserved_connection")}
+              </FieldDescription>
             </div>
-          </div>
-          <TextField
-            label={t("ui.imap_port")}
-            className="font-mono text-[13px] tabular-nums"
-            type="number"
-            min={1}
-            max={65535}
-            error={message("port")}
-            {...register("port", { valueAsNumber: true })}
-          />
-        </div>
-        <div className="grid grid-cols-1 gap-5 @md/field-group:grid-cols-2">
-          <TextField
-            label={t("ui.mailbox_username")}
-            autoComplete="off"
-            spellCheck={false}
-            error={message("username")}
-            {...register("username")}
-          />
-          <TextField
-            label={t("ui.mailbox_password")}
-            type="password"
-            autoComplete="new-password"
-            placeholder={
-              mailbox?.password.configured ? t("ui.credential_kept") : undefined
-            }
-            error={message("password")}
-            {...register("password")}
-          />
-        </div>
-        <Field data-invalid={overBudget || !!message("connection_limit")}>
-          <FieldLabel htmlFor={limitId}>{t("ui.connection_limit")}</FieldLabel>
-          <div className="flex flex-col gap-3 @md/field-group:flex-row @md/field-group:items-center">
-            <Input
-              id={limitId}
-              type="number"
-              className="w-30 shrink-0"
-              min={2}
-              max={100}
-              aria-invalid={overBudget || !!message("connection_limit")}
-              aria-describedby={`${limitId}-hint${overBudget || message("connection_limit") ? ` ${limitId}-error` : ""}`}
-              {...register("connection_limit", { valueAsNumber: true })}
-            />
-            <FieldDescription id={`${limitId}-hint`}>
-              {t("ui.reserved_connection")}
-            </FieldDescription>
-          </div>
-          {(overBudget || message("connection_limit")) && (
-            <FieldError id={`${limitId}-error`}>
-              {overBudget
-                ? t("ui.budget_exceeded")
-                : message("connection_limit")}
-            </FieldError>
-          )}
-        </Field>
-      </FieldGroup>
+            {(overBudget || message("connection_limit")) && (
+              <FieldError id={`${limitId}-error`}>
+                {overBudget
+                  ? t("ui.budget_exceeded")
+                  : message("connection_limit")}
+              </FieldError>
+            )}
+          </Field>
+        </FieldGroup>
+      </FieldSet>
       <FormActions>
         <BusyButton
           type="button"

@@ -16,13 +16,13 @@ Administrators list grants through `GET /api/v1/management/devices` and revoke o
 
 ## Requests and permissions
 
-App requests use `Authorization: Bearer mwac_…`. Each `/api/v1/app/*` route declares its required scope in `appRoutes` in `internal/httpapi/app_management.go`. Core validates the credential, revocation state, scope, resource range and business constraints. Configuration mutations retain revision optimistic locking. Tests of saved configuration are limited to once per device and target per minute.
+App requests use `Authorization: Bearer mwac_…`. Each protected `/api/v1/app/*` route declares its required scope alongside its registration through `appRouteRegistrar` in `internal/httpapi/app_management.go`. Authenticated controller identity is passed explicitly to handlers that need it. Core validates the credential, revocation state, scope, resource range and business constraints. Configuration mutations retain revision optimistic locking. Tests of saved configuration are limited to once per device and target per minute.
 
 The official App checks Pro for folder discovery and management modifications. Reads, deletion, diagnostics, saved-configuration tests and body reading are free. Core configures networking, storage and Relay access; iOS and Platform own commercial state.
 
 ## Content authorization
 
-The owner separately grants `content` for all currently subscribed folders on this Core. `POST /api/v1/app/content` uses the controller credential and verifies content scope, the signed message reference, current subscription and mailbox identity. Body reading is free. HTTP handling lives in `internal/httpapi/app_management.go`; message-reference signatures live in `internal/native/message_reference.go`. Limits and privacy rules are in [HTML content](../../docs/html-content.md).
+The owner separately grants `content` for all currently subscribed folders on this Core. `POST /api/v1/app/content` uses the controller credential and verifies content scope, the signed message reference, current subscription and mailbox identity. Body reading is free. HTTP handling lives in `internal/httpapi/app_management.go`; message-reference signatures live in `internal/coreidentity/message_reference.go`. Limits and privacy rules are in [HTML content](../../docs/html-content.md).
 
 ## Subscription directory and native receiving device
 

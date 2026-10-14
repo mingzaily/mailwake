@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mingzaily/mailwake/internal/runtime"
+	"github.com/mingzaily/mailwake/internal/application"
 	"github.com/mingzaily/mailwake/internal/settings"
 	"github.com/mingzaily/mailwake/internal/storage"
 )
@@ -43,13 +43,13 @@ func TestSettingsHTTPRedactsAllCredentials(t *testing.T) {
 		}
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	configuration, err := runtime.New(t.Context(), s, v, log, "")
+	configuration, err := application.New(t.Context(), s, v, log, "", application.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer configuration.Close()
 	a, g := testAdministrator(t, s)
-	r := New(a, configuration, s, log)
+	r := New(a, configuration.Manager, s, log, Integrations{Native: configuration.Native, Management: configuration.Management})
 	for _, path := range []string{"mailboxes/mbx_primary", "settings/delivery"} {
 		req := httptest.NewRequest("GET", "/api/v1/"+path, nil)
 		authorizeSession(req, g)
@@ -106,13 +106,13 @@ func TestStatusReportsRecoverableConfiguration(t *testing.T) {
 		t.Fatal(err)
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	configuration, err := runtime.New(t.Context(), store, vault, log, "")
+	configuration, err := application.New(t.Context(), store, vault, log, "", application.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer configuration.Close()
 	service, grant := testAdministrator(t, store)
-	router := New(service, configuration, store, log)
+	router := New(service, configuration.Manager, store, log, Integrations{Native: configuration.Native, Management: configuration.Management})
 	req := httptest.NewRequest("GET", "/api/v1/status", nil)
 	authorizeSession(req, grant)
 	w := httptest.NewRecorder()
@@ -158,13 +158,13 @@ func TestDeliveryDeleteUsesOwnerAuthenticationAndRevisionCAS(t *testing.T) {
 		t.Fatal(err)
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	manager, err := runtime.New(t.Context(), store, vault, logger, "")
+	manager, err := application.New(t.Context(), store, vault, logger, "", application.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer manager.Close()
 	service, grant := testAdministrator(t, store)
-	router := New(service, manager, store, logger)
+	router := New(service, manager.Manager, store, logger, Integrations{Native: manager.Native, Management: manager.Management})
 	for _, tc := range []struct {
 		name, body          string
 		authenticated, csrf bool
@@ -196,7 +196,7 @@ func TestDeliveryDeleteUsesOwnerAuthenticationAndRevisionCAS(t *testing.T) {
 			}
 		})
 	}
-	if manager.Channel() != "" || manager.DeliveryView()["revision"] != int64(2) {
+	if manager.Channel() != "" || manager.DeliveryView().Revision != int64(2) {
 		t.Fatal("delivery was not cleared exactly once")
 	}
 }

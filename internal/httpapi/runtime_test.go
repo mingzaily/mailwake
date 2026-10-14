@@ -2,10 +2,11 @@ package httpapi
 
 import (
 	"context"
+
+	"github.com/mingzaily/mailwake/internal/coreidentity"
 	"github.com/mingzaily/mailwake/internal/engine"
 	"github.com/mingzaily/mailwake/internal/fault"
 	"github.com/mingzaily/mailwake/internal/mail"
-	"github.com/mingzaily/mailwake/internal/native"
 	"github.com/mingzaily/mailwake/internal/settings"
 )
 
@@ -45,26 +46,28 @@ func (r testRuntime) Folders(ctx context.Context, _ string) (*mail.FolderDiscove
 }
 func (r testRuntime) Channel() string                { return r.channel }
 func (testRuntime) Notices() map[string]*fault.Error { return nil }
-func (r testRuntime) Mailboxes() []map[string]any {
-	result := []map[string]any{}
+func (r testRuntime) Mailboxes() []settings.MailboxView {
+	result := []settings.MailboxView{}
 	seen := map[string]bool{}
 	for _, s := range r.Status() {
 		if !seen[s.MailboxID] {
-			result = append(result, map[string]any{"id": s.MailboxID})
+			result = append(result, settings.MailboxView{ID: s.MailboxID})
 			seen[s.MailboxID] = true
 		}
 	}
 	return result
 }
-func (testRuntime) Mailbox(id string) (map[string]any, error) { return map[string]any{"id": id}, nil }
-func (testRuntime) CreateMailbox(context.Context, settings.MailboxUpdate) (map[string]any, error) {
-	return nil, fault.New("mailbox_required")
+func (testRuntime) Mailbox(id string) (settings.MailboxView, error) {
+	return settings.MailboxView{ID: id}, nil
+}
+func (testRuntime) CreateMailbox(context.Context, settings.MailboxUpdate) (settings.MailboxView, error) {
+	return settings.MailboxView{}, fault.New("mailbox_required")
 }
 func (testRuntime) DeleteMailbox(context.Context, string) error {
 	return fault.New("mailbox_not_found")
 }
-func (r testRuntime) DeliveryView() map[string]any {
-	return map[string]any{"channel": r.channel, "revision": int64(0)}
+func (r testRuntime) DeliveryView() settings.DeliveryView {
+	return settings.DeliveryView{Channel: r.channel}
 }
 func (testRuntime) UpdateMailbox(context.Context, string, settings.MailboxUpdate) error {
 	return fault.New("mailbox_required")
@@ -88,6 +91,6 @@ func (testRuntime) TestSavedDelivery(context.Context) error {
 	return fault.New("delivery_test_failed")
 }
 
-func (r testRuntime) ReadContent(context.Context, native.MessageReference) (mail.Body, error) {
+func (r testRuntime) ReadContent(context.Context, coreidentity.MessageReference) (mail.Body, error) {
 	return mail.Body{Text: "test body"}, nil
 }

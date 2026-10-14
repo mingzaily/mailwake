@@ -57,7 +57,7 @@ func TestNativeSaveIsLocalAndBothTestRoutesUseFreePairingTests(t *testing.T) {
 	if err := store.FinishNativePairing(t.Context(), id, "active", ""); err != nil {
 		t.Fatal(err)
 	}
-	revision := m.DeliveryView()["revision"].(int64)
+	revision := m.DeliveryView().Revision
 	input := DeliveryUpdate{Revision: &revision, Channel: "native", NativePairingID: &id, Preview: "off"}
 	if err := m.UpdateDelivery(t.Context(), input); err != nil {
 		t.Fatal(err)

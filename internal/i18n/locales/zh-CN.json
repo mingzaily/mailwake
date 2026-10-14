@@ -136,6 +136,7 @@
   "ui.skip_content": "跳转到内容",
   "ui.logout": "退出登录",
   "ui.loading": "加载中…",
+  "ui.page_load_failed": "页面加载失败，请刷新后重试。",
   "ui.reload": "重新加载",
   "ui.conflict": "已在其他地方修改，请重新加载最新内容后保存。",
   "ui.wait_seconds": "请等待 {seconds} 秒后重试。",

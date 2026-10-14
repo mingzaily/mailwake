@@ -6,11 +6,21 @@ The documentation site owns endpoint tables, request examples and script usage. 
 
 ## Ownership and authentication
 
-`internal/httpapi/` owns routing, input decoding, status codes and safe error responses. `internal/auth/` owns setup, password hashes, sessions and API tokens. `internal/settings/` owns validated configuration and revisions; `internal/storage/` owns transactional persistence. App routes declare their required scope in the `appRoutes` table; see [App management](../internal/appmanagement/README.md).
+`internal/httpapi/` owns routing, input decoding, status codes and safe error responses. `internal/auth/` owns setup, password hashes, sessions and API tokens. `internal/settings/` owns validated configuration and revisions; `internal/storage/` owns transactional persistence. App routes declare their required scope alongside registration through `appRouteRegistrar`; see [App management](../internal/appmanagement/README.md).
 
 Before setup, protected management endpoints return `setup_required`. Browser sessions use HttpOnly cookies and CSRF on mutations. Script APIs use Bearer tokens. App controller credentials have separate device and scope boundaries. Validate at the owning boundary and pass resolved authorization onward.
 
 Configuration mutations use revision optimistic concurrency. Preserve write-only credentials when omitted, return a conflict for stale revisions, and keep user input available for correction. Test observable status codes and persisted state, including unauthorized access, scope isolation, stale revisions, invalid values and atomic updates.
+
+## Service composition and response boundaries
+
+`cmd/mailwake/` calls `internal/application` to assemble the local identity, native delivery, App management and mailbox runtime services. HTTP receives the App and native services explicitly. The runtime owns mailbox and delivery worker lifetimes and installs its transactional pairing-revocation callback before workers start. App invitation handling stays in `internal/appmanagement`.
+
+`internal/coreidentity` owns the persisted Core signing identity, P-256 signatures and signed message references. App invitations and content verification use this local capability directly. Native delivery uses the same identity for Relay requests and notification references. The encrypted `native.identity` configuration key, vault AAD and signature formats remain stable across restarts and upgrades.
+
+Mailbox, delivery and diagnostic handlers depend on the capabilities they use. `internal/settings/views.go` defines typed, allowlisted public views; credential values remain write-only. Web and App share business operations and error mapping. Web mailbox probes return folder discovery; App mailbox probes return only `{ "status": "connected" }`, preserving the separate folder scope.
+
+Each protected App registration specifies its method, path, scope and handler together. Authentication resolves the controller once, enforces that scope, and passes the controller explicitly to self-revocation and saved-test limiting. Unknown routes use the standard 404 response. Management authorization and push pairing retain independent lifecycles; selected-target revocation keeps its configuration revision and transaction boundaries.
 
 ## Languages and error codes
 

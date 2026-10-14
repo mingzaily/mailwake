@@ -9,8 +9,8 @@ import (
 	"github.com/mingzaily/mailwake/internal/storage"
 )
 
-func managementRoutes(api *gin.RouterGroup, monitor Runtime, store *storage.Store) {
-	api.GET("/diagnostics", func(c *gin.Context) {
+func diagnosticsHandler(monitor DiagnosticsRuntime, store *storage.Store) gin.HandlerFunc {
+	return func(c *gin.Context) {
 		counts, err := store.Summary(c.Request.Context())
 		if err != nil {
 			databaseError(c)
@@ -38,7 +38,7 @@ func managementRoutes(api *gin.RouterGroup, monitor Runtime, store *storage.Stor
 		indexes, folderIndexes := map[string]int{}, map[string]int{}
 		notices := monitor.Notices()
 		for _, view := range monitor.Mailboxes() {
-			id, _ := view["id"].(string)
+			id := view.ID
 			item := mailbox{Index: len(boxes) + 1}
 			if notice := notices["mailbox:"+id]; notice != nil {
 				item.NoticeCode = notice.Code
@@ -68,5 +68,5 @@ func managementRoutes(api *gin.RouterGroup, monitor Runtime, store *storage.Stor
 		version, revision := buildinfo.Current()
 		c.Header("Content-Disposition", `attachment; filename="mailwake-diagnostics.json"`)
 		c.JSON(200, gin.H{"schema_version": 1, "generated_at": time.Now().UTC(), "build": gin.H{"version": version, "revision": revision, "go_version": runtime.Version(), "os": runtime.GOOS, "arch": runtime.GOARCH}, "mailboxes": boxes, "watches": watches, "delivery": counts})
-	})
+	}
 }

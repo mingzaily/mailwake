@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/mingzaily/mailwake/internal/coreidentity"
 	"github.com/mingzaily/mailwake/internal/storage"
 )
 
@@ -18,7 +19,7 @@ func TestChangedRelayURLFailsBeforeNetwork(t *testing.T) {
 	if _, err := service.Create(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	next, err := New(store, service.vault, "http://127.0.0.1:1", service.log)
+	next, err := New(store, service.vault, coreidentity.New(store, service.vault), "http://127.0.0.1:1", service.log)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mingzaily/mailwake/internal/coreidentity"
 	"github.com/mingzaily/mailwake/internal/settings"
 	"github.com/mingzaily/mailwake/internal/storage"
 )
@@ -35,7 +36,7 @@ func testServiceInDirectory(t *testing.T, dir string, handler http.HandlerFunc) 
 	}
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
-	service, err := New(store, vault, server.URL, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	service, err := New(store, vault, coreidentity.New(store, vault), server.URL, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,12 +94,12 @@ func TestPairingSelectsBeforeRevealingTokenAndResumes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	identity, err := service.identity.load(ctx)
+	identity, err := service.identity.Load(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	claim = Claim{v.Device.ID, v.Device.PublicKey, v.Encryption.PublicKey, "", "My phone", p.ExpiresAt}
-	claim.Signature, err = sign(fixedKey(t, v.Device), consentText(v.Audience, p.ID, identity.ID, claim.DeviceID, v.Encryption.ID, p.TokenHash, strconv.FormatInt(p.ExpiresAt, 10)))
+	claim.Signature, err = coreidentity.Sign(fixedKey(t, v.Device), consentText(v.Audience, p.ID, identity.ID, claim.DeviceID, v.Encryption.ID, p.TokenHash, strconv.FormatInt(p.ExpiresAt, 10)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +110,7 @@ func TestPairingSelectsBeforeRevealingTokenAndResumes(t *testing.T) {
 	if err != nil || locked.State != "waiting" || locked.DeviceID != claim.DeviceID {
 		t.Fatal(locked, err)
 	}
-	restarted, err := New(store, service.vault, service.client.url, service.log)
+	restarted, err := New(store, service.vault, coreidentity.New(store, service.vault), service.client.url, service.log)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,11 +161,11 @@ func TestClaimValidationAndConcurrentPairingLimit(t *testing.T) {
 	}
 	items, _ := store.NativePairings(ctx, "waiting")
 	p := items[0]
-	identity, _ := service.identity.load(ctx)
+	identity, _ := service.identity.Load(ctx)
 	info := Info{Audience: v.Audience, Environment: "sandbox", Version: 2}
 	valid := Claim{v.Device.ID, v.Device.PublicKey, v.Encryption.PublicKey, "", "Phone", p.ExpiresAt}
 	text := consentText(v.Audience, p.ID, identity.ID, valid.DeviceID, v.Encryption.ID, p.TokenHash, strconv.FormatInt(p.ExpiresAt, 10))
-	valid.Signature, _ = sign(fixedKey(t, v.Device), text)
+	valid.Signature, _ = coreidentity.Sign(fixedKey(t, v.Device), text)
 	if err := validateClaim(identity, info, p, valid); err != nil {
 		t.Fatal(err)
 	}
@@ -204,7 +205,7 @@ func TestExpiredPairingAndRelayBinding(t *testing.T) {
 	}
 	p, _ := store.NativePairing(ctx, created.ID)
 	p.ExpiresAt = time.Now().Unix() - 1
-	identity, _ := service.identity.load(ctx)
+	identity, _ := service.identity.Load(ctx)
 	if err = service.pollPairing(ctx, identity, Info{Audience: audience, Environment: "sandbox", Version: 2}, p); err != nil {
 		t.Fatal(err)
 	}
@@ -216,7 +217,7 @@ func TestExpiredPairingAndRelayBinding(t *testing.T) {
 	if _, err = service.Create(ctx); safeCode(err) != "native_environment_mismatch" {
 		t.Fatal(err)
 	}
-	disabled, _ := New(store, service.vault, "", service.log)
+	disabled, _ := New(store, service.vault, coreidentity.New(store, service.vault), "", service.log)
 	if _, err = disabled.Create(ctx); safeCode(err) != "native_push_unavailable" {
 		t.Fatal(err)
 	}
@@ -243,9 +244,9 @@ func TestRelayKeySubstitutionEndsPairingAndClearsToken(t *testing.T) {
 		t.Fatal(err)
 	}
 	p, _ = store.NativePairing(ctx, created.ID)
-	identity, _ := service.identity.load(ctx)
+	identity, _ := service.identity.Load(ctx)
 	claim = Claim{v.Device.ID, v.Device.PublicKey, v.Encryption.PublicKey, "", "Phone", p.ExpiresAt}
-	claim.Signature, _ = sign(fixedKey(t, v.Device), consentText(v.Audience, p.ID, identity.ID, claim.DeviceID, v.Encryption.ID, p.TokenHash, strconv.FormatInt(p.ExpiresAt, 10)))
+	claim.Signature, _ = coreidentity.Sign(fixedKey(t, v.Device), consentText(v.Audience, p.ID, identity.ID, claim.DeviceID, v.Encryption.ID, p.TokenHash, strconv.FormatInt(p.ExpiresAt, 10)))
 	if err = service.Poll(ctx); err != nil {
 		t.Fatal(err)
 	}

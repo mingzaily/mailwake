@@ -14,6 +14,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
+	"github.com/mingzaily/mailwake/internal/coreidentity"
 	"github.com/mingzaily/mailwake/internal/delivery"
 	"github.com/mingzaily/mailwake/internal/fault"
 	"github.com/mingzaily/mailwake/internal/settings"
@@ -33,16 +34,16 @@ type Service struct {
 	deliveryPolling atomic.Bool
 	store           *storage.Store
 	vault           *settings.Vault
-	identity        identityStore
+	identity        *coreidentity.Store
 	client          *Client
 	log             *slog.Logger
 }
 
-func New(store *storage.Store, vault *settings.Vault, relayURL string, log *slog.Logger) (*Service, error) {
-	return NewWithOptions(store, vault, relayURL, log, ClientOptions{})
+func New(store *storage.Store, vault *settings.Vault, identity *coreidentity.Store, relayURL string, log *slog.Logger) (*Service, error) {
+	return NewWithOptions(store, vault, identity, relayURL, log, ClientOptions{})
 }
-func NewWithOptions(store *storage.Store, vault *settings.Vault, relayURL string, log *slog.Logger, options ClientOptions) (*Service, error) {
-	s := &Service{store: store, vault: vault, identity: identityStore{store: store, vault: vault}, log: log}
+func NewWithOptions(store *storage.Store, vault *settings.Vault, identity *coreidentity.Store, relayURL string, log *slog.Logger, options ClientOptions) (*Service, error) {
+	s := &Service{store: store, vault: vault, identity: identity, log: log}
 	if relayURL != "" {
 		c, err := NewClientWithOptions(relayURL, options)
 		if err != nil {
@@ -156,7 +157,7 @@ func (s *Service) Create(ctx context.Context) (PairingView, error) {
 	if err != nil {
 		return PairingView{}, err
 	}
-	identity, err := s.identity.load(ctx)
+	identity, err := s.identity.Load(ctx)
 	if err != nil {
 		return PairingView{}, err
 	}
@@ -196,9 +197,6 @@ func (s *Service) Devices(ctx context.Context) ([]PairingView, error) {
 	}
 	return result, err
 }
-
-// CoreIdentity returns the Core signing identity; it does not require a Relay.
-func (s *Service) CoreIdentity(ctx context.Context) (*Identity, error) { return s.identity.load(ctx) }
 
 // Unlink revokes a pairing locally first, then removes it at Relay. A failed
 // Relay call stays queued and the poller retries it with backoff.
@@ -240,7 +238,7 @@ func (s *Service) deletePairing(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	identity, err := s.identity.load(ctx)
+	identity, err := s.identity.Load(ctx)
 	if err != nil {
 		return err
 	}
@@ -294,8 +292,8 @@ type Claim struct {
 	ExpiresAt     int64  `json:"expires_at"`
 }
 
-func validateClaim(identity *Identity, info Info, p storage.NativePairing, c Claim) error {
-	id, err := KeyID(c.SigningKey)
+func validateClaim(identity *coreidentity.Identity, info Info, p storage.NativePairing, c Claim) error {
+	id, err := coreidentity.KeyID(c.SigningKey)
 	if err != nil || id != c.DeviceID {
 		return fault.New("native_signature_invalid")
 	}
@@ -305,11 +303,11 @@ func validateClaim(identity *Identity, info Info, p storage.NativePairing, c Cla
 	if !utf8.ValidString(c.Name) || utf8.RuneCountInString(c.Name) > 64 {
 		return fault.New("native_protocol_invalid")
 	}
-	encryptionID, err := KeyID(c.EncryptionKey)
+	encryptionID, err := coreidentity.KeyID(c.EncryptionKey)
 	if err != nil {
 		return err
 	}
-	return verify(c.SigningKey, c.Signature, consentText(info.Audience, p.ID, identity.ID, c.DeviceID, encryptionID, p.TokenHash, strconv.FormatInt(c.ExpiresAt, 10)))
+	return coreidentity.Verify(c.SigningKey, c.Signature, consentText(info.Audience, p.ID, identity.ID, c.DeviceID, encryptionID, p.TokenHash, strconv.FormatInt(c.ExpiresAt, 10)))
 }
 
 type relayPairing struct {
@@ -345,7 +343,7 @@ func (s *Service) Poll(ctx context.Context) error {
 		}
 		return err
 	}
-	identity, err := s.identity.load(ctx)
+	identity, err := s.identity.Load(ctx)
 	if err != nil {
 		return err
 	}
@@ -370,7 +368,7 @@ func (s *Service) finish(ctx context.Context, p storage.NativePairing, state, co
 	}
 	return err
 }
-func (s *Service) pollPairing(ctx context.Context, identity *Identity, info Info, p storage.NativePairing) error {
+func (s *Service) pollPairing(ctx context.Context, identity *coreidentity.Identity, info Info, p storage.NativePairing) error {
 	if p.ExpiresAt <= time.Now().Unix() {
 		if p.DeviceID != "" {
 			var result relayPairing
@@ -437,7 +435,7 @@ func (s *Service) pollPairing(ctx context.Context, identity *Identity, info Info
 	}
 	return s.finish(ctx, p, "active", "")
 }
-func (s *Service) pollWaiting(ctx context.Context, identity *Identity, info Info, id string) error {
+func (s *Service) pollWaiting(ctx context.Context, identity *coreidentity.Identity, info Info, id string) error {
 	s.pairingMu.Lock()
 	defer s.pairingMu.Unlock()
 	p, err := s.store.NativePairing(ctx, id)

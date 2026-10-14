@@ -1,13 +1,14 @@
 package httpapi
 
 import (
-	"github.com/mingzaily/mailwake/internal/auth"
-	"github.com/mingzaily/mailwake/internal/storage"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/mingzaily/mailwake/internal/auth"
+	"github.com/mingzaily/mailwake/internal/storage"
 )
 
 func testAdministrator(t *testing.T, s *storage.Store) (*auth.Service, auth.Grant) {
@@ -39,7 +40,7 @@ func TestSetupGateAndOneTimeCode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := New(a, newTestRuntime("", nil, nil), s, nil)
+	r := New(a, newTestRuntime("", nil, nil), s, nil, Integrations{})
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/status", nil))
 	if w.Code != 403 || !strings.Contains(w.Body.String(), "setup_required") {

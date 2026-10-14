@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useI18n } from "@/lib/i18n";
 import { AppearanceControls } from "./appearance-controls";
-import { Brand } from "./shell";
+import { Brand } from "./brand";
 import { Panel } from "./common";
 
 export function SetupLayout({

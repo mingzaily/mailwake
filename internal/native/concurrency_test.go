@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/mingzaily/mailwake/internal/coreidentity"
 	"github.com/mingzaily/mailwake/internal/event"
 )
 
@@ -65,9 +66,9 @@ func TestSlowPollingDoesNotBlockSend(t *testing.T) {
 					t.Fatal(err)
 				}
 				p, _ := store.NativePairing(ctx, created.ID)
-				identity, _ := service.identity.load(ctx)
+				identity, _ := service.identity.Load(ctx)
 				claim = Claim{v.Device.ID, v.Device.PublicKey, v.Encryption.PublicKey, "", "phone", p.ExpiresAt}
-				claim.Signature, _ = sign(fixedKey(t, v.Device), consentText(v.Audience, p.ID, identity.ID, claim.DeviceID, v.Encryption.ID, p.TokenHash, strconv.FormatInt(p.ExpiresAt, 10)))
+				claim.Signature, _ = coreidentity.Sign(fixedKey(t, v.Device), consentText(v.Audience, p.ID, identity.ID, claim.DeviceID, v.Encryption.ID, p.TokenHash, strconv.FormatInt(p.ExpiresAt, 10)))
 			}
 			done := make(chan error, 1)
 			go func() {

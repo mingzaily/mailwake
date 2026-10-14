@@ -136,6 +136,7 @@
   "ui.skip_content": "Skip to content",
   "ui.logout": "Sign out",
   "ui.loading": "Loading…",
+  "ui.page_load_failed": "This page could not be loaded. Reload to try again.",
   "ui.reload": "Reload",
   "ui.conflict": "Changed elsewhere. Reload the latest values before saving.",
   "ui.wait_seconds": "Try again in {seconds} s.",

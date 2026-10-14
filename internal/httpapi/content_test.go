@@ -12,8 +12,8 @@ import (
 	"testing"
 
 	"github.com/mingzaily/mailwake/internal/content"
+	"github.com/mingzaily/mailwake/internal/coreidentity"
 	"github.com/mingzaily/mailwake/internal/mail"
-	"github.com/mingzaily/mailwake/internal/native"
 )
 
 type mimeBodyRuntime struct {
@@ -21,7 +21,7 @@ type mimeBodyRuntime struct {
 	raw string
 }
 
-func (r mimeBodyRuntime) ReadContent(ctx context.Context, _ native.MessageReference) (mail.Body, error) {
+func (r mimeBodyRuntime) ReadContent(ctx context.Context, _ coreidentity.MessageReference) (mail.Body, error) {
 	return content.ReadBody(ctx, strings.NewReader(r.raw))
 }
 

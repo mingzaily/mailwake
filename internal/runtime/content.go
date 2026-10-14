@@ -4,16 +4,16 @@ import (
 	"context"
 	"time"
 
+	"github.com/mingzaily/mailwake/internal/coreidentity"
 	"github.com/mingzaily/mailwake/internal/fault"
 	"github.com/mingzaily/mailwake/internal/mail"
-	"github.com/mingzaily/mailwake/internal/native"
 )
 
 // ReadContent accepts an owner-authorized request and owns only its bounded read connection.
-func (m *Manager) ReadContent(ctx context.Context, reference native.MessageReference) (mail.Body, error) {
+func (m *Manager) ReadContent(ctx context.Context, reference coreidentity.MessageReference) (mail.Body, error) {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	if err := m.native.VerifyMessageReference(ctx, reference); err != nil {
+	if err := m.identity.VerifyMessageReference(ctx, reference); err != nil {
 		return mail.Body{}, err
 	}
 	b, err := m.mailbox(reference.MailboxID)

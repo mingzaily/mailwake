@@ -23,7 +23,7 @@ func TestAuthenticationInputErrorContracts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	router := New(service, newTestRuntime("", nil, nil), store, slog.Default())
+	router := New(service, newTestRuntime("", nil, nil), store, slog.Default(), Integrations{})
 	call := func(method, path, body string, grant auth.Grant) *httptest.ResponseRecorder {
 		request := httptest.NewRequest(method, path, strings.NewReader(body))
 		request.Header.Set("Accept-Language", "zh-CN")

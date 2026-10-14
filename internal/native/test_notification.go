@@ -51,7 +51,7 @@ func (s *Service) Test(ctx context.Context, pairingID string) (result error) {
 	if err != nil {
 		return err
 	}
-	identity, err := s.identity.load(ctx)
+	identity, err := s.identity.Load(ctx)
 	if err != nil {
 		return err
 	}

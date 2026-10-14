@@ -19,7 +19,7 @@ func TestSessionSecurityAndPasswordChange(t *testing.T) {
 	}
 	defer s.Close()
 	a, first := testAdministrator(t, s)
-	r := New(a, newTestRuntime("", nil, nil), s, nil)
+	r := New(a, newTestRuntime("", nil, nil), s, nil, Integrations{})
 	call := func(method, path, body string, g auth.Grant, csrf, origin string, https bool) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, path, strings.NewReader(body))
 		if https {
@@ -85,7 +85,7 @@ func TestFailedAttemptLimitAndForwardedHeaders(t *testing.T) {
 				path = "/api/v1/session"
 				body = `{"username":"admin","password":"wrong"}`
 			}
-			r := New(a, newTestRuntime("", nil, nil), s, nil)
+			r := New(a, newTestRuntime("", nil, nil), s, nil, Integrations{})
 			for i := 0; i < 11; i++ {
 				req := httptest.NewRequest("POST", path, strings.NewReader(body))
 				req.Header.Set("X-Forwarded-For", string(rune('a'+i)))

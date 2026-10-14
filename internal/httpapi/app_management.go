@@ -9,38 +9,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/mingzaily/mailwake/internal/appmanagement"
+	"github.com/mingzaily/mailwake/internal/coreidentity"
 	"github.com/mingzaily/mailwake/internal/fault"
-	"github.com/mingzaily/mailwake/internal/native"
+	"github.com/mingzaily/mailwake/internal/mail"
 	"github.com/mingzaily/mailwake/internal/storage"
 )
-
-// App routes map directly to the owner-approved scope they require.
-var appRoutes = map[string]string{
-	"GET /folder-mailboxes":              "folders",
-	"GET /native/devices":                "channels",
-	"POST /content":                      "content",
-	"GET /mailboxes":                     "mailboxes",
-	"POST /mailboxes":                    "mailboxes",
-	"POST /mailboxes/test":               "mailboxes",
-	"GET /mailboxes/:id":                 "mailboxes",
-	"PUT /mailboxes/:id":                 "mailboxes",
-	"DELETE /mailboxes/:id":              "mailboxes",
-	"POST /mailboxes/:id/test":           "mailboxes",
-	"POST /mailboxes/:id/test-saved":     "mailboxes",
-	"GET /mailboxes/:id/folders":         "folders",
-	"GET /mailboxes/:id/subscriptions":   "folders",
-	"PUT /mailboxes/:id/subscriptions":   "folders",
-	"GET /settings/delivery":             "channels",
-	"PUT /settings/delivery":             "channels",
-	"DELETE /settings/delivery":          "channels",
-	"POST /settings/delivery/test":       "channels",
-	"POST /settings/delivery/test-saved": "channels",
-	"GET /status":                        "diagnostics",
-	"GET /diagnostics":                   "diagnostics",
-	"GET /deliveries":                    "diagnostics",
-	"GET /controller":                    "",
-	"DELETE /controller":                 "",
-}
 
 const appPrefix = "/api/v1/app"
 
@@ -49,11 +22,7 @@ func credentialHash(credential string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func appManagementRoutes(r *gin.Engine, admin *gin.RouterGroup, runtime Runtime, store *storage.Store) {
-	var service *appmanagement.Service
-	if provider, ok := runtime.(interface{ AppManagement() *appmanagement.Service }); ok {
-		service = provider.AppManagement()
-	}
+func appManagementRoutes(r *gin.Engine, admin *gin.RouterGroup, runtime Runtime, store *storage.Store, service *appmanagement.Service) {
 	if service == nil {
 		return
 	}
@@ -118,19 +87,19 @@ func appManagementRoutes(r *gin.Engine, admin *gin.RouterGroup, runtime Runtime,
 		c.JSON(200, credential)
 	})
 
-	app := r.Group(appPrefix, appAuthenticate(store))
-	app.GET("/controller", func(c *gin.Context) { c.JSON(200, viewController(currentController(c))) })
-	app.DELETE("/controller", func(c *gin.Context) {
-		if err := store.DeleteAppController(c.Request.Context(), currentController(c).ID); err != nil {
+	app := appRouteRegistrar{group: r.Group(appPrefix), store: store}
+	app.HandleController("GET", "/controller", "", func(c *gin.Context, controller storage.AppController) { c.JSON(200, viewController(controller)) })
+	app.HandleController("DELETE", "/controller", "", func(c *gin.Context, controller storage.AppController) {
+		if err := store.DeleteAppController(c.Request.Context(), controller.ID); err != nil {
 			respondFault(c, err)
 			return
 		}
 		c.Status(204)
 	})
-	app.POST("/content", func(c *gin.Context) {
+	app.Handle("POST", "/content", "content", func(c *gin.Context) {
 		c.Header("Cache-Control", "no-store")
 		var input struct {
-			Reference native.MessageReference `json:"reference"`
+			Reference coreidentity.MessageReference `json:"reference"`
 		}
 		if !decodeRequest(c, &input) {
 			return
@@ -142,15 +111,15 @@ func appManagementRoutes(r *gin.Engine, admin *gin.RouterGroup, runtime Runtime,
 		}
 		c.JSON(200, result)
 	})
-	app.GET("/folder-mailboxes", func(c *gin.Context) {
+	app.Handle("GET", "/folder-mailboxes", "folders", func(c *gin.Context) {
 		items := []gin.H{}
 		for _, mailbox := range runtime.Mailboxes() {
-			items = append(items, gin.H{"id": mailbox["id"], "label": mailbox["label"],
-				"revision": mailbox["revision"], "connection_limit": mailbox["connection_limit"]})
+			items = append(items, gin.H{"id": mailbox.ID, "label": mailbox.Label,
+				"revision": mailbox.Revision, "connection_limit": mailbox.ConnectionLimit})
 		}
 		c.JSON(200, gin.H{"mailboxes": items})
 	})
-	app.GET("/native/devices", func(c *gin.Context) {
+	app.Handle("GET", "/native/devices", "channels", func(c *gin.Context) {
 		devices, err := store.NativeDevices(c.Request.Context())
 		if err != nil {
 			databaseError(c)
@@ -164,15 +133,30 @@ func appManagementRoutes(r *gin.Engine, admin *gin.RouterGroup, runtime Runtime,
 		}
 		c.JSON(200, gin.H{"devices": items})
 	})
-	mailboxRoutes(app, runtime)
-	settingsRoutes(app, runtime)
-	managementRoutes(app, runtime, store)
-	app.GET("/status", statusHandler(runtime, store))
-	app.GET("/deliveries", deliveriesHandler(store))
+	mailboxes := mailboxHandlers{runtime: runtime}
+	app.Handle("GET", "/mailboxes", "mailboxes", mailboxes.List)
+	app.Handle("POST", "/mailboxes", "mailboxes", mailboxes.Create)
+	app.Handle("GET", "/mailboxes/:id", "mailboxes", mailboxes.Get)
+	app.Handle("PUT", "/mailboxes/:id", "mailboxes", mailboxes.Update)
+	app.Handle("DELETE", "/mailboxes/:id", "mailboxes", mailboxes.Delete)
+	app.Handle("GET", "/mailboxes/:id/folders", "folders", mailboxes.Folders)
+	app.Handle("GET", "/mailboxes/:id/subscriptions", "folders", mailboxes.Subscriptions)
+	app.Handle("PUT", "/mailboxes/:id/subscriptions", "folders", mailboxes.UpdateSubscriptions)
+	testMailbox := mailboxTestHandler(runtime, func(c *gin.Context, _ *mail.FolderDiscovery) { c.JSON(200, gin.H{"status": "connected"}) })
+	app.Handle("POST", "/mailboxes/test", "mailboxes", testMailbox)
+	app.Handle("POST", "/mailboxes/:id/test", "mailboxes", testMailbox)
+	delivery := deliveryHandlers{runtime: runtime}
+	app.Handle("GET", "/settings/delivery", "channels", delivery.Get)
+	app.Handle("PUT", "/settings/delivery", "channels", delivery.Update)
+	app.Handle("POST", "/settings/delivery/test", "channels", delivery.Test)
+	app.Handle("DELETE", "/settings/delivery", "channels", delivery.Delete)
+	app.Handle("GET", "/diagnostics", "diagnostics", diagnosticsHandler(runtime, store))
+	app.Handle("GET", "/status", "diagnostics", statusHandler(runtime, store))
+	app.Handle("GET", "/deliveries", "diagnostics", deliveriesHandler(store))
 
 	limiter := &savedTestLimiter{last: map[string]time.Time{}}
-	app.POST("/mailboxes/:id/test-saved", func(c *gin.Context) {
-		if !limiter.allow(c, "mailbox:"+c.Param("id")) {
+	app.HandleController("POST", "/mailboxes/:id/test-saved", "mailboxes", func(c *gin.Context, controller storage.AppController) {
+		if !limiter.allow(c, controller.ID, "mailbox:"+c.Param("id")) {
 			return
 		}
 		if err := runtime.TestSavedMailbox(c.Request.Context(), c.Param("id")); err != nil {
@@ -181,8 +165,8 @@ func appManagementRoutes(r *gin.Engine, admin *gin.RouterGroup, runtime Runtime,
 		}
 		c.JSON(200, gin.H{"status": "connected"})
 	})
-	app.POST("/settings/delivery/test-saved", func(c *gin.Context) {
-		if !limiter.allow(c, "delivery") {
+	app.HandleController("POST", "/settings/delivery/test-saved", "channels", func(c *gin.Context, controller storage.AppController) {
+		if !limiter.allow(c, controller.ID, "delivery") {
 			return
 		}
 		if err := runtime.TestSavedDelivery(c.Request.Context()); err != nil {
@@ -193,23 +177,26 @@ func appManagementRoutes(r *gin.Engine, admin *gin.RouterGroup, runtime Runtime,
 	})
 }
 
-// appAuthenticate resolves the controller credential, then enforces the route's
-// owner-approved scope.
-func appAuthenticate(store *storage.Store) gin.HandlerFunc {
-	return func(c *gin.Context) {
+// appRouteRegistrar binds the route, owner-approved scope and handler together.
+// Controller-aware handlers receive the identity authenticated for this request.
+type appRouteRegistrar struct {
+	group *gin.RouterGroup
+	store *storage.Store
+}
+
+func (r appRouteRegistrar) Handle(method, path, scope string, handler gin.HandlerFunc) {
+	r.HandleController(method, path, scope, func(c *gin.Context, _ storage.AppController) { handler(c) })
+}
+func (r appRouteRegistrar) HandleController(method, path, scope string, handler func(*gin.Context, storage.AppController)) {
+	r.group.Handle(method, path, func(c *gin.Context) {
 		credential, ok := strings.CutPrefix(c.GetHeader("Authorization"), "Bearer ")
 		if !ok || !strings.HasPrefix(credential, "mwac_") {
 			respondError(c, 401, fault.New("unauthorized"))
 			return
 		}
-		controller, err := store.AuthenticateAppController(c.Request.Context(), credentialHash(credential))
+		controller, err := r.store.AuthenticateAppController(c.Request.Context(), credentialHash(credential))
 		if err != nil {
 			respondFault(c, err)
-			return
-		}
-		scope, known := appRoutes[c.Request.Method+" "+strings.TrimPrefix(c.FullPath(), appPrefix)]
-		if !known {
-			respondError(c, 404, fault.New("route_not_found"))
 			return
 		}
 		if scope != "" && !controller.HasScope(scope) {
@@ -220,9 +207,8 @@ func appAuthenticate(store *storage.Store) gin.HandlerFunc {
 			respondError(c, 403, fault.New(code))
 			return
 		}
-		c.Set("app_controller", controller)
-		c.Next()
-	}
+		handler(c, controller)
+	})
 }
 
 type controllerView struct {
@@ -243,18 +229,14 @@ func viewController(c storage.AppController) controllerView {
 	return view
 }
 
-func currentController(c *gin.Context) storage.AppController {
-	return c.MustGet("app_controller").(storage.AppController)
-}
-
 // savedTestLimiter allows one saved-configuration test per controller and target a minute.
 type savedTestLimiter struct {
 	mu   sync.Mutex
 	last map[string]time.Time
 }
 
-func (l *savedTestLimiter) allow(c *gin.Context, target string) bool {
-	key := currentController(c).ID + "|" + target
+func (l *savedTestLimiter) allow(c *gin.Context, controllerID, target string) bool {
+	key := controllerID + "|" + target
 	now := time.Now()
 	l.mu.Lock()
 	defer l.mu.Unlock()

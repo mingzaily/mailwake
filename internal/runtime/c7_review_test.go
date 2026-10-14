@@ -60,7 +60,7 @@ func TestSlowMailboxStopKeepsOtherMailboxAndStatusAvailable(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			router := httpapi.New(service, m, store, m.log)
+			router := httpapi.New(service, m, store, m.log, httpapi.Integrations{Native: m.native})
 			// Release before manager cleanup, including when a deadline assertion fails.
 			defer close(release)
 			a, input := addMailbox(t, m, "first", 10)
@@ -140,7 +140,7 @@ func TestCreateMailboxSharesTestAdmission(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	router := httpapi.New(service, m, store, m.log)
+	router := httpapi.New(service, m, store, m.log, httpapi.Integrations{Native: m.native})
 	input := settings.MailboxUpdate{Host: "imap.test", Port: 993, Username: "user", Password: ptr("synthetic")}
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -204,7 +204,7 @@ func TestDuplicateUpdatePreservesLiveMailbox(t *testing.T) {
 		t.Fatal("rejected duplicate restarted mailbox monitoring")
 	}
 	view, err := m.Mailbox(id)
-	if err != nil || view["revision"] != int64(1) {
+	if err != nil || view.Revision != int64(1) {
 		t.Fatal("rejected update changed revision", view, err)
 	}
 	if cp, _ := store.Checkpoint(t.Context(), id, "INBOX"); cp != "progress" {

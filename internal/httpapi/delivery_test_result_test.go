@@ -34,7 +34,7 @@ func TestSavedPushReturnsAcceptedOrLocalizedFailure(t *testing.T) {
 		{fault.New("apns_device_invalid"), 400, "APNs 拒绝了设备 Token"},
 		{&fault.Error{Code: "rate_limited", Params: map[string]string{"retry_after": "60"}}, 429, "rate_limited"},
 	} {
-		router := New(auth, savedTestRuntime{Runtime: newTestRuntime("native", nil, nil), result: tc.err}, store, slog.Default())
+		router := New(auth, savedTestRuntime{Runtime: newTestRuntime("native", nil, nil), result: tc.err}, store, slog.Default(), Integrations{})
 		req := httptest.NewRequest("POST", "/api/v1/test-push", nil)
 		authorizeSession(req, grant)
 		req.Header.Set("Accept-Language", "zh-CN")

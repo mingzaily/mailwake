@@ -15,7 +15,7 @@ func TestSavedDeliveryTestUsesTheSavedChannel(t *testing.T) {
 	m, _, _ := managerFixture(t, nil)
 	sender := &countingSender{}
 	m.newSender = func(settings.Delivery) delivery.Sender { return sender }
-	revision := m.DeliveryView()["revision"].(int64)
+	revision := m.DeliveryView().Revision
 	input := settings.DeliveryUpdate{Revision: &revision, Channel: "webhook", Preview: "off", Language: "en"}
 	input.Webhook.URL = ptr("https://original.example.test")
 	input.Webhook.Secret = ptr(strings.Repeat("x", 32))
@@ -51,7 +51,7 @@ func TestNotificationLanguagesPersistAndRender(t *testing.T) {
 	m, _, _ := managerFixture(t, nil)
 	for _, locale := range i18n.Languages() {
 		t.Run(locale.Code, func(t *testing.T) {
-			revision := m.DeliveryView()["revision"].(int64)
+			revision := m.DeliveryView().Revision
 			input := settings.DeliveryUpdate{Revision: &revision, Channel: "bark", Preview: "off", Language: locale.Code}
 			input.Bark.Key = ptr("fixture-key")
 			if err := m.UpdateDelivery(t.Context(), input); err != nil {
@@ -61,7 +61,7 @@ func TestNotificationLanguagesPersistAndRender(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if saved.Language != locale.Code || m.DeliveryView()["language"] != locale.Code {
+			if saved.Language != locale.Code || m.DeliveryView().Language != locale.Code {
 				t.Fatal("notification language was not persisted", saved.Language)
 			}
 			if got := delivery.Render(saved.Language, event.Notification{}).Body; got != i18n.Message(locale.Code, "notification.new_mail", nil) {

@@ -17,6 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/mingzaily/mailwake/internal/coreidentity"
 	"github.com/mingzaily/mailwake/internal/delivery"
 	"github.com/mingzaily/mailwake/internal/fault"
 	"github.com/mingzaily/mailwake/internal/localtls"
@@ -107,7 +108,7 @@ func (c *Client) info(ctx context.Context, checkClock bool) (Info, error) {
 	}
 	return info, err
 }
-func (c *Client) call(ctx context.Context, identity *Identity, audience, method, path string, body any, result any, status int, headers ...*http.Header) error {
+func (c *Client) call(ctx context.Context, identity *coreidentity.Identity, audience, method, path string, body any, result any, status int, headers ...*http.Header) error {
 	var raw []byte
 	var err error
 	if body != nil {
@@ -135,7 +136,7 @@ func (c *Client) call(ctx context.Context, identity *Identity, audience, method,
 			now = clock.local.Add(time.Since(clock.local)).Add(clock.offset)
 		}
 		timestamp := strconv.FormatInt(now.Unix(), 10)
-		signature, err := sign(identity.Key, requestText(audience, "core", identity.ID, method, path, timestamp, n, raw, ""))
+		signature, err := coreidentity.Sign(identity.Key, requestText(audience, "core", identity.ID, method, path, timestamp, n, raw, ""))
 		if err != nil {
 			return err
 		}

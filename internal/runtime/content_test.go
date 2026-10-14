@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mingzaily/mailwake/internal/coreidentity"
 	"github.com/mingzaily/mailwake/internal/fault"
 	"github.com/mingzaily/mailwake/internal/mail"
-	"github.com/mingzaily/mailwake/internal/native"
 	"github.com/mingzaily/mailwake/internal/settings"
 )
 
@@ -69,13 +69,13 @@ func TestContentReferenceFollowsOriginalAccount(t *testing.T) {
 	}
 }
 
-func signedContentReference(t *testing.T, m *Manager, id, accountID string) native.MessageReference {
+func signedContentReference(t *testing.T, m *Manager, id, accountID string) coreidentity.MessageReference {
 	t.Helper()
-	identity, err := m.native.CoreIdentity(t.Context())
+	identity, err := m.identity.Load(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
-	reference := native.MessageReference{CoreID: identity.ID, MailboxID: id, AccountID: accountID, Folder: "INBOX", Location: mail.Location{UIDValidity: 1, UID: 7}}
+	reference := coreidentity.MessageReference{CoreID: identity.ID, MailboxID: id, AccountID: accountID, Folder: "INBOX", Location: mail.Location{UIDValidity: 1, UID: 7}}
 	raw, _ := json.Marshal([]string{"mailwake-message-v1", reference.CoreID, id, accountID, "INBOX", "1", "7"})
 	digest := sha256.Sum256(raw)
 	r, s, err := ecdsa.Sign(rand.Reader, identity.Key, digest[:])

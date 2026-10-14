@@ -30,7 +30,7 @@ func TestHistoryDeletionRequiresAdministratorAuthenticationAndCSRF(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	router := New(a, newTestRuntime("", nil, nil), store, log)
+	router := New(a, newTestRuntime("", nil, nil), store, log, Integrations{})
 	for _, path := range []string{"/api/v1/logs", "/api/v1/deliveries"} {
 		for _, mode := range []string{"anonymous", "missing-csrf", "session", "token"} {
 			request := httptest.NewRequest("DELETE", path, nil)

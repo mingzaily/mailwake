@@ -19,19 +19,13 @@ import (
 
 	"github.com/mingzaily/mailwake/internal/appmanagement"
 	"github.com/mingzaily/mailwake/internal/auth"
+	"github.com/mingzaily/mailwake/internal/coreidentity"
 	"github.com/mingzaily/mailwake/internal/native"
 	"github.com/mingzaily/mailwake/internal/settings"
 	"github.com/mingzaily/mailwake/internal/storage"
 )
 
 var b64 = base64.RawURLEncoding
-
-type appRuntime struct {
-	Runtime
-	service *appmanagement.Service
-}
-
-func (r appRuntime) AppManagement() *appmanagement.Service { return r.service }
 
 type appFixture struct {
 	router  http.Handler
@@ -53,12 +47,13 @@ func newAppFixture(t *testing.T, runtimes ...Runtime) appFixture {
 		t.Fatal(err)
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	nativeService, err := native.New(store, vault, "", log)
+	keys := coreidentity.New(store, vault)
+	nativeService, err := native.New(store, vault, keys, "", log)
 	if err != nil {
 		t.Fatal(err)
 	}
-	service := &appmanagement.Service{Store: store, Native: nativeService}
-	identity, err := nativeService.CoreIdentity(t.Context())
+	service := &appmanagement.Service{Store: store, Native: nativeService, Identity: keys}
+	identity, err := keys.Load(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +62,7 @@ func newAppFixture(t *testing.T, runtimes ...Runtime) appFixture {
 	if len(runtimes) > 0 {
 		base = runtimes[0]
 	}
-	router := New(authService, appRuntime{base, service}, store, log)
+	router := New(authService, base, store, log, Integrations{Native: nativeService, Management: service})
 	return appFixture{router, grant, identity.ID, service}
 }
 
@@ -239,10 +234,10 @@ func TestContentRequiresOwnerScopeAndActiveCredential(t *testing.T) {
 
 type folderDirectoryRuntime struct{ Runtime }
 
-func (folderDirectoryRuntime) Mailboxes() []map[string]any {
-	return []map[string]any{{"id": "mail", "label": "Work", "revision": int64(2), "connection_limit": 5,
-		"host": "imap.private.test", "username": "owner@private.test", "password": map[string]bool{"configured": true}}}
+func (folderDirectoryRuntime) Mailboxes() []settings.MailboxView {
+	return []settings.MailboxView{{ID: "mail", Label: "Work", Revision: 2, ConnectionLimit: 5, Host: "imap.private.test", Username: "owner@private.test", Password: settings.ConfiguredValue{Configured: true}}}
 }
+
 func TestFolderOnlyControllerCanReadMailboxDirectoryWithoutMailboxAccess(t *testing.T) {
 	f := newAppFixture(t, folderDirectoryRuntime{newTestRuntime("bark", nil, nil)})
 	credential, _ := f.invite(t, []string{"folders"})

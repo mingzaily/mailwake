@@ -7,7 +7,11 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  QueryClient,
+  QueryClientProvider,
+  useQuery,
+} from "@tanstack/react-query";
 import { I18nContext } from "@/lib/i18n";
 import { AuthForm } from "./auth";
 import { SetupWizard } from "./setup";
@@ -15,7 +19,7 @@ import { MailboxEditor } from "./mailbox-form";
 import { SubscriptionsEditor } from "./subscriptions-form";
 import { Settings } from "@/pages/settings";
 import catalog from "../../../internal/i18n/locales/en.json";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { Mailbox } from "@/lib/types";
 const box: Mailbox = {
   id: "mbx_test",
@@ -402,4 +406,212 @@ test("new mailbox requires a successful current connection test and discards a f
     target: { value: "synthetic-password" },
   });
   expect(save.hasAttribute("disabled")).toBe(true);
+});
+
+function SavedMailboxEditor() {
+  const [mailbox, setMailbox] = useState(box);
+  return (
+    <MailboxEditor
+      key={mailbox.revision}
+      mailbox={mailbox}
+      onSaved={setMailbox}
+    />
+  );
+}
+
+for (const succeeds of [true, false]) {
+  test(`mailbox save locks editing and ${succeeds ? "applies the saved revision" : "retains the failed draft"}`, async () => {
+    let complete!: (response: Response) => void;
+    const pending = new Promise<Response>((resolve) => {
+      complete = resolve;
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => pending),
+    );
+    mount(<SavedMailboxEditor />);
+    fireEvent.change(screen.getByLabelText("Display name"), {
+      target: { value: "Submitted" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: catalog["ui.save"] }));
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText("Display name").closest("fieldset[disabled]"),
+      ).not.toBeNull(),
+    );
+    for (const control of screen.getAllByRole("textbox")) {
+      expect(control.closest("fieldset[disabled]")).not.toBeNull();
+    }
+    expect(
+      screen.getByLabelText("Connection limit").closest("fieldset[disabled]"),
+    ).not.toBeNull();
+    expect(
+      screen.getByRole("button", { name: "QQ Mail" }).hasAttribute("disabled"),
+    ).toBe(true);
+    complete(
+      succeeds
+        ? response({ ...box, label: "Submitted", revision: 4 })
+        : response(
+            { error: { code: "request_failed", message: "Save failed" } },
+            500,
+          ),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText("Display name").closest("fieldset[disabled]"),
+      ).toBeNull(),
+    );
+    expect(
+      (screen.getByLabelText("Display name") as HTMLInputElement).value,
+    ).toBe("Submitted");
+    if (!succeeds) expect(screen.getByText("Save failed")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Display name"), {
+      target: { value: "Next draft" },
+    });
+    expect(screen.getByDisplayValue("Next draft")).toBeTruthy();
+  });
+
+  test(`subscription save locks selection and ${succeeds ? "applies saved settings" : "retains the failed draft"}`, async () => {
+    let complete!: (response: Response) => void;
+    const pending = new Promise<Response>((resolve) => {
+      complete = resolve;
+    });
+    let saved = false;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "PUT") return pending;
+        return Promise.resolve(
+          response(
+            saved
+              ? { revision: 2, folders: [{ name: "INBOX", check: "realtime" }] }
+              : { revision: 1, folders: [{ name: "INBOX", check: "5m" }] },
+          ),
+        );
+      }),
+    );
+    mount(
+      <SubscriptionsEditor mailbox={box} discovered={["INBOX", "Other"]} />,
+    );
+    const check = await screen.findByRole("combobox", {
+      name: "Inbox (INBOX) Check method",
+    });
+    fireEvent.change(check, { target: { value: "realtime" } });
+    fireEvent.click(screen.getByRole("button", { name: catalog["ui.save"] }));
+    await waitFor(() => expect(check.hasAttribute("disabled")).toBe(true));
+    for (const control of screen.getAllByRole("checkbox"))
+      expect(control.hasAttribute("disabled")).toBe(true);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Other" }));
+    expect(
+      screen
+        .getByRole("checkbox", { name: "Other" })
+        .getAttribute("aria-checked"),
+    ).toBe("false");
+    saved = succeeds;
+    complete(
+      succeeds
+        ? response({
+            revision: 2,
+            folders: [{ name: "INBOX", check: "realtime" }],
+          })
+        : response(
+            { error: { code: "request_failed", message: "Save failed" } },
+            500,
+          ),
+    );
+    await waitFor(() =>
+      expect(
+        screen
+          .getByRole("checkbox", { name: "Other" })
+          .hasAttribute("disabled"),
+      ).toBe(false),
+    );
+    expect(
+      (
+        screen.getByRole("combobox", {
+          name: "Inbox (INBOX) Check method",
+        }) as HTMLSelectElement
+      ).value,
+    ).toBe("realtime");
+    if (!succeeds) expect(screen.getByText("Save failed")).toBeTruthy();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Other" }));
+    expect(
+      screen
+        .getByRole("checkbox", { name: "Other" })
+        .getAttribute("aria-checked"),
+    ).toBe("true");
+  });
+}
+
+function StatusObserver() {
+  useQuery({
+    queryKey: ["status"],
+    queryFn: async () => (await fetch("/api/v1/status")).json(),
+  });
+  return null;
+}
+
+test("subscription revision refresh keeps editing locked until save completion", async () => {
+  let completeSave!: (response: Response) => void;
+  let completeStatus!: (response: Response) => void;
+  const save = new Promise<Response>((resolve) => {
+    completeSave = resolve;
+  });
+  const status = new Promise<Response>((resolve) => {
+    completeStatus = resolve;
+  });
+  let saved = false;
+  let refreshed = false;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "PUT") return save;
+      if (String(input).endsWith("/status"))
+        return saved ? status : Promise.resolve(response({}));
+      if (saved) refreshed = true;
+      return Promise.resolve(
+        response({
+          revision: saved ? 2 : 1,
+          folders: [{ name: "INBOX", check: "5m" }],
+        }),
+      );
+    }),
+  );
+  const done = vi.fn();
+  mount(
+    <>
+      <StatusObserver />
+      <SubscriptionsEditor
+        mailbox={box}
+        discovered={["INBOX"]}
+        onSaved={done}
+      />
+    </>,
+  );
+  const checkbox = await screen.findByRole("checkbox", {
+    name: "Inbox (INBOX)",
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: catalog["ui.save_finish"] }),
+  );
+  await waitFor(() => expect(checkbox.hasAttribute("disabled")).toBe(true));
+  saved = true;
+  completeSave(
+    response({ revision: 2, folders: [{ name: "INBOX", check: "5m" }] }),
+  );
+  await waitFor(() => expect(refreshed).toBe(true));
+  await waitFor(() => expect(checkbox.isConnected).toBe(false));
+  expect(
+    screen
+      .getByRole("checkbox", { name: "Inbox (INBOX)" })
+      .hasAttribute("disabled"),
+  ).toBe(true);
+  expect(done).not.toHaveBeenCalled();
+  completeStatus(response({}));
+  await waitFor(() => expect(done).toHaveBeenCalledOnce());
+  expect(
+    screen
+      .getByRole("checkbox", { name: "Inbox (INBOX)" })
+      .hasAttribute("disabled"),
+  ).toBe(false);
 });

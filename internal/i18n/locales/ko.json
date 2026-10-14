@@ -136,6 +136,7 @@
   "ui.skip_content": "본문으로 이동",
   "ui.logout": "로그아웃",
   "ui.loading": "불러오는 중…",
+  "ui.page_load_failed": "페이지를 불러오지 못했습니다. 새로고침한 후 다시 시도하세요.",
   "ui.reload": "새로고침",
   "ui.conflict": "다른 세션에서 변경되었습니다. 저장하기 전에 최신 값을 불러오세요.",
   "ui.wait_seconds": "{seconds}초 후 다시 시도하세요.",

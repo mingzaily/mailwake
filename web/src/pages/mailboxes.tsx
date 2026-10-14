@@ -15,7 +15,7 @@ import { navigate } from "@/lib/router";
 import type { Mailbox } from "@/lib/types";
 import { MailboxEditor } from "@/components/mailbox-form";
 import { FolderScanDialog } from "@/components/folder-scan-dialog";
-import { Budget } from "@/components/shell";
+import { Budget } from "@/components/budget";
 import { FolderTable } from "@/components/status-tables";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";

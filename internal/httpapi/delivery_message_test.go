@@ -24,7 +24,7 @@ func TestDeliveryMessageContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	service, grant := testAdministrator(t, store)
-	router := New(service, newTestRuntime("", nil, nil), store, nil)
+	router := New(service, newTestRuntime("", nil, nil), store, nil, Integrations{})
 	req := httptest.NewRequest("GET", "/api/v1/deliveries", nil)
 	authorizeSession(req, grant)
 	w := httptest.NewRecorder()

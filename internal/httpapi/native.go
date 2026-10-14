@@ -9,11 +9,7 @@ import (
 	"github.com/mingzaily/mailwake/internal/native"
 )
 
-func nativeRoutes(api *gin.RouterGroup, runtime Runtime) {
-	var service *native.Service
-	if provider, ok := runtime.(interface{ Native() *native.Service }); ok {
-		service = provider.Native()
-	}
+func nativeRoutes(api *gin.RouterGroup, service *native.Service) {
 	group := api.Group("/native", func(c *gin.Context) {
 		if !service.Available() {
 			respondError(c, 503, fault.New("native_push_unavailable"))

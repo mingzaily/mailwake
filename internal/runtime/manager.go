@@ -11,7 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/mingzaily/mailwake/internal/appmanagement"
+	"github.com/mingzaily/mailwake/internal/coreidentity"
 	"github.com/mingzaily/mailwake/internal/delivery"
 	"github.com/mingzaily/mailwake/internal/engine"
 	"github.com/mingzaily/mailwake/internal/fault"
@@ -26,7 +26,7 @@ import (
 // Manager owns independent mailbox lifetimes and one global delivery dispatcher.
 // Map locks only protect membership. Network tests hold no configuration locks.
 type Manager struct {
-	appManagement    *appmanagement.Service
+	identity         *coreidentity.Store
 	native           *native.Service
 	nativeDone       chan struct{}
 	mu               sync.RWMutex
@@ -71,23 +71,23 @@ type mailboxRuntime struct {
 	done                         chan struct{}
 }
 
-type Options struct{ IMAPRootCAs, RelayRootCAs, DeliveryRootCAs *x509.CertPool }
+type Options struct{ IMAPRootCAs, DeliveryRootCAs *x509.CertPool }
 
-func New(ctx context.Context, store *storage.Store, vault *settings.Vault, log *slog.Logger, relayURL string) (*Manager, error) {
-	return NewWithOptions(ctx, store, vault, log, relayURL, Options{})
+// Dependencies are assembled before the manager starts its workers.
+type Dependencies struct {
+	Identity *coreidentity.Store
+	Native   *native.Service
 }
-func NewWithOptions(ctx context.Context, store *storage.Store, vault *settings.Vault, log *slog.Logger, relayURL string, options Options) (*Manager, error) {
-	return newManagerWithOptions(ctx, store, vault, log, relayURL, func(m settings.Mailbox) mail.Source {
+
+func New(ctx context.Context, store *storage.Store, vault *settings.Vault, log *slog.Logger, dependencies Dependencies, options Options) (*Manager, error) {
+	return newManagerWithFactories(ctx, store, vault, log, dependencies, func(m settings.Mailbox) mail.Source {
 		return imapsource.NewWithOptions(m.Host, m.Port, m.Username, m.Password, log.With("mailbox_id", m.ID), imapsource.Options{RootCAs: localtls.Roots(m.Host, options.IMAPRootCAs)})
 	}, func(d settings.Delivery) delivery.Sender {
 		return senderWithOptions(d, options.DeliveryRootCAs)
-	}, options)
+	})
 }
-func newManager(ctx context.Context, store *storage.Store, vault *settings.Vault, log *slog.Logger, relayURL string, sourceFactory func(settings.Mailbox) mail.Source, senderFactory func(settings.Delivery) delivery.Sender) (*Manager, error) {
-	return newManagerWithOptions(ctx, store, vault, log, relayURL, sourceFactory, senderFactory, Options{})
-}
-func newManagerWithOptions(ctx context.Context, store *storage.Store, vault *settings.Vault, log *slog.Logger, relayURL string, sourceFactory func(settings.Mailbox) mail.Source, senderFactory func(settings.Delivery) delivery.Sender, options Options) (*Manager, error) {
-	m := &Manager{store: store, settings: settings.NewRepository(store, vault), log: log, mailboxes: make(map[string]*mailboxRuntime), identities: make(map[string]mailboxIdentity), discovery: make(chan struct{}, 2), newSource: sourceFactory, newSender: senderFactory}
+func newManagerWithFactories(ctx context.Context, store *storage.Store, vault *settings.Vault, log *slog.Logger, dependencies Dependencies, sourceFactory func(settings.Mailbox) mail.Source, senderFactory func(settings.Delivery) delivery.Sender) (*Manager, error) {
+	m := &Manager{identity: dependencies.Identity, native: dependencies.Native, store: store, settings: settings.NewRepository(store, vault), log: log, mailboxes: make(map[string]*mailboxRuntime), identities: make(map[string]mailboxIdentity), discovery: make(chan struct{}, 2), newSource: sourceFactory, newSender: senderFactory}
 	saved, err := m.settings.Mailboxes(ctx)
 	if err != nil {
 		return nil, err
@@ -131,12 +131,7 @@ func newManagerWithOptions(ctx context.Context, store *storage.Store, vault *set
 		m.mailboxes[s.ID] = b
 	}
 	m.publishIdentities()
-	m.native, err = native.NewWithOptions(store, vault, relayURL, log, native.ClientOptions{RootCAs: options.RelayRootCAs})
-	if err != nil {
-		return nil, err
-	}
 	m.native.SetPairingRevoker(m.revokeNativePairing)
-	m.appManagement = &appmanagement.Service{Store: store, Native: m.native}
 	m.ctx, m.cancel = context.WithCancel(ctx)
 	var channel delivery.Sender
 	if m.delivery.Channel != "" {
@@ -233,8 +228,8 @@ func (m *Manager) mailbox(id string) (*mailboxRuntime, error) {
 	}
 	return b, nil
 }
-func (m *Manager) Mailboxes() []map[string]any {
-	views := []map[string]any{}
+func (m *Manager) Mailboxes() []settings.MailboxView {
+	views := []settings.MailboxView{}
 	for _, b := range m.snapshot() {
 		if state := b.state.Load(); state != nil {
 			views = append(views, state.config.View(b.budget.InUse()))
@@ -242,14 +237,14 @@ func (m *Manager) Mailboxes() []map[string]any {
 	}
 	return views
 }
-func (m *Manager) Mailbox(id string) (map[string]any, error) {
+func (m *Manager) Mailbox(id string) (settings.MailboxView, error) {
 	b, err := m.mailbox(id)
 	if err != nil {
-		return nil, err
+		return settings.MailboxView{}, err
 	}
 	state := b.state.Load()
 	if state == nil {
-		return nil, fault.New("mailbox_not_found")
+		return settings.MailboxView{}, fault.New("mailbox_not_found")
 	}
 	return state.config.View(b.budget.InUse()), nil
 }
@@ -296,37 +291,37 @@ func probeMailbox(ctx context.Context, source mail.Source) (*mail.FolderDiscover
 	}
 	return folders, nil
 }
-func (m *Manager) CreateMailbox(ctx context.Context, input settings.MailboxUpdate) (map[string]any, error) {
+func (m *Manager) CreateMailbox(ctx context.Context, input settings.MailboxUpdate) (settings.MailboxView, error) {
 	if err := m.beginDiscovery(); err != nil {
-		return nil, err
+		return settings.MailboxView{}, err
 	}
 	defer m.endDiscovery()
 	m.mu.RLock()
 	full := len(m.mailboxes) >= storage.MaxMailboxes
 	m.mu.RUnlock()
 	if full {
-		return nil, fault.New("mailbox_limit_exceeded")
+		return settings.MailboxView{}, fault.New("mailbox_limit_exceeded")
 	}
 	base := settings.NewMailbox()
 	next, err := base.Merge(input)
 	if err != nil {
-		return nil, err
+		return settings.MailboxView{}, err
 	}
 	b := &mailboxRuntime{config: next, budget: mail.NewConnectionBudget(next.Limit())}
 	b.source = b.budget.Wrap(m.newSource(next))
 	if _, err := probeMailbox(ctx, b.source); err != nil {
-		return nil, err
+		return settings.MailboxView{}, err
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if err := m.ctx.Err(); err != nil {
-		return nil, err
+		return settings.MailboxView{}, err
 	}
 	if err := m.checkDuplicate(next); err != nil {
-		return nil, err
+		return settings.MailboxView{}, err
 	}
 	if err := m.settings.SaveMailboxRecord(ctx, base, next, 0); err != nil {
-		return nil, err
+		return settings.MailboxView{}, err
 	}
 	m.identities[next.ID] = identityOf(next)
 	m.publishIdentities()
@@ -541,11 +536,11 @@ func (m *Manager) Channel() string {
 	defer m.deliveryMu.RUnlock()
 	return m.delivery.Channel
 }
-func (m *Manager) DeliveryView() map[string]any {
+func (m *Manager) DeliveryView() settings.DeliveryView {
 	m.deliveryMu.RLock()
 	defer m.deliveryMu.RUnlock()
 	view := m.delivery.View()
-	view["native_available"] = m.native.Available()
+	view.NativeAvailable = m.native.Available()
 	return view
 }
 func (m *Manager) TestDelivery(ctx context.Context, input settings.DeliveryUpdate) error {
@@ -690,8 +685,6 @@ func (m *Manager) beginDiscovery() error {
 }
 func (m *Manager) endDiscovery() { <-m.discovery }
 
-func (m *Manager) Native() *native.Service { return m.native }
-
 func (m *Manager) deliverySender(d settings.Delivery) delivery.Sender {
 	if d.Channel == "" {
 		return nil
@@ -701,8 +694,6 @@ func (m *Manager) deliverySender(d settings.Delivery) delivery.Sender {
 	}
 	return m.newSender(d)
 }
-
-func (m *Manager) AppManagement() *appmanagement.Service { return m.appManagement }
 
 func (m *Manager) DeleteDelivery(ctx context.Context, revision int64) error {
 	m.deliveryMu.Lock()

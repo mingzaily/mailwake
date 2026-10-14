@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/mingzaily/mailwake/internal/logging"
 	"io"
 	"log/slog"
 	"net"
@@ -14,13 +13,14 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/mingzaily/mailwake/internal/application"
 	"github.com/mingzaily/mailwake/internal/auth"
 	"github.com/mingzaily/mailwake/internal/buildinfo"
 	"github.com/mingzaily/mailwake/internal/config"
 	"github.com/mingzaily/mailwake/internal/fault"
 	"github.com/mingzaily/mailwake/internal/httpapi"
 	"github.com/mingzaily/mailwake/internal/i18n"
-	"github.com/mingzaily/mailwake/internal/runtime"
+	"github.com/mingzaily/mailwake/internal/logging"
 	"github.com/mingzaily/mailwake/internal/settings"
 	"github.com/mingzaily/mailwake/internal/storage"
 )
@@ -89,13 +89,13 @@ func run(log *slog.Logger) error {
 	if code != "" {
 		writeSetupCode(os.Stderr, code)
 	}
-	configuration, err := runtime.NewWithOptions(ctx, store, vault, log, c.RelayURL, runtime.Options{IMAPRootCAs: c.LocalTestTLS.IMAP, RelayRootCAs: c.LocalTestTLS.Relay, DeliveryRootCAs: c.LocalTestTLS.Delivery})
+	configuration, err := application.New(ctx, store, vault, log, c.RelayURL, application.Options{IMAPRootCAs: c.LocalTestTLS.IMAP, RelayRootCAs: c.LocalTestTLS.Relay, DeliveryRootCAs: c.LocalTestTLS.Delivery})
 	if err != nil {
 		return err
 	}
 	defer configuration.Close()
 	gin.SetMode(gin.ReleaseMode)
-	server := &http.Server{Handler: httpapi.New(authService, configuration, store, log), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 40 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10}
+	server := &http.Server{Handler: httpapi.New(authService, configuration.Manager, store, log, httpapi.Integrations{Native: configuration.Native, Management: configuration.Management}), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 40 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10}
 	listener, err := net.Listen("tcp", c.Listen)
 	if err != nil {
 		return fault.New("http_listen_failed")

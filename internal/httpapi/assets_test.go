@@ -19,7 +19,7 @@ func TestEmbeddedManagementAssetsAndSecurityHeaders(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer store.Close()
-	router := New(auth.New(store, slog.Default()), newTestRuntime("", nil, nil), store, slog.Default())
+	router := New(auth.New(store, slog.Default()), newTestRuntime("", nil, nil), store, slog.Default(), Integrations{})
 	paths := []string{"/"}
 	fs.WalkDir(assets, "webdist", func(name string, entry fs.DirEntry, err error) error {
 		if err != nil {
@@ -112,7 +112,7 @@ func TestManagementPageNoncesAreUnique(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer store.Close()
-	router := New(auth.New(store, slog.Default()), newTestRuntime("", nil, nil), store, slog.Default())
+	router := New(auth.New(store, slog.Default()), newTestRuntime("", nil, nil), store, slog.Default(), Integrations{})
 	first := httptest.NewRecorder()
 	second := httptest.NewRecorder()
 	router.ServeHTTP(first, httptest.NewRequest("GET", "/", nil))

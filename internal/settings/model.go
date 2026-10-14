@@ -208,15 +208,6 @@ func (m Mailbox) Limit() int {
 	return m.ConnectionLimit
 }
 
-// Public views use explicit allowlists. URLs that may carry credentials stay write-only.
-func configured(value string) map[string]bool { return map[string]bool{"configured": value != ""} }
-func (m Mailbox) View(connections int) map[string]any {
-	return map[string]any{"id": m.ID, "label": m.Label, "revision": m.Revision, "connection_limit": m.Limit(), "connections_in_use": connections, "host": m.Host, "port": m.Port, "username": m.Username, "password": configured(m.Password)}
-}
-func (d Delivery) View() map[string]any {
-	return map[string]any{"native_pairing_id": d.NativePairingID, "revision": d.Revision, "channel": d.Channel, "preview": d.Preview, "retry_count": d.RetryCount, "language": d.Language, "bark": map[string]any{"endpoint": d.Bark.Endpoint, "key": configured(d.Bark.Key)}, "pushover": map[string]any{"token": configured(d.Pushover.Token), "user": configured(d.Pushover.User)}, "webhook": map[string]any{"url": configured(d.Webhook.URL), "secret": configured(d.Webhook.Secret)}}
-}
-
 func NewMailbox() Mailbox { return Mailbox{ID: "mbx_" + rand.Text()} }
 
 func (d Delivery) RecordsPreview() bool { return d.Channel == "native" || d.Preview == "subject" }

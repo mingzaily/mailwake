@@ -17,10 +17,13 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/mingzaily/mailwake/internal/appmanagement"
 	"github.com/mingzaily/mailwake/internal/auth"
 	"github.com/mingzaily/mailwake/internal/engine"
 	"github.com/mingzaily/mailwake/internal/fault"
 	"github.com/mingzaily/mailwake/internal/i18n"
+	"github.com/mingzaily/mailwake/internal/mail"
+	"github.com/mingzaily/mailwake/internal/native"
 	"github.com/mingzaily/mailwake/internal/storage"
 )
 
@@ -30,7 +33,13 @@ var assets embed.FS
 //go:embed placeholder.html
 var placeholder []byte
 
-func New(authService *auth.Service, runtime Runtime, store *storage.Store, log *slog.Logger) http.Handler {
+// Integrations keeps optional App and push services explicit at the HTTP boundary.
+type Integrations struct {
+	Native     *native.Service
+	Management *appmanagement.Service
+}
+
+func New(authService *auth.Service, runtime Runtime, store *storage.Store, log *slog.Logger, integrations Integrations) http.Handler {
 	styleHashes := managementStyleHashes(assets)
 	r := gin.New()
 	_ = r.SetTrustedProxies([]string{"127.0.0.0/8", "::1/128", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7"})
@@ -143,11 +152,26 @@ func New(authService *auth.Service, runtime Runtime, store *storage.Store, log *
 	logsRoute(api, log)
 	sessionRoutes(api, authService)
 	tokenRoutes(api, authService)
-	settingsRoutes(api, runtime)
-	nativeRoutes(api, runtime)
-	appManagementRoutes(r, api, runtime, store)
-	mailboxRoutes(api, runtime)
-	managementRoutes(api, runtime, store)
+	delivery := deliveryHandlers{runtime: runtime}
+	api.GET("/settings/delivery", delivery.Get)
+	api.PUT("/settings/delivery", delivery.Update)
+	api.POST("/settings/delivery/test", delivery.Test)
+	api.DELETE("/settings/delivery", delivery.Delete)
+	nativeRoutes(api, integrations.Native)
+	appManagementRoutes(r, api, runtime, store, integrations.Management)
+	mailboxes := mailboxHandlers{runtime: runtime}
+	api.GET("/mailboxes", mailboxes.List)
+	api.POST("/mailboxes", mailboxes.Create)
+	api.GET("/mailboxes/:id", mailboxes.Get)
+	api.PUT("/mailboxes/:id", mailboxes.Update)
+	api.DELETE("/mailboxes/:id", mailboxes.Delete)
+	api.GET("/mailboxes/:id/folders", mailboxes.Folders)
+	api.GET("/mailboxes/:id/subscriptions", mailboxes.Subscriptions)
+	api.PUT("/mailboxes/:id/subscriptions", mailboxes.UpdateSubscriptions)
+	testMailbox := mailboxTestHandler(runtime, func(c *gin.Context, folders *mail.FolderDiscovery) { c.JSON(200, folders) })
+	api.POST("/mailboxes/test", testMailbox)
+	api.POST("/mailboxes/:id/test", testMailbox)
+	api.GET("/diagnostics", diagnosticsHandler(runtime, store))
 	api.GET("/status", statusHandler(runtime, store))
 	api.GET("/deliveries", deliveriesHandler(store))
 	api.DELETE("/deliveries", func(c *gin.Context) {
@@ -230,7 +254,7 @@ func managementIndex(files fs.FS) ([]byte, error) {
 	return data, err
 }
 
-func statusHandler(runtime Runtime, store *storage.Store) gin.HandlerFunc {
+func statusHandler(runtime DiagnosticsRuntime, store *storage.Store) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		summary, err := store.Summary(c.Request.Context())
 		if err != nil {
@@ -255,7 +279,7 @@ func statusHandler(runtime Runtime, store *storage.Store) gin.HandlerFunc {
 				databaseError(c)
 				return
 			}
-			target, _ := runtime.DeliveryView()["native_pairing_id"].(string)
+			target := runtime.DeliveryView().NativePairingID
 			found := false
 			for _, device := range devices {
 				if device.ID == target {

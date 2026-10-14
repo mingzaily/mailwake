@@ -69,7 +69,7 @@ func (s *Service) checkActivePairing(ctx context.Context, p storage.NativePairin
 	if err != nil {
 		return err
 	}
-	identity, err := s.identity.load(ctx)
+	identity, err := s.identity.Load(ctx)
 	if err != nil {
 		return err
 	}

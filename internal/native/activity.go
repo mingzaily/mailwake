@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/mingzaily/mailwake/internal/coreidentity"
 	"github.com/mingzaily/mailwake/internal/event"
 	"github.com/mingzaily/mailwake/internal/storage"
 )
@@ -31,12 +32,12 @@ type activityContent struct {
 	Notification plaintext `json:"notification"`
 }
 
-func (s *Service) planActivities(n event.Notification, devices []storage.NativePairing, identity *Identity, audience string) ([]storage.NativeActivity, error) {
+func (s *Service) planActivities(n event.Notification, devices []storage.NativePairing, identity *coreidentity.Identity, audience string) ([]storage.NativeActivity, error) {
 	expiresAt := n.ReceivedAt.Unix() + 600
 	if n.Test || n.Code == "" || expiresAt <= time.Now().Unix() {
 		return nil, nil
 	}
-	reference, err := messageReference(identity, n)
+	reference, err := identity.MessageReference(n)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +56,7 @@ func (s *Service) planActivities(n event.Notification, devices []storage.NativeP
 		if err != nil {
 			return nil, err
 		}
-		request.Signature, err = sign(identity.Key, contentText(audience, device.ID, contextID, request.Envelope))
+		request.Signature, err = coreidentity.Sign(identity.Key, contentText(audience, device.ID, contextID, request.Envelope))
 		if err != nil {
 			return nil, err
 		}
@@ -67,24 +68,59 @@ func (s *Service) planActivities(n event.Notification, devices []storage.NativeP
 
 // pollActivities is separate from ordinary delivery outcomes and never changes their status.
 func (s *Service) pollActivities(ctx context.Context) error {
-	items, err := s.store.PendingNativeActivities(ctx)
+	return s.pollActivitiesAt(ctx, time.Now)
+}
+
+func (s *Service) pollActivitiesAt(ctx context.Context, now func() time.Time) error {
+	items, err := s.store.DueNativeActivities(ctx, now())
 	if err != nil || len(items) == 0 {
 		return err
 	}
+	eligible := items[:0]
+	for _, item := range items {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if item.ExpiresAt <= now().Unix() {
+			if err := s.store.FinishNativeActivity(ctx, item, "failed"); err != nil {
+				return err
+			}
+			continue
+		}
+		eligible = append(eligible, item)
+	}
+	if len(eligible) == 0 {
+		return nil
+	}
 	info, err := s.ensure(ctx)
 	if err != nil {
-		return err
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if !nativeFailure(err).Retryable {
+			return err
+		}
+		for _, item := range eligible {
+			if err := s.recordActivityResult(ctx, item, err, now()); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
-	identity, err := s.identity.load(ctx)
+	identity, err := s.identity.Load(ctx)
 	if err != nil {
 		return err
 	}
-	for _, item := range items {
+	for _, item := range eligible {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		pairing, err := s.store.NativePairing(ctx, item.PairingID)
 		if err != nil && safeCode(err) != "native_pairing_not_found" {
 			return err
 		}
-		if item.ExpiresAt <= time.Now().Unix() || pairing.State != "active" {
+		// Earlier requests can consume the lifetime or revoke this pairing.
+		if item.ExpiresAt <= now().Unix() || pairing.State != "active" {
 			if err := s.store.FinishNativeActivity(ctx, item, "failed"); err != nil {
 				return err
 			}
@@ -94,21 +130,32 @@ func (s *Service) pollActivities(ctx context.Context) error {
 			ID string `json:"id"`
 		}
 		err = s.client.call(ctx, identity, info.Audience, "POST", "/v1/activities", json.RawMessage(item.Request), &result, 202)
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		if err != nil && nativeFailure(err).HTTPStatus == 410 && pairingGone(nativeFailure(err)) {
 			if err := s.revoke(ctx, item.PairingID); err != nil {
 				return err
 			}
 		}
-		if err != nil && nativeFailure(err).Retryable {
-			continue
-		}
-		state := "accepted"
-		if err != nil {
-			state = "failed"
-		}
-		if err := s.store.FinishNativeActivity(ctx, item, state); err != nil {
+		if err := s.recordActivityResult(ctx, item, err, now()); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func (s *Service) recordActivityResult(ctx context.Context, item storage.NativeActivity, err error, now time.Time) error {
+	if err == nil {
+		return s.store.FinishNativeActivity(ctx, item, "accepted")
+	}
+	failure := nativeFailure(err)
+	if failure.Retryable {
+		delay := max(min(30*time.Second<<min(item.Failures, 4), 5*time.Minute), failure.RetryAfter)
+		// Compare the duration before adding it so an excessive Retry-After cannot overflow a timestamp.
+		if remaining := time.Unix(item.ExpiresAt, 0).Sub(now); delay < remaining {
+			return s.store.DelayNativeActivity(ctx, item, now.Add(delay))
+		}
+	}
+	return s.store.FinishNativeActivity(ctx, item, "failed")
 }

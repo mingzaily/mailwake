@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/mingzaily/mailwake/internal/coreidentity"
 	"github.com/mingzaily/mailwake/internal/fault"
 	"github.com/mingzaily/mailwake/internal/native"
 	"github.com/mingzaily/mailwake/internal/storage"
@@ -61,8 +62,9 @@ func Scopes(values []string) ([]string, error) {
 }
 
 type Service struct {
-	Store  *storage.Store
-	Native *native.Service
+	Identity *coreidentity.Store
+	Store    *storage.Store
+	Native   *native.Service
 }
 
 type InvitationInput struct {
@@ -88,7 +90,7 @@ func (s *Service) Create(ctx context.Context, input InvitationInput) (Invitation
 	if !input.Management && !input.Native {
 		return Invitation{}, fault.New("request_invalid")
 	}
-	identity, err := s.Native.CoreIdentity(ctx)
+	identity, err := s.Identity.Load(ctx)
 	if err != nil {
 		return Invitation{}, err
 	}
@@ -142,7 +144,7 @@ type Credential struct {
 
 // Accept consumes a management invitation and returns the device's credential.
 func (s *Service) Accept(ctx context.Context, input AcceptInput) (Credential, error) {
-	deviceID, err := native.KeyID(input.SigningKey)
+	deviceID, err := coreidentity.KeyID(input.SigningKey)
 	if err != nil {
 		return Credential{}, fault.New("request_invalid")
 	}
@@ -150,7 +152,7 @@ func (s *Service) Accept(ctx context.Context, input AcceptInput) (Credential, er
 	if name == "" || len([]rune(name)) > 64 {
 		return Credential{}, fault.New("request_invalid")
 	}
-	identity, err := s.Native.CoreIdentity(ctx)
+	identity, err := s.Identity.Load(ctx)
 	if err != nil {
 		return Credential{}, err
 	}

@@ -71,6 +71,12 @@ Form footers align actions to the right of their own card, with the primary save
 
 Successful operations and transient failures use the shared toast. Validation messages remain beside fields; configuration conflicts retain their reload action in the form. Query failures and ongoing connection problems use persistent page alerts. Native modal failures stay inside the modal so they remain visible above the browser's top layer. Multiple messages use Sonner’s toast stack.
 
-Notification settings lock their form controls while a save is pending. Successful saves apply the returned revision and values; failed saves preserve the draft and restore editing. The overview reports healthy status only after a successful status read. Initial loading shows a loading state, and failed reads show an error even when cached status data exists.
+Mailbox, subscription and notification settings lock their editable controls while a save is pending. Subscription locking lasts through revision refresh and completion callbacks. Successful saves apply the returned revision and values; failed saves preserve the draft and restore editing. The overview reports healthy status only after a successful status read. Initial loading shows a loading state, and failed reads show an error even when cached status data exists.
 
 The authorized App list combines management devices, notification capability and available push devices. It shows loading until all required reads finish, shows query failures before an empty state, and refreshes errors and cached data through the existing foreground polling. Creating an invitation requires a successful notification capability read.
+
+### Page loading
+
+Login, first-time setup, the authenticated shell and each console page load through explicit dynamic imports. Shared branding and the connection-budget display live in independent components so public screens and mailbox forms use only their own dependencies. The mailbox schema loads with the mailbox editor; shared form helpers keep login and navigation independent of that validation bundle. Page loading retains the shell and navigation, announces a localized loading state and preserves drafts across ordinary rerenders. Route changes reset the page boundary.
+
+A failed module download or render shows a localized error and an explicit Reload action. The user can navigate to another page while the shell remains available. Reload fetches the current application document, including current asset hashes after a Core update. Pages use same-origin modules under the existing CSP and immutable hashed-asset cache policy. Runtime failures keep the current document open until the user chooses an action.

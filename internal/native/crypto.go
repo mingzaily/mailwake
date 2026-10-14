@@ -5,19 +5,16 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/ecdh"
-	"crypto/ecdsa"
-	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/x509"
-	"encoding/asn1"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"io"
-	"math/big"
 	"strings"
 
+	"github.com/mingzaily/mailwake/internal/coreidentity"
 	"github.com/mingzaily/mailwake/internal/fault"
 	"golang.org/x/crypto/hkdf"
 )
@@ -31,62 +28,6 @@ func decode(value string, size int) ([]byte, error) {
 		return nil, fault.New("native_protocol_invalid")
 	}
 	return b, nil
-}
-func PublicKey(value string) (*ecdsa.PublicKey, error) {
-	b, err := decode(value, 91)
-	if err != nil {
-		return nil, err
-	}
-	p, err := x509.ParsePKIXPublicKey(b)
-	if err != nil {
-		return nil, fault.New("native_protocol_invalid")
-	}
-	key, ok := p.(*ecdsa.PublicKey)
-	if !ok || key.Curve != elliptic.P256() {
-		return nil, fault.New("native_protocol_invalid")
-	}
-	canonical, err := x509.MarshalPKIXPublicKey(key)
-	if err != nil || encoding.EncodeToString(canonical) != value {
-		return nil, fault.New("native_protocol_invalid")
-	}
-	return key, nil
-}
-func KeyID(value string) (string, error) {
-	if _, err := PublicKey(value); err != nil {
-		return "", err
-	}
-	b, _ := decode(value, 91)
-	return hash(b), nil
-}
-func sign(key *ecdsa.PrivateKey, text string) (string, error) {
-	digest := sha256.Sum256([]byte(text))
-	der, err := ecdsa.SignASN1(rand.Reader, key, digest[:])
-	if err != nil {
-		return "", err
-	}
-	var pair struct{ R, S *big.Int }
-	if _, err = asn1.Unmarshal(der, &pair); err != nil {
-		return "", err
-	}
-	raw := make([]byte, 64)
-	pair.R.FillBytes(raw[:32])
-	pair.S.FillBytes(raw[32:])
-	return encoding.EncodeToString(raw), nil
-}
-func verify(key, signature, text string) error {
-	pub, err := PublicKey(key)
-	if err != nil {
-		return err
-	}
-	raw, err := decode(signature, 64)
-	if err != nil {
-		return err
-	}
-	digest := sha256.Sum256([]byte(text))
-	if !ecdsa.Verify(pub, digest[:], new(big.Int).SetBytes(raw[:32]), new(big.Int).SetBytes(raw[32:])) {
-		return fault.New("native_signature_invalid")
-	}
-	return nil
 }
 func requestText(audience, role, id, method, path, timestamp, nonce string, body []byte, authorization string) string {
 	return strings.Join([]string{"mailwake-request-v1", audience, role, id, method, path, timestamp, nonce, hash(body), hash([]byte(authorization))}, "\n")
@@ -127,7 +68,7 @@ func encryptWith(audience, pairingID, eventID, key string, plain []byte, ephemer
 	if len(plain) == 0 || len(plain) > 2032 {
 		return Envelope{}, fault.New("native_payload_too_large")
 	}
-	pub, err := PublicKey(key)
+	pub, err := coreidentity.PublicKey(key)
 	if err != nil {
 		return Envelope{}, err
 	}

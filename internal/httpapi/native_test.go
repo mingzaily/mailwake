@@ -16,7 +16,7 @@ func TestNativeRoutesKeepAuthenticationAndUnavailableBoundary(t *testing.T) {
 	}
 	defer store.Close()
 	auth, grant := testAdministrator(t, store)
-	router := New(auth, newTestRuntime("", nil, nil), store, slog.Default())
+	router := New(auth, newTestRuntime("", nil, nil), store, slog.Default(), Integrations{})
 	for _, route := range []struct{ method, path string }{{"POST", "/api/v1/native/pairings"}, {"GET", "/api/v1/native/pairings/test"}, {"GET", "/api/v1/native/devices"}, {"DELETE", "/api/v1/native/devices/test"}} {
 		req := httptest.NewRequest(route.method, route.path, nil)
 		w := httptest.NewRecorder()
@@ -42,7 +42,7 @@ func TestNativeOverviewRequiresActiveDevice(t *testing.T) {
 	defer store.Close()
 	auth, grant := testAdministrator(t, store)
 	runtime := newTestRuntime("native", nil, nil)
-	router := New(auth, runtime, store, slog.Default())
+	router := New(auth, runtime, store, slog.Default(), Integrations{})
 	req := httptest.NewRequest("GET", "/api/v1/status", nil)
 	authorizeSession(req, grant)
 	req.Header.Set("Accept-Language", "zh-CN")

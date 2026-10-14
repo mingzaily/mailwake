@@ -22,11 +22,13 @@ export function FolderSelection({
   folders,
   available,
   roles = {},
+  disabled = false,
   onChange,
 }: {
   folders: Folder[];
   available: string[];
   roles?: Record<string, string>;
+  disabled?: boolean;
   onChange: (folders: Folder[]) => void;
 }) {
   const { t } = useI18n();
@@ -38,7 +40,7 @@ export function FolderSelection({
     folders.map((folder) => [folder.name, folder]),
   );
   return (
-    <FieldSet>
+    <FieldSet disabled={disabled}>
       <FieldLegend>{t("ui.choose_folders")}</FieldLegend>
       {names.length ? (
         <Table>
@@ -60,6 +62,7 @@ export function FolderSelection({
                     <Field orientation="horizontal">
                       <Checkbox
                         id={`${id}-${index}`}
+                        disabled={disabled}
                         checked={!!selected}
                         onCheckedChange={(checked) =>
                           onChange(
@@ -84,7 +87,7 @@ export function FolderSelection({
                       className="min-w-36"
                       aria-label={`${label} ${t("ui.check")}`}
                       value={selected?.check ?? "5m"}
-                      disabled={!selected}
+                      disabled={disabled || !selected}
                       onChange={(event) =>
                         onChange(
                           folders.map((folder) =>

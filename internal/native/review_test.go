@@ -149,7 +149,7 @@ func TestRelayDateCalibratesSignedRequestTimestamp(t *testing.T) {
 			if _, err := service.Create(t.Context()); err != nil {
 				t.Fatal(err)
 			}
-			identity, err := service.identity.load(t.Context())
+			identity, err := service.identity.Load(t.Context())
 			if err != nil {
 				t.Fatal(err)
 			}

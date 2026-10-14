@@ -12,7 +12,7 @@ import { Button } from "./ui/button";
 import { Alert, AlertDescription } from "./ui/alert";
 import { BusyButton, ErrorNotice, useToast } from "./common";
 import { FolderSelection } from "./folder-selection";
-import { Budget } from "./shell";
+import { Budget } from "./budget";
 import {
   Table,
   TableBody,

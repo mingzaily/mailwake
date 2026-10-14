@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { lazy, useEffect, useState } from "react";
 import {
   keepPreviousData,
   QueryClient,
@@ -15,20 +15,25 @@ import {
   useI18n,
 } from "./lib/i18n";
 import { navigate, useRoute } from "./lib/router";
-import { AuthScreen } from "./components/auth-screen";
-import { Shell } from "./components/shell";
 import { ErrorNotice, ToastProvider } from "./components/common";
-import { SetupWizard } from "./components/setup";
-import { AppSettings } from "./pages/app-settings";
-import { Settings } from "./pages/settings";
-import { Diagnostics } from "./pages/diagnostics";
+import { PageBoundary } from "./components/page-boundary";
+import { ConsolePage } from "./console-page";
 import { applyTheme } from "./lib/preferences";
-import { Notifications } from "./pages/notifications";
-import { Deliveries } from "./pages/deliveries";
-import { Logs } from "./pages/logs";
-import { Overview } from "./pages/overview";
-import { Mailboxes } from "./pages/mailboxes";
 import type { Language } from "./lib/types";
+
+const AuthScreen = lazy(() =>
+  import("./components/auth-screen").then((module) => ({
+    default: module.AuthScreen,
+  })),
+);
+const Shell = lazy(() =>
+  import("./components/shell").then((module) => ({ default: module.Shell })),
+);
+const SetupWizard = lazy(() =>
+  import("./components/setup").then((module) => ({
+    default: module.SetupWizard,
+  })),
+);
 
 const client = new QueryClient({
   defaultOptions: {
@@ -88,73 +93,51 @@ function Console() {
     );
   if (!authenticated)
     return (
-      <AuthScreen
-        setup={setup}
-        error={
-          session.error &&
-          (!(session.error instanceof APIError) ||
-            (session.error.status !== 401 &&
-              session.error.failure.code !== "setup_required"))
-            ? session.error
-            : undefined
-        }
-        onSuccess={() => {
-          void session.refetch();
-          setAuthenticated(true);
-          setWizard(setup);
-          setSetup(false);
-          navigate(setup ? "setup" : "overview");
-        }}
-      />
+      <PageBoundary key="auth">
+        <AuthScreen
+          setup={setup}
+          error={
+            session.error &&
+            (!(session.error instanceof APIError) ||
+              (session.error.status !== 401 &&
+                session.error.failure.code !== "setup_required"))
+              ? session.error
+              : undefined
+          }
+          onSuccess={() => {
+            void session.refetch();
+            setAuthenticated(true);
+            setWizard(setup);
+            setSetup(false);
+            navigate(setup ? "setup" : "overview");
+          }}
+        />
+      </PageBoundary>
     );
   if (wizard)
     return (
-      <SetupWizard
-        done={() => {
-          setWizard(false);
-          navigate("notifications");
-        }}
-      />
+      <PageBoundary key="setup">
+        <SetupWizard
+          done={() => {
+            setWizard(false);
+            navigate("notifications");
+          }}
+        />
+      </PageBoundary>
     );
   return (
-    <Shell
-      username={session.data?.username}
-      page={page}
-      mailboxId={id}
-      logout={() => void logout()}
-    >
-      <ErrorNotice error={error} />
-      <ConsolePage page={page} id={id} view={view} />
-    </Shell>
+    <PageBoundary key="console">
+      <Shell
+        username={session.data?.username}
+        page={page}
+        mailboxId={id}
+        logout={() => void logout()}
+      >
+        <ErrorNotice error={error} />
+        <ConsolePage page={page} id={id} view={view} />
+      </Shell>
+    </PageBoundary>
   );
-}
-function ConsolePage({
-  page,
-  id,
-  view,
-}: {
-  page: string;
-  id?: string;
-  view?: string;
-}) {
-  switch (page) {
-    case "mailboxes":
-      return <Mailboxes id={id} view={view} />;
-    case "app_settings":
-      return <AppSettings />;
-    case "notifications":
-      return <Notifications />;
-    case "deliveries":
-      return <Deliveries />;
-    case "logs":
-      return <Logs />;
-    case "settings":
-      return <Settings />;
-    case "diagnostics":
-      return <Diagnostics />;
-    default:
-      return <Overview />;
-  }
 }
 function LocalizedConsole() {
   const [language, setLanguage] = useState<Language | undefined>(() => {

@@ -2,11 +2,11 @@ package httpapi
 
 import (
 	"encoding/json"
-
-	"github.com/mingzaily/mailwake/internal/storage"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/mingzaily/mailwake/internal/storage"
 )
 
 func TestTokenLifecycle(t *testing.T) {
@@ -16,7 +16,7 @@ func TestTokenLifecycle(t *testing.T) {
 	}
 	defer s.Close()
 	a, g := testAdministrator(t, s)
-	r := New(a, newTestRuntime("", nil, nil), s, nil)
+	r := New(a, newTestRuntime("", nil, nil), s, nil, Integrations{})
 	req := httptest.NewRequest("POST", "/api/v1/tokens", strings.NewReader(`{"name":"automation"}`))
 	authorizeSession(req, g)
 	w := httptest.NewRecorder()

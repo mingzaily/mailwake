@@ -18,6 +18,8 @@ The development version creates new databases from `internal/storage/migrations/
 
 Before the first release, schema changes update the baseline directly. Development fixtures should use a fresh temporary directory when the schema changes.
 
+Activity submissions persist `failures` and `next_attempt` alongside the encrypted request and original expiry. A partial pending-work index supports the bounded due query. Terminal completion clears the encrypted request; late retry scheduling updates only pending rows. These fields belong to the initial schema baseline. Development databases created with an older baseline require a fresh data directory; the pre-release schema has no historical migration path.
+
 ## Backup and recovery
 
 Stop Core, back up the complete directory, then restart it. Restore the database and `secret.key` from the same backup while Core is stopped. See the [deployment guide](https://mailwake.oritx.com/en/docs/backup/) for Docker backup commands, upgrades and administrator recovery.

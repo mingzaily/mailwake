@@ -37,7 +37,7 @@ func TestIMAPResponseCodeInStatusAndDiagnostics(t *testing.T) {
 			{Folder: "private-folder", State: "reconnecting", LastError: &fault.Error{Code: errorCode, Params: params}},
 			{Folder: "other-private-folder", State: "reconnecting", LastError: &fault.Error{Code: "request_failed", Params: map[string]string{"response_code": "unrelated-private-value"}}},
 		}}
-		router := New(auth, runtime, store, slog.Default())
+		router := New(auth, runtime, store, slog.Default(), Integrations{})
 		for _, locale := range []string{"en", "zh-CN"} {
 			for _, route := range []string{"status", "diagnostics"} {
 				t.Run(code+"/"+locale+"/"+route, func(t *testing.T) {

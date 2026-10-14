@@ -21,8 +21,8 @@ import (
 	protocol "github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapserver"
 	"github.com/emersion/go-imap/v2/imapserver/imapmemserver"
+	"github.com/mingzaily/mailwake/internal/application"
 	"github.com/mingzaily/mailwake/internal/mail"
-	"github.com/mingzaily/mailwake/internal/runtime"
 	"github.com/mingzaily/mailwake/internal/settings"
 	"github.com/mingzaily/mailwake/internal/storage"
 )
@@ -79,13 +79,13 @@ func TestMailboxHTTPWithRealRuntime(t *testing.T) {
 		t.Fatal(err)
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	manager, err := runtime.New(t.Context(), store, vault, logger, "")
+	manager, err := application.New(t.Context(), store, vault, logger, "", application.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer manager.Close()
 	auth, grant := testAdministrator(t, store)
-	router := New(auth, manager, store, logger)
+	router := New(auth, manager.Manager, store, logger, Integrations{Native: manager.Native, Management: manager.Management})
 	call := func(method, path string, body any, status int) map[string]any {
 		t.Helper()
 		var raw []byte

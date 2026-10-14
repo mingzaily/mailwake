@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Brand } from "./shell";
+import { Brand } from "./brand";
 import { useI18n } from "@/lib/i18n";
 import { AppearanceControls } from "./appearance-controls";
 import { AuthForm } from "./auth";

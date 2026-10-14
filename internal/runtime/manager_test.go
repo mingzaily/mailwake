@@ -83,7 +83,7 @@ func addMailbox(t *testing.T, m *Manager, host string, limit int) (string, setti
 		t.Fatal(err)
 	}
 	input.Revision = 1
-	return view["id"].(string), input
+	return view.ID, input
 }
 func subscribeMailbox(t *testing.T, m *Manager, id string) {
 	t.Helper()
@@ -206,7 +206,7 @@ func TestMailboxBudgetAndSettingsRevisionsAreIndependent(t *testing.T) {
 	waitFor(t, func() bool { return first.opened.Load() == 1 && second.opened.Load() == 1 })
 	for _, id := range []string{a, b} {
 		view, err := m.Mailbox(id)
-		if err != nil || view["connections_in_use"] != 1 {
+		if err != nil || view.ConnectionsInUse != 1 {
 			t.Fatal(view, err)
 		}
 		if _, err := m.Folders(t.Context(), id); err != nil {
@@ -354,7 +354,7 @@ func TestMailboxPersistenceFailureRestoresOnlyItsWatcher(t *testing.T) {
 				t.Fatal("rollback interrupted another mailbox")
 			}
 			view, err := m.Mailbox(a)
-			if err != nil || view["revision"] != int64(1) {
+			if err != nil || view.Revision != int64(1) {
 				t.Fatal("failed write advanced revision", view, err)
 			}
 			if cp, _ := store.Checkpoint(t.Context(), b, "INBOX"); cp != "progress" {

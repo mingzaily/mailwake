@@ -136,6 +136,7 @@
   "ui.skip_content": "Aller au contenu",
   "ui.logout": "Déconnexion",
   "ui.loading": "Chargement…",
+  "ui.page_load_failed": "Cette page n’a pas pu être chargée. Rechargez-la pour réessayer.",
   "ui.reload": "Recharger",
   "ui.conflict": "Modification dans une autre session. Rechargez les valeurs avant d’enregistrer.",
   "ui.wait_seconds": "Réessayez dans {seconds} s.",

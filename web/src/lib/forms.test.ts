@@ -2,11 +2,10 @@ import { expect, test } from "vitest";
 import {
   connectionUsage,
   errorFields,
-  mailboxPayload,
-  mailboxSchema,
   previewOptions,
   subscriptionsPayload,
 } from "./forms";
+import { mailboxPayload, mailboxSchema } from "./mailbox-schema";
 
 test("scheduled folders share a connection while realtime folders each use one", () => {
   expect(connectionUsage([])).toBe(0);

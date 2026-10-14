@@ -136,6 +136,7 @@
   "ui.skip_content": "跳轉到內容",
   "ui.logout": "登出",
   "ui.loading": "載入中…",
+  "ui.page_load_failed": "頁面載入失敗，請重新整理後再試。",
   "ui.reload": "重新載入",
   "ui.conflict": "已在其他地方修改，請重新載入最新內容後儲存。",
   "ui.wait_seconds": "請等待 {seconds} 秒後重試。",

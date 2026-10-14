@@ -126,6 +126,9 @@ CREATE TABLE native_activities (
  pairing_id TEXT NOT NULL,
  request TEXT NOT NULL,
  expires_at INTEGER NOT NULL,
+ failures INTEGER NOT NULL DEFAULT 0 CHECK(failures>=0),
+ next_attempt INTEGER NOT NULL DEFAULT 0,
  state TEXT NOT NULL DEFAULT 'pending' CHECK(state IN ('pending','accepted','failed')),
  PRIMARY KEY(event_id,pairing_id)
 );
+CREATE INDEX native_activities_due ON native_activities(next_attempt,event_id,pairing_id) WHERE state='pending';

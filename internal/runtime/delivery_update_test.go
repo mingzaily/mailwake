@@ -42,7 +42,7 @@ func TestDeliverySavingIsIndependentOfProviderAvailability(t *testing.T) {
 			counter := &countingSender{}
 			counter.fail.Store(true)
 			m.newSender = func(Delivery) delivery.Sender { return counter }
-			revision := m.DeliveryView()["revision"].(int64)
+			revision := m.DeliveryView().Revision
 			input := DeliveryUpdate{Revision: &revision, Channel: channel, Preview: "off"}
 			input.Bark.Key = ptr("bark-key")
 			input.Pushover.Token = ptr("application")

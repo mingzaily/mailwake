@@ -10,7 +10,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { I18nContext } from "@/lib/i18n";
 import type { Mailbox, Status } from "@/lib/types";
 import catalog from "../../../internal/i18n/locales/zh-CN.json";
-import { Budget, Shell } from "./shell";
+import { Shell } from "./shell";
+import { Budget } from "./budget";
 
 const mailboxes: Mailbox[] = [
   { id: "work", label: "工作邮箱", connection_limit: 10 },

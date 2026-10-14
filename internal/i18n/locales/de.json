@@ -136,6 +136,7 @@
   "ui.skip_content": "Zum Inhalt springen",
   "ui.logout": "Abmelden",
   "ui.loading": "Wird geladen…",
+  "ui.page_load_failed": "Diese Seite konnte nicht geladen werden. Laden Sie sie erneut, um es noch einmal zu versuchen.",
   "ui.reload": "Neu laden",
   "ui.conflict": "In einer anderen Sitzung geändert. Lade vor dem Speichern die aktuellen Werte neu.",
   "ui.wait_seconds": "Versuche es in {seconds} s erneut.",

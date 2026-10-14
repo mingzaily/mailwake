@@ -1,4 +1,4 @@
-package native
+package coreidentity
 
 import (
 	"context"
@@ -18,19 +18,24 @@ type Identity struct {
 	Key           *ecdsa.PrivateKey
 	PublicKey, ID string
 }
-type identityStore struct {
+type Store struct {
 	mu     sync.Mutex
 	cached *Identity
 	store  *storage.Store
 	vault  *settings.Vault
 }
 
-func (s *identityStore) load(ctx context.Context) (*Identity, error) {
+func New(store *storage.Store, vault *settings.Vault) *Store {
+	return &Store{store: store, vault: vault}
+}
+
+func (s *Store) Load(ctx context.Context) (*Identity, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.cached != nil {
 		return s.cached, nil
 	}
+	// This persisted key and vault AAD keep existing Core identities stable.
 	const name = "native.identity"
 	encrypted, err := s.store.Configuration(ctx, name)
 	if err != nil {

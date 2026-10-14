@@ -2,13 +2,14 @@ package httpapi
 
 import (
 	"encoding/json"
-	"github.com/mingzaily/mailwake/internal/auth"
-	"github.com/mingzaily/mailwake/internal/logging"
-	"github.com/mingzaily/mailwake/internal/storage"
 	"io"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/mingzaily/mailwake/internal/auth"
+	"github.com/mingzaily/mailwake/internal/logging"
+	"github.com/mingzaily/mailwake/internal/storage"
 )
 
 func TestLogsAuthenticationAndFilters(t *testing.T) {
@@ -19,7 +20,7 @@ func TestLogsAuthenticationAndFilters(t *testing.T) {
 	defer store.Close()
 	log := logging.New(io.Discard)
 	a := auth.New(store, log)
-	router := New(a, newTestRuntime("", nil, nil), store, log)
+	router := New(a, newTestRuntime("", nil, nil), store, log, Integrations{})
 	var grant auth.Grant
 	call := func(path, token string, session bool) *httptest.ResponseRecorder {
 		r := httptest.NewRequest("GET", path, nil)

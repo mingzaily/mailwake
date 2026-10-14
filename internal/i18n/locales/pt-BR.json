@@ -136,6 +136,7 @@
   "ui.skip_content": "Ir para o conteúdo",
   "ui.logout": "Sair",
   "ui.loading": "Carregando…",
+  "ui.page_load_failed": "Não foi possível carregar esta página. Recarregue para tentar novamente.",
   "ui.reload": "Recarregar",
   "ui.conflict": "Alterado em outra sessão. Recarregue os valores antes de salvar.",
   "ui.wait_seconds": "Tente novamente em {seconds} s.",
