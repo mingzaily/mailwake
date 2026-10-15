@@ -36,7 +36,7 @@ func TestLocalizedAPIAndDiagnosticCodes(t *testing.T) {
 	defer store.Close()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	source := failingSource{err: fault.New("imap_connection_failed")}
-	monitor := engine.New(source, store, "a", mail.Subscriptions{Revision: 1, Folders: mail.RealtimeFolders([]string{"Customers"})}, time.Minute, false, logger)
+	monitor := engine.New(source, store, "a", mail.Subscriptions{Revision: 1, Folders: mail.RealtimeFolders([]string{"Customers"})}, time.Minute, logger)
 	done := make(chan struct{})
 	go func() { defer close(done); monitor.Run(ctx) }()
 	defer func() { cancel(); <-done }()
@@ -158,7 +158,7 @@ func TestAuthenticationAndDurableTestPush(t *testing.T) {
 	defer s.Close()
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	source := folderSource{}
-	monitor := engine.New(source, s, "private-account", mail.Subscriptions{Revision: 1, Folders: mail.RealtimeFolders([]string{"Clients"})}, time.Minute, false, log)
+	monitor := engine.New(source, s, "private-account", mail.Subscriptions{Revision: 1, Folders: mail.RealtimeFolders([]string{"Clients"})}, time.Minute, log)
 	token := strings.Repeat("secret", 8)
 	authService, grant := testAdministrator(t, s)
 	router := New(authService, newTestRuntime("bark", monitor, source), s, log, Integrations{})

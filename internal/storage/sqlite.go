@@ -167,8 +167,8 @@ func enqueue(ctx context.Context, db executor, e event.Notification, now int64) 
 		return err
 	}
 	_, err = db.ExecContext(ctx, `INSERT INTO outbox(id,payload,next_attempt,created_at,message)
- SELECT ?,CASE WHEN (SELECT value FROM settings WHERE name='delivery_preview')='off' THEN json_remove(?,'$.sender','$.subject') ELSE ? END,?,?,
- CASE WHEN (SELECT value FROM settings WHERE name='delivery_preview')='off' THEN json_set(?,'$.subject',NULL) ELSE ? END
+ SELECT ?,CASE WHEN (SELECT value FROM settings WHERE name='delivery_preview')='subject' THEN ? ELSE json_remove(?,'$.sender','$.subject','$.code') END,?,?,
+ CASE WHEN (SELECT value FROM settings WHERE name='delivery_preview')='subject' THEN ? ELSE json_set(?,'$.subject',NULL) END
  WHERE ? OR COALESCE((SELECT value FROM settings WHERE name='delivery_channel'),'')<>'native' OR EXISTS(SELECT 1 FROM native_pairings WHERE state='active')
  ON CONFLICT(id) DO NOTHING`, e.ID, string(b), string(b), now, now, string(message), string(message), e.Test)
 	return err

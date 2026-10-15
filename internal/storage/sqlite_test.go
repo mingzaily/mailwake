@@ -19,6 +19,10 @@ func TestAtomicCommitRecoveryAndDedup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := s.SaveDelivery(t.Context(), []byte("synthetic"), "subject", "webhook", false, 0); err != nil {
+		t.Fatal(err)
+	}
+
 	defer func() { s.Close() }()
 	other, err := Open(ctx, dir)
 	if err == nil {

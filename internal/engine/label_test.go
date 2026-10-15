@@ -27,7 +27,7 @@ func TestLiveLabelOnlyChangesFutureEvents(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer store.Close()
-	e := New(nil, store, "mbx_test", mail.Subscriptions{}, time.Minute, false, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	e := New(nil, store, "mbx_test", mail.Subscriptions{}, time.Minute, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	e.SetMailboxLabel("Before")
 	if _, err := e.sync(t.Context(), "INBOX", labelSession{key: "1"}); err != nil {
 		t.Fatal(err)
@@ -63,7 +63,7 @@ func (s *blockedCommit) Commit(_ context.Context, _, _, _, _ string, items []eve
 }
 func TestLabelAndStatusRemainAvailableDuringDatabaseCommit(t *testing.T) {
 	store := &blockedCommit{entered: make(chan struct{}), release: make(chan struct{})}
-	e := New(nil, store, "mbx_test", mail.Subscriptions{}, time.Minute, false, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	e := New(nil, store, "mbx_test", mail.Subscriptions{}, time.Minute, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	e.SetMailboxLabel("Before")
 	done := make(chan error, 1)
 	go func() { _, err := e.sync(t.Context(), "INBOX", labelSession{key: "next"}); done <- err }()

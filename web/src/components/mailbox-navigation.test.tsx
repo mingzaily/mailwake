@@ -327,3 +327,75 @@ test("scan opens on its title and saving blocks Escape and close", async () => {
   finishSave(new Response("{}"));
   await waitFor(() => expect(dialog.hasAttribute("open")).toBe(false));
 });
+
+test.each([
+  [[], 0],
+  [["5m"], 1],
+  [["5m", "15m"], 1],
+  [["realtime", "realtime", "5m", "15m"], 3],
+])(
+  "mailbox list shows monitoring demand for %j instead of open sockets",
+  async (checks, expected) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((path: string) =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify(
+              path.endsWith("/mailboxes")
+                ? { mailboxes: [{ ...mailbox, connections_in_use: 0 }] }
+                : {
+                    folders: [
+                      ...checks.map((check, i) => ({
+                        mailbox_id: mailbox.id,
+                        folder: `Folder ${i}`,
+                        check,
+                        state: "backoff",
+                      })),
+                      {
+                        mailbox_id: "other",
+                        folder: "INBOX",
+                        check: "realtime",
+                        state: "watching",
+                      },
+                    ],
+                  },
+            ),
+          ),
+        ),
+      ),
+    );
+    mount(<Mailboxes />);
+    await screen.findByRole("columnheader", { name: "监听连接 / 上限" });
+    expect(
+      await screen.findByRole("cell", { name: `${expected} / 10` }),
+    ).toBeTruthy();
+  },
+);
+
+test("mailbox list leaves demand unknown until status loads and reports failures", async () => {
+  let rejectStatus: (error: Error) => void = () => {};
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((path: string) =>
+      path.endsWith("/mailboxes")
+        ? Promise.resolve(
+            new Response(JSON.stringify({ mailboxes: [mailbox] })),
+          )
+        : new Promise<Response>((_, reject) => {
+            rejectStatus = reject;
+          }),
+    ),
+  );
+  mount(
+    <Shell page="mailboxes" logout={() => {}}>
+      <Mailboxes />
+    </Shell>,
+  );
+  await screen.findByRole("cell", { name: "— / 10" });
+  expect(screen.queryByRole("cell", { name: "0 / 10" })).toBeNull();
+  rejectStatus(new TypeError("offline"));
+  expect(await screen.findAllByRole("alert")).toHaveLength(1);
+  expect(screen.getByText(catalog["ui.core_unreachable"])).toBeTruthy();
+  expect(screen.getByRole("cell", { name: "— / 10" })).toBeTruthy();
+});

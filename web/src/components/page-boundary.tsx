@@ -16,11 +16,26 @@ class PageErrorBoundary extends Component<
   }
 }
 
-export function PageBoundary({ children }: { children: ReactNode }) {
+export function PageBoundary({
+  children,
+  fullScreen = false,
+}: {
+  children: ReactNode;
+  fullScreen?: boolean;
+}) {
   const { t } = useI18n();
+  function frame(content: ReactNode) {
+    return fullScreen ? (
+      <main className="flex min-h-svh items-center justify-center p-6 md:p-10">
+        <div className="w-full max-w-sm text-center">{content}</div>
+      </main>
+    ) : (
+      content
+    );
+  }
   return (
     <PageErrorBoundary
-      fallback={
+      fallback={frame(
         <Alert variant="destructive">
           <AlertDescription>
             <p>{t("ui.page_load_failed")}</p>
@@ -28,15 +43,15 @@ export function PageBoundary({ children }: { children: ReactNode }) {
               {t("ui.reload")}
             </Button>
           </AlertDescription>
-        </Alert>
-      }
+        </Alert>,
+      )}
     >
       <Suspense
-        fallback={
+        fallback={frame(
           <p role="status" className="py-6 text-muted-foreground">
             {t("ui.loading")}
-          </p>
-        }
+          </p>,
+        )}
       >
         {children}
       </Suspense>

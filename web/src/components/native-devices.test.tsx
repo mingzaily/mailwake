@@ -772,7 +772,9 @@ test.each([false, true])(
           .value,
       ).toBe(""),
     );
-    expect(screen.queryByRole("alert")).toBeNull();
+    if (refreshFails)
+      expect(await screen.findByText("Unavailable")).toBeTruthy();
+    else expect(screen.queryByRole("alert")).toBeNull();
     await waitFor(() =>
       expect(
         (
@@ -786,7 +788,7 @@ test.each([false, true])(
       target: { value: "synthetic-second-key" },
     });
     fireEvent.click(screen.getByRole("button", { name: catalog["ui.save"] }));
-    await screen.findByRole("alert");
+    await screen.findByText(catalog.settings_conflict);
     expect(revisions).toEqual([1, 2]);
     expect(
       (screen.getByLabelText(catalog["ui.bark_key"]) as HTMLInputElement).value,

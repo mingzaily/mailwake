@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http/httptest"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -195,6 +196,48 @@ func TestGmailStyleFolderDiscovery(t *testing.T) {
 	}
 }
 
+func TestDiscoveryExcludesUnavailableParentsAndKeepsSelectableChildren(t *testing.T) {
+	for _, attrs := range [][]protocol.MailboxAttr{
+		{protocol.MailboxAttrNonExistent},
+		{protocol.MailboxAttrHasChildren, protocol.MailboxAttrNonExistent},
+		{protocol.MailboxAttrNoSelect, protocol.MailboxAttrHasChildren},
+		{protocol.MailboxAttr("\\nOnExIsTeNt"), protocol.MailboxAttrAll},
+	} {
+		t.Run(fmt.Sprint(attrs), func(t *testing.T) {
+			f := gmailFixture(t, "[Gmail]")
+			for i := range f.folders {
+				switch f.folders[i].Mailbox {
+				case "[Gmail]", "Projects", "Projects/Invoices":
+					f.folders[i].Attrs = attrs
+				case "Projects/Clients":
+					f.folders[i].Attrs = []protocol.MailboxAttr{protocol.MailboxAttrHasChildren}
+				}
+			}
+			found, err := f.source.Folders(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, parent := range []string{"[Gmail]", "Projects", "Projects/Invoices"} {
+				if slices.Contains(found.Folders, parent) || found.FolderRoles[parent] != "" {
+					t.Fatalf("unavailable parent returned: %q", parent)
+				}
+			}
+			for _, selectable := range []string{"INBOX", "[Gmail]/All Mail", "Projects/Invoices/2026", "Projects/Clients"} {
+				if !slices.Contains(found.Folders, selectable) {
+					t.Fatalf("selectable path missing: %q", selectable)
+				}
+			}
+			for _, folder := range found.Folders {
+				session, err := f.source.Open(t.Context(), folder)
+				if err != nil {
+					t.Fatalf("open discovered folder %q: %v", folder, err)
+				}
+				session.Close()
+			}
+		})
+	}
+}
+
 func TestGmailStyleLabelsKeepFolderEventsAndOfflineWindow(t *testing.T) {
 	f := gmailFixture(t, "[Gmail]")
 	store, err := storage.Open(t.Context(), t.TempDir())
@@ -211,7 +254,7 @@ func TestGmailStyleLabelsKeepFolderEventsAndOfflineWindow(t *testing.T) {
 	}
 	start := func() (context.CancelFunc, <-chan struct{}) {
 		ctx, cancel := context.WithCancel(t.Context())
-		monitor := engine.New(f.source, store, "gmail-imap", mail.Subscriptions{Revision: 1, Folders: mail.RealtimeFolders(folders)}, 20*time.Millisecond, true, f.source.log)
+		monitor := engine.New(f.source, store, "gmail-imap", mail.Subscriptions{Revision: 1, Folders: mail.RealtimeFolders(folders)}, 20*time.Millisecond, f.source.log)
 		done := make(chan struct{})
 		go func() { defer close(done); monitor.Run(ctx) }()
 		t.Cleanup(func() { cancel(); <-done })
@@ -323,5 +366,30 @@ func TestGmailStyleAppPasswordReplacementResumesCheckpoint(t *testing.T) {
 	}
 	if caughtUp, err := session.Poll(t.Context(), batch.Checkpoint, false); err != nil || len(caughtUp.Messages) != 0 {
 		t.Fatalf("caught-up Label preserves progress: %+v, error %v", caughtUp, err)
+	}
+}
+
+func TestDiscoveryNamesUseEachServerDelimiter(t *testing.T) {
+	f := gmailFixture(t, "[Gmail]")
+	f.folders = []protocol.ListData{
+		{Mailbox: "其他文件夹/A区域", Delim: '/'},
+		{Mailbox: "Projects.Customer.A", Delim: '.'},
+		{Mailbox: "Literal/Slash", Delim: 0},
+		{Mailbox: "顶层", Delim: '/'},
+		{Mailbox: "尾部/", Delim: '/'},
+		{Mailbox: "组界名字", Delim: '界'},
+		{Mailbox: "[Gmail]/重要", Delim: '/'},
+		{Mailbox: "Hidden/Parent", Delim: '/', Attrs: []protocol.MailboxAttr{protocol.MailboxAttrNoSelect}},
+	}
+	found, err := f.source.Folders(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{"其他文件夹/A区域": "A区域", "Projects.Customer.A": "A", "组界名字": "名字", "[Gmail]/重要": "重要"}
+	if !reflect.DeepEqual(found.FolderNames, want) {
+		t.Fatalf("names=%v want=%v", found.FolderNames, want)
+	}
+	if !slices.Contains(found.Folders, "Literal/Slash") || !slices.Contains(found.Folders, "尾部/") {
+		t.Fatal("original paths lost", found.Folders)
 	}
 }

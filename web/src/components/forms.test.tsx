@@ -410,13 +410,7 @@ test("new mailbox requires a successful current connection test and discards a f
 
 function SavedMailboxEditor() {
   const [mailbox, setMailbox] = useState(box);
-  return (
-    <MailboxEditor
-      key={mailbox.revision}
-      mailbox={mailbox}
-      onSaved={setMailbox}
-    />
-  );
+  return <MailboxEditor mailbox={mailbox} onSaved={setMailbox} />;
 }
 
 for (const succeeds of [true, false]) {

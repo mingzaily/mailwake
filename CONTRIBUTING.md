@@ -37,7 +37,8 @@ The binary is written to `bin/mailwake`. The `nomsgpack` build tag is used by th
 | `internal/settings/` | Mailbox/delivery models, validation, merging, redacted views, per-mailbox encryption |
 | `internal/runtime/` | Independent mailbox engines/budgets, global dispatcher, channel factories and isolated hot updates |
 | `internal/mail/` | Protocol-neutral sessions/shared connections, check methods and connection budgets |
-| `internal/mail/imap/` | IMAP protocol handling and provider checkpoints |
+| `internal/mail/imap/` | IMAP protocol handling, bounded FETCH assembly and provider checkpoints |
+| `third_party/go-imap/` | Maintained MIT-licensed client source; see its MAILWAKE.md change record |
 | `internal/engine/` | Realtime workers, one scheduled worker per mailbox, online handovers and batch persistence |
 | `internal/content/` | Message parsing, HTML to text and verification code detection |
 | `internal/event/` | Notification values and stable event identities |

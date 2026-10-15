@@ -118,3 +118,19 @@ func (s *Store) DeleteMailbox(ctx context.Context, id string, revision int64) er
 	}
 	return tx.Commit()
 }
+
+// RefreshMailboxDisplay keeps the owner's revision while updating derived folder metadata.
+func (s *Store) RefreshMailboxDisplay(ctx context.Context, id string, revision int64, encrypted []byte) error {
+	result, err := s.db.ExecContext(ctx, "UPDATE configuration SET encrypted=? WHERE name=? AND revision=?", encrypted, MailboxConfigurationName(id), revision)
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count != 1 {
+		return fault.New("settings_conflict")
+	}
+	return nil
+}

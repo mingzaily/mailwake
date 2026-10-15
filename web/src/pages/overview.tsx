@@ -1,6 +1,11 @@
 import { useI18n } from "@/lib/i18n";
 import { useDeliveries, useMailboxes, useStatus } from "@/lib/queries";
-import { ErrorNotice, PageHeading, Panel } from "@/components/common";
+import {
+  ErrorNotice,
+  LoadingState,
+  PageHeading,
+  Panel,
+} from "@/components/common";
 import { DeliveryTable, FolderTable } from "@/components/status-tables";
 import { Button } from "@/components/ui/button";
 export function Overview() {
@@ -28,14 +33,17 @@ export function Overview() {
     }),
   );
   for (const folder of data?.folders ?? [])
-    if (folder.state === "auth_required")
+    if (folder.state !== "watching" || folder.last_error || folder.notice)
       issues.push({
         key: `${folder.mailbox_id}/${folder.folder}`,
         text: t("ui.scoped_issue", {
           object: `${folder.mailbox_label} · ${folder.folder}`,
-          message: folder.last_error?.message ?? t("state.auth_required"),
+          message:
+            folder.notice?.message ??
+            folder.last_error?.message ??
+            t(`state.${folder.state}`),
         }),
-        href: `#/mailboxes/${folder.mailbox_id}/settings`,
+        href: `#/mailboxes/${folder.mailbox_id}${folder.state === "auth_required" ? "/settings" : ""}`,
       });
   if (data?.delivery.dead)
     issues.push({
@@ -83,11 +91,7 @@ export function Overview() {
         ))}
       </div>
       <Panel title={t("ui.needs_attention")}>
-        {status.isPending && (
-          <p className="px-4 py-3 text-muted-foreground" role="status">
-            {t("ui.loading")}
-          </p>
-        )}
+        {status.isPending && <LoadingState />}
         {status.isError && <ErrorNotice error={status.error} />}
         {status.isSuccess &&
           (issues.length ? (
@@ -116,16 +120,18 @@ export function Overview() {
           </span>
         }
       >
-        <FolderTable folders={data?.folders ?? []} />
+        {status.isPending && <LoadingState />}
+        {data && <FolderTable folders={data.folders} />}
       </Panel>
       <Panel
         title={t("ui.recent_deliveries")}
         actions={<a href="#/deliveries">{t("ui.view_all")}</a>}
       >
         <ErrorNotice error={deliveries.error} />
-        <DeliveryTable
-          deliveries={deliveries.data?.deliveries.slice(0, 6) ?? []}
-        />
+        {deliveries.isPending && <LoadingState />}
+        {deliveries.data && (
+          <DeliveryTable deliveries={deliveries.data.deliveries.slice(0, 6)} />
+        )}
       </Panel>
     </>
   );

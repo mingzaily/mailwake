@@ -29,7 +29,9 @@ export function folderLabel(
   name: string,
   metadata: Record<string, string>,
   t: (key: string) => string,
+  names: Record<string, string> = {},
 ) {
   const role = metadata[name] ?? nameRoles[name.toLowerCase()];
-  return roles.has(role) ? t(`ui.folder_${role}`) : name;
+  if (roles.has(role)) return t(`ui.folder_${role}`);
+  return Object.hasOwn(names, name) && names[name] ? names[name] : name;
 }

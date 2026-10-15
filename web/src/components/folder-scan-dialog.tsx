@@ -45,7 +45,12 @@ export function FolderScanDialog({
   const [busy, setBusy] = useState<"scan" | "save" | "reload" | null>(null);
   const [error, setError] = useState<unknown>();
   const [subscriptions, setSubscriptions] = useState<Subscriptions>();
-  const [roles, setRoles] = useState<Record<string, string>>({});
+  const [names, setNames] = useState<Record<string, string>>(
+    mailbox.folder_display?.folder_names ?? {},
+  );
+  const [roles, setRoles] = useState<Record<string, string>>(
+    mailbox.folder_display?.folder_roles ?? {},
+  );
   const [available, setAvailable] = useState<string[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const over = connectionUsage(folders) > mailbox.connection_limit - 1;
@@ -76,6 +81,8 @@ export function FolderScanDialog({
       if (controller.signal.aborted) return;
       setAvailable(result.folders);
       setRoles(result.folder_roles ?? {});
+      setNames(result.folder_names ?? {});
+      void client.invalidateQueries({ queryKey: ["mailboxes"] });
       if (!subscriptions) {
         setSubscriptions(saved);
         setFolders(saved.folders);
@@ -238,6 +245,7 @@ export function FolderScanDialog({
                       folders={folders}
                       available={available}
                       roles={roles}
+                      names={names}
                       onChange={setFolders}
                     />
                   </>
@@ -263,7 +271,11 @@ export function FolderScanDialog({
                           {folders.map((folder) => (
                             <TableRow key={folder.name}>
                               <TableCell title={folder.name}>
-                                <FolderName name={folder.name} roles={roles} />
+                                <FolderName
+                                  name={folder.name}
+                                  roles={roles}
+                                  names={names}
+                                />
                               </TableCell>
                               <TableCell>
                                 {t(`ui.check_${folder.check}`)}

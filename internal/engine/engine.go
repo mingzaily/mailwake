@@ -20,6 +20,7 @@ type Store interface {
 	// SaveSubscriptions also clears saved progress of newly added folders so they start from a new baseline.
 	SaveSubscriptions(context.Context, string, mail.Subscriptions) error
 	Checkpoint(context.Context, string, string) (string, error)
+	// Commit applies the persisted preview policy while atomically saving events and progress.
 	Commit(context.Context, string, string, string, string, []event.Notification) error
 }
 
@@ -44,7 +45,6 @@ type Engine struct {
 	subscriptions   mail.Subscriptions
 	changed         chan struct{}
 	interval        time.Duration
-	preview         atomic.Bool
 	detectCodes     atomic.Bool
 	eventNamespace  string
 	connectionLimit int
@@ -72,10 +72,9 @@ const sessionLifetime = 30 * time.Minute
 // errSessionExpired ends a healthy session so the watcher reopens it without backoff.
 var errSessionExpired = errors.New("session lifetime reached")
 
-func New(source mail.Source, store Store, account string, subscriptions mail.Subscriptions, interval time.Duration, preview bool, log *slog.Logger) *Engine {
+func New(source mail.Source, store Store, account string, subscriptions mail.Subscriptions, interval time.Duration, log *slog.Logger) *Engine {
 	e := &Engine{source: source, store: store, account: account, label: account, subscriptions: mail.Subscriptions{Revision: subscriptions.Revision, Folders: append([]mail.Folder{}, subscriptions.Folders...)}, changed: make(chan struct{}, 1), interval: interval, log: log.With("mailbox_id", account), authRetry: authRetryDelay, staleAfter: staleMessageAge, lifetime: sessionLifetime, status: make(map[string]FolderStatus)}
 	e.connectionLimit = mail.DefaultConnectionLimit
-	e.preview.Store(preview)
 	e.eventNamespace = account
 	for _, f := range subscriptions.Folders {
 		e.status[f.Name] = FolderStatus{Folder: f.Name, State: "connecting"}
@@ -321,9 +320,7 @@ func (e *Engine) sync(ctx context.Context, folder string, session mail.Session) 
 		}
 		messageID := event.ID(e.eventNamespace, folder, msg.Key)
 		n := event.Notification{Location: msg.Location, ID: messageID, Account: label, AccountID: e.eventNamespace, MailboxID: e.account, Folder: folder, ReceivedAt: msg.ReceivedAt}
-		if e.preview.Load() {
-			n.Sender, n.Subject, n.Code = msg.Sender, msg.Subject, msg.Code
-		}
+		n.Sender, n.Subject, n.Code = msg.Sender, msg.Subject, msg.Code
 		items = append(items, n)
 	}
 	if err := e.store.Commit(ctx, e.account, folder, previous, batch.Checkpoint, items); err != nil {
@@ -345,8 +342,6 @@ var errCheckpoints = fault.New("checkpoint_storage_failed")
 
 // SetEventNamespace is called before Run to separate events from different mailboxes.
 func (e *Engine) SetEventNamespace(identity string) { e.eventNamespace = identity }
-
-func (e *Engine) SetPreview(enabled bool) { e.preview.Store(enabled) }
 
 func (e *Engine) SetDetectCodes(enabled bool) { e.detectCodes.Store(enabled) }
 

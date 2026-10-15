@@ -3,6 +3,7 @@ import {
   useActionError,
   BusyButton,
   ErrorNotice,
+  LoadingState,
   SelectField,
   TextField,
   useToast,
@@ -73,24 +74,22 @@ export function DeliveryEditor({ onSaved }: { onSaved?: () => void }) {
     refetchInterval: 5000,
     refetchIntervalInBackground: false,
   });
-  const { t } = useI18n();
-  if (!query.data)
-    return (
-      <>
-        <ErrorNotice error={query.error} />
-        <p>{t("ui.loading")}</p>
-      </>
-    );
   return (
-    <DeliveryFields
-      initial={query.data}
-      reload={async () => {
-        const result = await query.refetch();
-        if (result.error) throw result.error;
-        return result.data!;
-      }}
-      onSaved={onSaved}
-    />
+    <div className="flex flex-col gap-5">
+      <ErrorNotice error={query.error} />
+      {query.isPending && <LoadingState />}
+      {query.data && (
+        <DeliveryFields
+          initial={query.data}
+          reload={async () => {
+            const result = await query.refetch();
+            if (result.error) throw result.error;
+            return result.data!;
+          }}
+          onSaved={onSaved}
+        />
+      )}
+    </div>
   );
 }
 function DeliveryFields({

@@ -28,21 +28,19 @@ func (s *Source) ReadContent(ctx context.Context, folder string, location mail.L
 	if selected.(*session).validity != location.UIDValidity {
 		return mail.Body{}, fault.New("message_not_found")
 	}
-	var structure protocol.BodyStructure
-	err = x.command(ctx, "message_unavailable", func() error {
-		messages, err := x.client.Fetch(protocol.UIDSetNum(protocol.UID(location.UID)), &protocol.FetchOptions{BodyStructure: &protocol.FetchItemBodyStructure{Extended: true}}).Collect()
-		if err != nil {
-			return err
-		}
-		if len(messages) == 0 {
-			return fault.New("message_not_found")
-		}
-		structure = messages[0].BodyStructure
-		return nil
-	})
+	uid := protocol.UID(location.UID)
+	messages, err := x.fetch(ctx, "message_unavailable", protocol.UIDSetNum(uid), &protocol.FetchOptions{BodyStructure: &protocol.FetchItemBodyStructure{Extended: true}}, 0)
 	if err != nil {
 		return mail.Body{}, err
 	}
+	item := messages[uid]
+	if item == nil {
+		return mail.Body{}, fault.New("message_not_found")
+	}
+	if item.BodyStructure == nil {
+		return mail.Body{}, fault.New("message_unavailable")
+	}
+	structure := item.BodyStructure
 	reader := contentParts{connection: x, uid: protocol.UID(location.UID), remaining: content.MaxReadBytes}
 	root, err := reader.tree(ctx, structure, nil, 0)
 	if err != nil {

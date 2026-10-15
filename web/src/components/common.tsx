@@ -24,6 +24,15 @@ import { Alert, AlertDescription } from "./ui/alert";
 import { Field, FieldDescription, FieldError, FieldLabel } from "./ui/field";
 import { Empty, EmptyHeader, EmptyDescription } from "./ui/empty";
 
+export function LoadingState() {
+  const { t } = useI18n();
+  return (
+    <p className="px-4 py-3 text-muted-foreground" role="status">
+      {t("ui.loading")}
+    </p>
+  );
+}
+
 export function Panel({
   title,
   actions,

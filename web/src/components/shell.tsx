@@ -1,3 +1,4 @@
+import { FolderDisplayContext } from "./folder-name";
 import { AccountMenu } from "./account-menu";
 import { useRef, useState, type ReactNode } from "react";
 import {
@@ -291,7 +292,9 @@ export function Shell({
               void status.refetch();
             }}
           />
-          {children}
+          <FolderDisplayContext.Provider value={boxes.data?.mailboxes ?? []}>
+            {children}
+          </FolderDisplayContext.Provider>
         </main>
       </div>
     </SidebarProvider>

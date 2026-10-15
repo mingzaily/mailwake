@@ -49,10 +49,13 @@ func TestContentReferenceFollowsOriginalAccount(t *testing.T) {
 				input.Password = ptr("new-password")
 			case "host":
 				input.Host = "imap.replacement.test"
+				input.Password = ptr("replacement-password")
 			case "port":
 				input.Port = 1993
+				input.Password = ptr("replacement-password")
 			case "username":
 				input.Username = "replacement@example.test"
+				input.Password = ptr("replacement-password")
 			}
 			if err := m.UpdateMailbox(t.Context(), id, input); err != nil {
 				t.Fatal(err)

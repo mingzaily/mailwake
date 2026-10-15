@@ -8,8 +8,8 @@ Development uses Go and Node.js 24.18.1. Run `cd web && npm ci` once before chec
 
 ```sh
 make web      # npm ci, TypeScript, Vite, license audit and notices
-make test     # Vitest and Go race tests
-make check    # TypeScript, ESLint and Go vet
+make test     # Vitest, Core and maintained go-imap race tests
+make check    # TypeScript, ESLint, Core and maintained go-imap vet
 make build    # bin/mailwake; set VERSION=v1.0.0 to stamp a release version
 ```
 
@@ -77,3 +77,7 @@ For an IMAP fixture at `localhost:11993`, its certificate must include the `loca
 ## External service smoke fixtures
 
 `TestThreeServiceEndToEnd` is an optional integration test. Ordinary Go test runs skip it. An external harness supplies isolated loopback HTTP endpoints through `MAILWAKE_E2E_RELAY`, `MAILWAKE_E2E_PLATFORM` and `MAILWAKE_E2E_APNS`, plus `MAILWAKE_E2E_DEVICE` (fixture state), `MAILWAKE_E2E_DEVICE_SIM` (absolute Node.js simulator path) and `MAILWAKE_E2E_RESULT` (result file). The simulator supports the `pair`, `decrypt`, `activity-preferences` and `activity-token` operations used in the test. The harness owns setup and cleanup of services, state and keys; contributors can run Core's normal tests independently of these external fixtures.
+
+## Maintained IMAP dependency
+
+`third_party/go-imap/` is the MIT-licensed v2.0.0-beta.8 source with maintained FETCH routing changes. Core uses it through a local `go.mod` replacement. Builds copy this directory before downloading Go modules; binary archives and containers include `docs/imap-third-party.txt`. Read [the source/change record](../third_party/go-imap/MAILWAKE.md) before updating it. Tests cover both the upstream module and Core's shared, bounded FETCH collector.

@@ -17,6 +17,9 @@ func TestDeliveryMessageContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer store.Close()
+	if err := store.SaveDelivery(t.Context(), []byte("synthetic"), "subject", "webhook", false, 0); err != nil {
+		t.Fatal(err)
+	}
 	if err := store.Enqueue(t.Context(), event.Notification{ID: "message-contract", MailboxID: "mbx_work", Account: "工作邮箱", Folder: "Clients", Subject: "季度报告已更新", Sender: "private@example.org"}); err != nil {
 		t.Fatal(err)
 	}
@@ -44,5 +47,40 @@ func TestDeliveryMessageContract(t *testing.T) {
 	}
 	if w.Code != 200 || len(actual.Deliveries) != 1 || !reflect.DeepEqual(actual.Deliveries[0]["message"], expected.Deliveries[0]["message"]) {
 		t.Fatalf("delivery message contract: %d %s", w.Code, w.Body)
+	}
+}
+
+func TestUnconfiguredDeliveryTitleRemainsUnavailable(t *testing.T) {
+	store, err := storage.Open(t.Context(), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	if err := store.Enqueue(t.Context(), event.Notification{ID: "before-configuration", Subject: "Private subject"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveDelivery(t.Context(), []byte("synthetic"), "subject", "bark", false, 0); err != nil {
+		t.Fatal(err)
+	}
+	service, grant := testAdministrator(t, store)
+	router := New(service, newTestRuntime("", nil, nil), store, nil, Integrations{})
+	req := httptest.NewRequest("GET", "/api/v1/deliveries", nil)
+	authorizeSession(req, grant)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	var actual struct {
+		Deliveries []struct {
+			Message map[string]any `json:"message"`
+		} `json:"deliveries"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &actual); err != nil {
+		t.Fatal(err)
+	}
+	if w.Code != 200 || len(actual.Deliveries) != 1 {
+		t.Fatalf("delivery response: %d %s", w.Code, w.Body)
+	}
+	subject, exists := actual.Deliveries[0].Message["subject"]
+	if !exists || subject != nil {
+		t.Fatalf("expected explicit unavailable subject: %s", w.Body)
 	}
 }

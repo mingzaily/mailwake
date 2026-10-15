@@ -70,4 +70,15 @@ func (e *FolderError) Unwrap() error { return e.Err }
 type FolderDiscovery struct {
 	Folders     []string          `json:"folders"`
 	FolderRoles map[string]string `json:"folder_roles,omitempty"`
+	FolderNames map[string]string `json:"folder_names,omitempty"`
+}
+
+// FolderDisplay contains server-derived presentation only; paths remain the resource identity.
+type FolderDisplay struct {
+	FolderRoles map[string]string `json:"folder_roles,omitempty"`
+	FolderNames map[string]string `json:"folder_names,omitempty"`
+}
+
+func (d *FolderDiscovery) Display() *FolderDisplay {
+	return &FolderDisplay{FolderRoles: d.FolderRoles, FolderNames: d.FolderNames}
 }

@@ -5,6 +5,8 @@
 !cmd/**
 !internal/
 !internal/**
+!third_party/
+!third_party/**
 **/*_test.go
 **/*_test.mjs
 !LICENSE
@@ -12,6 +14,7 @@
 !docs/
 docs/**
 !docs/html-content-third-party.txt
+!docs/imap-third-party.txt
 
 !web/
 !web/**

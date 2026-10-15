@@ -25,59 +25,75 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-test("pending page keeps surrounding navigation visible and announces loading", async () => {
-  let resolve!: (module: { default: ComponentType }) => void;
-  const page = new Promise<{ default: ComponentType }>((done) => {
-    resolve = done;
-  });
-  const LazyPage = lazy(() => page);
-  render(
-    localized(
-      <>
-        <nav>Navigation</nav>
-        <PageBoundary>
-          <LazyPage />
-        </PageBoundary>
-      </>,
-    ),
-  );
-  expect(screen.getByText("Navigation")).toBeTruthy();
-  expect(screen.getByRole("status").textContent).toBe(catalog["ui.loading"]);
-  await act(async () => {
-    resolve({ default: () => <h1>Loaded page</h1> });
-    await page;
-  });
-  expect(screen.getByRole("heading", { name: "Loaded page" })).toBeTruthy();
-  expect(screen.queryByRole("status")).toBeNull();
-});
+test.each([false, true])(
+  "pending page announces loading in its full-screen context: %s",
+  async (fullScreen) => {
+    let resolve!: (module: { default: ComponentType }) => void;
+    const page = new Promise<{ default: ComponentType }>((done) => {
+      resolve = done;
+    });
+    const LazyPage = lazy(() => page);
+    render(
+      localized(
+        <>
+          {!fullScreen && <nav>Navigation</nav>}
+          <PageBoundary fullScreen={fullScreen}>
+            <LazyPage />
+          </PageBoundary>
+        </>,
+      ),
+    );
+    if (fullScreen)
+      expect(
+        screen.getByRole("main").contains(screen.getByRole("status")),
+      ).toBe(true);
+    else expect(screen.getByText("Navigation")).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toBe(catalog["ui.loading"]);
+    await act(async () => {
+      resolve({ default: () => <h1>Loaded page</h1> });
+      await page;
+    });
+    expect(screen.getByRole("heading", { name: "Loaded page" })).toBeTruthy();
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.queryByRole("main")).toBeNull();
+  },
+);
 
-test("failed page offers explicit reload and navigation can recover independently", async () => {
-  const reload = vi
-    .spyOn(window.location, "reload")
-    .mockImplementation(() => {});
-  vi.spyOn(console, "error").mockImplementation(() => {});
-  const Broken = lazy(() => Promise.reject(new Error("private chunk URL")));
-  const view = render(
-    localized(
-      <PageBoundary key="failed">
-        <Broken />
-      </PageBoundary>,
-    ),
-  );
-  expect((await screen.findByRole("alert")).textContent).toContain(
-    catalog["ui.page_load_failed"],
-  );
-  expect(screen.queryByText("private chunk URL")).toBeNull();
-  expect(reload).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: catalog["ui.reload"] }));
-  expect(reload).toHaveBeenCalledOnce();
-  view.rerender(
-    localized(
-      <PageBoundary key="another-page">
-        <h1>Another page</h1>
-      </PageBoundary>,
-    ),
-  );
-  expect(screen.getByRole("heading", { name: "Another page" })).toBeTruthy();
-  expect(screen.queryByRole("alert")).toBeNull();
-});
+test.each([false, true])(
+  "failed page offers reload and recovers in its full-screen context: %s",
+  async (fullScreen) => {
+    const reload = vi
+      .spyOn(window.location, "reload")
+      .mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const Broken = lazy(() => Promise.reject(new Error("private chunk URL")));
+    const view = render(
+      localized(
+        <PageBoundary key="failed" fullScreen={fullScreen}>
+          <Broken />
+        </PageBoundary>,
+      ),
+    );
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      catalog["ui.page_load_failed"],
+    );
+    expect(screen.queryByText("private chunk URL")).toBeNull();
+    if (fullScreen)
+      expect(screen.getByRole("main").contains(screen.getByRole("alert"))).toBe(
+        true,
+      );
+    expect(reload).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: catalog["ui.reload"] }));
+    expect(reload).toHaveBeenCalledOnce();
+    view.rerender(
+      localized(
+        <PageBoundary key="another-page">
+          <h1>Another page</h1>
+        </PageBoundary>,
+      ),
+    );
+    expect(screen.getByRole("heading", { name: "Another page" })).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("main")).toBeNull();
+  },
+);

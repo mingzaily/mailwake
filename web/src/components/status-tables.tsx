@@ -80,7 +80,7 @@ export function FolderTable({
               </TableCell>
             )}
             <TableCell>
-              <FolderName name={folder.folder} />
+              <FolderName name={folder.folder} mailboxId={folder.mailbox_id} />
             </TableCell>
             <TableCell>
               <State value={folder.state} />
@@ -209,7 +209,14 @@ export function DeliveryTable({ deliveries }: { deliveries: Delivery[] }) {
                       className="text-muted-foreground"
                       title={item.message.folder}
                     >
-                      {item.message.folder || "—"}
+                      {item.message.folder ? (
+                        <FolderName
+                          name={item.message.folder}
+                          mailboxId={item.message.mailbox_id}
+                        />
+                      ) : (
+                        "—"
+                      )}
                     </span>
                   </div>
                 ) : (

@@ -159,7 +159,7 @@ func New(authService *auth.Service, runtime Runtime, store *storage.Store, log *
 	api.DELETE("/settings/delivery", delivery.Delete)
 	nativeRoutes(api, integrations.Native)
 	appManagementRoutes(r, api, runtime, store, integrations.Management)
-	mailboxes := mailboxHandlers{runtime: runtime}
+	mailboxes := mailboxHandlers{runtime: runtime, includeFolderDisplay: true}
 	api.GET("/mailboxes", mailboxes.List)
 	api.POST("/mailboxes", mailboxes.Create)
 	api.GET("/mailboxes/:id", mailboxes.Get)

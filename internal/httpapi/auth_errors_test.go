@@ -49,9 +49,18 @@ func TestAuthenticationInputErrorContracts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	check(call("POST", "/api/v1/session", `{"username":"admin","password":"incorrect"}`, auth.Grant{}), 401, "unauthorized")
-	// The setup and login failures above also use this source's ten-attempt budget.
-	for range 8 {
+	for _, body := range []string{
+		`{"username":"admin","password":"incorrect"}`,
+		`{"username":"unknown","password":"synthetic password"}`,
+	} {
+		response := call("POST", "/api/v1/session", body, auth.Grant{})
+		check(response, 401, "login_credentials_invalid")
+		if len(response.Result().Cookies()) != 0 {
+			t.Fatal("failed login set a session cookie")
+		}
+	}
+	// The setup and two login failures above also use this source's ten-attempt budget.
+	for range 7 {
 		check(call("PUT", "/api/v1/admin/password", `{"current_password":"incorrect","password":"replacement password"}`, grant), 400, "current_password_invalid")
 	}
 	response := call("PUT", "/api/v1/admin/password", `{"current_password":"incorrect","password":"replacement password"}`, grant)

@@ -19,7 +19,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "./ui/dropdown-menu";
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
@@ -75,61 +75,89 @@ function connectionSignature(values: MailboxForm) {
   ]);
 }
 
+function mailboxDefaults(mailbox?: Mailbox): MailboxForm {
+  return {
+    label: mailbox?.label ?? "",
+    host: mailbox?.host ?? "",
+    port: mailbox?.port ?? 993,
+    username: mailbox?.username ?? "",
+    connection_limit: mailbox?.connection_limit ?? 10,
+    password: "",
+  };
+}
+
 export function MailboxEditor({
-  mailbox,
+  mailbox: latest,
   onSaved,
   reload,
-  subscriptions = [],
+  subscriptions,
   showDiscoveredFolders = true,
 }: {
   mailbox?: Mailbox;
   showDiscoveredFolders?: boolean;
   subscriptions?: Folder[];
-  onSaved: (
+  onSaved?: (
     mailbox: Mailbox,
     folders: string[],
     roles?: Record<string, string>,
+    names?: Record<string, string>,
   ) => void;
-  reload?: () => void;
+  reload?: () => Promise<Mailbox>;
 }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const limitId = useId();
   const toast = useToast();
   const client = useQueryClient();
   const [error, setError] = useActionError();
   const [busy, setBusy] = useState(false);
+  const [mailbox, setMailbox] = useState(latest);
   const [tested, setTested] = useState<{
     signature: string;
     folders: string[];
     roles?: Record<string, string>;
+    names?: Record<string, string>;
   }>();
   const {
     register,
     handleSubmit,
     watch,
     setValue,
+    reset,
     setError: fieldError,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<MailboxForm>({
     resolver: zodResolver(mailboxSchema),
-    defaultValues: mailbox
-      ? {
-          label: mailbox.label,
-          host: mailbox.host,
-          port: mailbox.port,
-          username: mailbox.username,
-          connection_limit: mailbox.connection_limit,
-          password: "",
-        }
-      : {
-          label: "",
-          host: "",
-          port: 993,
-          username: "",
-          password: "",
-          connection_limit: 10,
-        },
+    defaultValues: mailboxDefaults(mailbox),
   });
+  const conflict = !!latest && !!mailbox && latest.revision > mailbox.revision;
+  useEffect(() => {
+    if (conflict && !isDirty && !isSubmitting && !busy) {
+      reset(mailboxDefaults(latest));
+      setMailbox(latest);
+      setTested(undefined);
+    }
+  }, [conflict, isDirty, isSubmitting, busy, latest, reset]);
+  async function reloadSettings() {
+    if (!reload || busy || isSubmitting) return;
+    setBusy(true);
+    try {
+      const current = await reload();
+      reset(mailboxDefaults(current));
+      setMailbox(current);
+      setTested(undefined);
+      setError(undefined);
+    } catch (error) {
+      setError(error);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const conflictError = conflict
+    ? new APIError(409, {
+        code: "settings_conflict",
+        message: t("settings_conflict"),
+      })
+    : undefined;
   const values = watch();
   const selectedPreset = imapPresets.find(
     (preset) =>
@@ -139,8 +167,12 @@ export function MailboxEditor({
     setValue("host", host, { shouldDirty: true, shouldValidate: true });
     setValue("port", 993, { shouldDirty: true, shouldValidate: true });
   }
-  const overBudget =
-    connectionUsage(subscriptions) > values.connection_limit - 1;
+  const used = subscriptions
+    ? connectionUsage(subscriptions)
+    : mailbox
+      ? undefined
+      : 0;
+  const overBudget = used !== undefined && used > values.connection_limit - 1;
   const signature = connectionSignature(values);
   function failed(error: unknown) {
     if (error instanceof APIError && errorFields[error.failure.code])
@@ -152,6 +184,7 @@ export function MailboxEditor({
     else setError(error);
   }
   async function test(values: MailboxForm) {
+    if (conflict) return;
     if (!mailbox && !values.password) {
       fieldError(
         "password",
@@ -172,6 +205,7 @@ export function MailboxEditor({
         signature: connectionSignature(values),
         folders: result.folders,
         roles: result.folder_roles,
+        names: result.folder_names,
       });
       toast(t("ui.connection_success"));
     } catch (error) {
@@ -181,8 +215,9 @@ export function MailboxEditor({
     }
   }
   async function save(values: MailboxForm) {
+    if (conflict) return;
     setError(undefined);
-    if (connectionUsage(subscriptions) > values.connection_limit - 1) {
+    if (used !== undefined && used > values.connection_limit - 1) {
       fieldError(
         "connection_limit",
         { message: t("ui.budget_exceeded") },
@@ -201,9 +236,37 @@ export function MailboxEditor({
           body: mailboxPayload(values, mailbox?.revision),
         },
       );
+      await client.cancelQueries({ queryKey: ["mailboxes"] });
+      const mergeSavedMailbox = (cached?: { mailboxes: Mailbox[] }) => {
+        const boxes = cached?.mailboxes ?? [];
+        return {
+          mailboxes: boxes.some((box) => box.id === result.id)
+            ? boxes.map((box) =>
+                box.id === result.id && box.revision <= result.revision
+                  ? result
+                  : box,
+              )
+            : [...boxes, result],
+        };
+      };
+      client.setQueriesData<{ mailboxes: Mailbox[] }>(
+        { queryKey: ["mailboxes"] },
+        mergeSavedMailbox,
+      );
+      client.setQueryData<{ mailboxes: Mailbox[] }>(
+        ["mailboxes", language],
+        mergeSavedMailbox,
+      );
+      reset(mailboxDefaults(result));
+      setMailbox(result);
       await client.invalidateQueries({ queryKey: ["mailboxes"] });
       toast(t("ui.saved"));
-      onSaved(result, tested?.folders ?? [], tested?.roles);
+      onSaved?.(
+        result,
+        tested?.folders ?? [],
+        result.folder_display?.folder_roles ?? tested?.roles,
+        result.folder_display?.folder_names ?? tested?.names,
+      );
     } catch (error) {
       failed(error);
     }
@@ -216,7 +279,10 @@ export function MailboxEditor({
       noValidate
       onSubmit={handleSubmit(save)}
     >
-      <ErrorNotice error={error} reload={reload} />
+      <ErrorNotice
+        error={conflictError ?? error}
+        reload={reload && !busy && !isSubmitting ? reloadSettings : undefined}
+      />
       <FieldSet disabled={busy || isSubmitting}>
         <FieldGroup className="gap-5">
           <TextField
@@ -342,6 +408,7 @@ export function MailboxEditor({
               />
               <FieldDescription id={`${limitId}-hint`}>
                 {t("ui.reserved_connection")}
+                {used === undefined && <> {t("ui.connection_usage_unknown")}</>}
               </FieldDescription>
             </div>
             {(overBudget || message("connection_limit")) && (
@@ -359,7 +426,7 @@ export function MailboxEditor({
           type="button"
           variant="outline"
           busy={busy}
-          disabled={isSubmitting}
+          disabled={isSubmitting || conflict}
           onClick={() => void handleSubmit(test)()}
         >
           {t("ui.test_connection")}
@@ -368,7 +435,10 @@ export function MailboxEditor({
           type="submit"
           busy={isSubmitting}
           disabled={
-            busy || overBudget || (!mailbox && tested?.signature !== signature)
+            busy ||
+            conflict ||
+            overBudget ||
+            (!mailbox && tested?.signature !== signature)
           }
         >
           {t("ui.save")}
@@ -382,7 +452,11 @@ export function MailboxEditor({
           <ul className="mt-3 grid max-h-40 grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2">
             {tested.folders.map((folder) => (
               <li key={folder} className="break-all" title={folder}>
-                <FolderName name={folder} roles={tested.roles} />
+                <FolderName
+                  name={folder}
+                  roles={tested.roles}
+                  names={tested.names}
+                />
               </li>
             ))}
           </ul>

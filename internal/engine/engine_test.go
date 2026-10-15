@@ -55,7 +55,7 @@ func TestFailedIdleKeepsExponentialBackoff(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		opened := make(chan time.Time, 1)
-		e := New(flappingSource{opened}, testCheckpoints{}, "a", mail.Subscriptions{Revision: 1, Folders: mail.RealtimeFolders([]string{"Clients"})}, time.Minute, false, slog.New(slog.NewTextHandler(io.Discard, nil)))
+		e := New(flappingSource{opened}, testCheckpoints{}, "a", mail.Subscriptions{Revision: 1, Folders: mail.RealtimeFolders([]string{"Clients"})}, time.Minute, slog.New(slog.NewTextHandler(io.Discard, nil)))
 		done := make(chan struct{})
 		go func() { defer close(done); e.Run(ctx) }()
 		first, second, third := <-opened, <-opened, <-opened
@@ -83,7 +83,7 @@ func TestRejectedCredentialsPauseLoginAttempts(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		opened := make(chan time.Time, 1)
-		e := New(rejectingSource{opened}, testCheckpoints{}, "a", mail.Subscriptions{Revision: 1, Folders: mail.RealtimeFolders([]string{"Clients"})}, time.Minute, false, slog.New(slog.NewTextHandler(io.Discard, nil)))
+		e := New(rejectingSource{opened}, testCheckpoints{}, "a", mail.Subscriptions{Revision: 1, Folders: mail.RealtimeFolders([]string{"Clients"})}, time.Minute, slog.New(slog.NewTextHandler(io.Discard, nil)))
 		done := make(chan struct{})
 		go func() { defer close(done); e.Run(ctx) }()
 		first := <-opened
@@ -116,7 +116,7 @@ func TestHealthySessionIsReopenedAfterLifetime(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		opened := make(chan time.Time, 1)
-		e := New(steadySource{opened}, testCheckpoints{}, "a", mail.Subscriptions{Revision: 1, Folders: mail.RealtimeFolders([]string{"Clients"})}, time.Minute, false, slog.New(slog.NewTextHandler(io.Discard, nil)))
+		e := New(steadySource{opened}, testCheckpoints{}, "a", mail.Subscriptions{Revision: 1, Folders: mail.RealtimeFolders([]string{"Clients"})}, time.Minute, slog.New(slog.NewTextHandler(io.Discard, nil)))
 		done := make(chan struct{})
 		go func() { defer close(done); e.Run(ctx) }()
 		first := <-opened
@@ -148,7 +148,7 @@ func TestBackoffResetsOnlyAfterStableWaitAndReconcile(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
-				e := New(nil, testCheckpoints{}, "a", mail.Subscriptions{Revision: 1, Folders: mail.RealtimeFolders([]string{"Clients"})}, time.Minute, false, slog.Default())
+				e := New(nil, testCheckpoints{}, "a", mail.Subscriptions{Revision: 1, Folders: mail.RealtimeFolders([]string{"Clients"})}, time.Minute, slog.Default())
 				waits, polls, resets := 0, 0, 0
 				s := testSession{wait: func() error {
 					waits++
@@ -193,7 +193,7 @@ func TestMailboxIdentitySeparatesEventIDs(t *testing.T) {
 		if err := store.SaveMailboxRecord(t.Context(), "mbx_test", int64(i), []byte("encrypted"), true); err != nil {
 			t.Fatal(err)
 		}
-		e := New(nil, store, "mbx_test", mail.Subscriptions{Revision: 1}, time.Minute, false, slog.Default())
+		e := New(nil, store, "mbx_test", mail.Subscriptions{Revision: 1}, time.Minute, slog.Default())
 		e.SetEventNamespace(identity)
 		if _, err := e.sync(t.Context(), "INBOX", messageSession{}); err != nil {
 			t.Fatal(err)
@@ -231,9 +231,15 @@ func TestEnqueueVerificationCodeFollowsDetectionAndPreview(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer store.Close()
-			e := New(nil, store, "mailbox", mail.Subscriptions{}, time.Minute, false, slog.New(slog.NewTextHandler(io.Discard, nil)))
+			e := New(nil, store, "mailbox", mail.Subscriptions{}, time.Minute, slog.New(slog.NewTextHandler(io.Discard, nil)))
 			e.SetDetectCodes(tc.detect)
-			e.SetPreview(tc.preview)
+			policy := "off"
+			if tc.preview {
+				policy = "subject"
+			}
+			if err := store.SaveDelivery(t.Context(), []byte("synthetic"), policy, "webhook", false, 0); err != nil {
+				t.Fatal(err)
+			}
 			if _, err := e.sync(t.Context(), "INBOX", codeSession{}); err != nil {
 				t.Fatal(err)
 			}

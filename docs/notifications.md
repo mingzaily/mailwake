@@ -18,8 +18,12 @@ Configuration updates use revisions. Channel, preview, language and retry settin
 
 ## Privacy and persistence
 
-Third-party previews default to `off`; `subject` permits the provider payload described in the public guide. Switching a third-party preview from `subject` to `off` atomically clears sender and subject from pending and failed records. Future enqueues use the saved policy. Native delivery always includes encrypted sender and subject and preserves the third-party preview preference.
+Third-party previews default to `off`; `subject` permits the provider payload described in the public guide. Switching a third-party preview from `subject` to `off` atomically clears sender and subject from pending and failed records. The enqueue transaction applies the saved policy to both payloads and history; an absent policy means `off`. It also removes verification codes when previews are off. Watchers pass transient metadata to this transaction rather than keeping a separate preview switch. Native delivery always includes encrypted sender and subject and preserves the third-party preview preference.
+
+Before a channel is configured, detected mail stays queued with the default preview policy. Configuring a channel can deliver these queued events, while enabling previews applies to future enqueues. Previously omitted subjects remain unavailable: history uses `subject: null` (title not retained), while an actual empty subject uses `subject: ""`. Core does not fetch old subjects to populate queued events.
 
 Mailbox and folder labels are part of notification metadata. Message bodies remain outside outbox persistence, history and logs. Renaming or deleting a mailbox preserves identity metadata already captured for queued work. Terminal payload clearing and history retention follow [Storage](storage.md); native terminal records additionally clear device envelopes and signatures.
 
 Channel changes require focused adapter, dispatcher, storage and privacy tests for affected behavior. Keep user configuration steps and webhook examples on the documentation site.
+
+Bark credentials stay bound to their saved service address. Tests and saves that change the address require an explicitly supplied device key, including edits while another channel is selected. See [credential target binding](api.md#credential-target-binding).

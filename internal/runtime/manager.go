@@ -37,7 +37,6 @@ type Manager struct {
 	deliveryMu       sync.RWMutex
 	delivery         settings.Delivery
 	deliveryInvalid  bool
-	preview          atomic.Bool
 	detectCodes      atomic.Bool
 	store            *storage.Store
 	settings         *settings.Repository
@@ -107,7 +106,6 @@ func newManagerWithFactories(ctx context.Context, store *storage.Store, vault *s
 		return nil, err
 	}
 	m.delivery.Revision = revision
-	m.preview.Store(m.delivery.RecordsPreview())
 	m.detectCodes.Store(m.delivery.Channel == "native")
 	if err := store.SetDeliveryChannel(ctx, m.delivery.Channel); err != nil {
 		return nil, err
@@ -138,7 +136,7 @@ func newManagerWithFactories(ctx context.Context, store *storage.Store, vault *s
 		channel = m.deliverySender(m.delivery)
 	}
 	m.dispatcher = delivery.New(store, channel, m.delivery.RetryCount, log)
-	m.dispatcher.Configure(channel, m.delivery.RetryCount, m.preview.Load())
+	m.dispatcher.Configure(channel, m.delivery.RetryCount, m.delivery.RecordsPreview())
 	m.dispatcher.SetNativeSender(m.native.ForPairing(m.delivery.NativePairingID))
 	for id, b := range m.mailboxes {
 		m.startMailbox(b, states[id])
@@ -155,12 +153,11 @@ func (b *mailboxRuntime) publish() {
 func (m *Manager) startMailbox(b *mailboxRuntime, state mail.Subscriptions) {
 	defer func() {
 		b.publish()
-		// Publishing before reading the policy lets a concurrent delivery update
+		// Publishing before reading code detection lets a concurrent delivery update
 		// either reach this engine through the snapshot or precede this read.
-		b.monitor.SetPreview(m.preview.Load())
 		b.monitor.SetDetectCodes(m.detectCodes.Load())
 	}()
-	b.monitor = engine.New(b.source, m.store, b.config.ID, state, time.Minute, m.preview.Load(), m.log)
+	b.monitor = engine.New(b.source, m.store, b.config.ID, state, time.Minute, m.log)
 	b.monitor.SetDetectCodes(m.detectCodes.Load())
 	b.monitor.SetEventNamespace(b.config.Identity())
 	b.monitor.SetMailboxLabel(b.config.Label)
@@ -309,9 +306,12 @@ func (m *Manager) CreateMailbox(ctx context.Context, input settings.MailboxUpdat
 	}
 	b := &mailboxRuntime{config: next, budget: mail.NewConnectionBudget(next.Limit())}
 	b.source = b.budget.Wrap(m.newSource(next))
-	if _, err := probeMailbox(ctx, b.source); err != nil {
+	directory, err := probeMailbox(ctx, b.source)
+	if err != nil {
 		return settings.MailboxView{}, err
 	}
+	next.FolderDisplay = directory.Display()
+	b.config = next
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if err := m.ctx.Err(); err != nil {
@@ -360,9 +360,11 @@ func (m *Manager) UpdateMailbox(ctx context.Context, id string, input settings.M
 	var source mail.Source
 	if !labelOnly {
 		source = b.budget.Wrap(m.newSource(next))
-		if _, err := probeMailbox(ctx, source); err != nil {
+		directory, err := probeMailbox(ctx, source)
+		if err != nil {
 			return err
 		}
+		next.FolderDisplay = directory.Display()
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -374,6 +376,9 @@ func (m *Manager) UpdateMailbox(ctx context.Context, id string, input settings.M
 	}
 	if b.config.Revision != current.Revision || (!labelOnly && b.monitor.Subscriptions().Revision != subs.Revision) {
 		return fault.New("settings_conflict")
+	}
+	if labelOnly {
+		next.FolderDisplay = b.config.FolderDisplay
 	}
 	if !labelOnly {
 		b.stop()
@@ -481,7 +486,7 @@ func (m *Manager) Folders(ctx context.Context, id string) (*mail.FolderDiscovery
 		return nil, err
 	}
 	b.mu.RLock()
-	source, deleted := b.source, b.deleted
+	source, deleted, revision := b.source, b.deleted, b.config.Revision
 	b.mu.RUnlock()
 	if deleted {
 		return nil, fault.New("mailbox_not_found")
@@ -489,7 +494,26 @@ func (m *Manager) Folders(ctx context.Context, id string) (*mail.FolderDiscovery
 	if source == nil {
 		return nil, fault.New("mailbox_required")
 	}
-	return probeMailbox(ctx, source)
+	directory, err := probeMailbox(ctx, source)
+	if err != nil {
+		return nil, err
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.deleted {
+		return nil, fault.New("mailbox_not_found")
+	}
+	if b.config.Revision != revision {
+		return nil, fault.New("settings_conflict")
+	}
+	next := b.config
+	next.FolderDisplay = directory.Display()
+	if err := m.settings.RefreshMailboxDisplay(ctx, next); err != nil {
+		return nil, fault.From(err, "database_unavailable")
+	}
+	b.config = next
+	b.publish()
+	return directory, nil
 }
 
 // TestSavedMailbox probes the current stored source and keeps directory data inside Core.
@@ -615,20 +639,18 @@ func (m *Manager) UpdateDelivery(ctx context.Context, input settings.DeliveryUpd
 func (m *Manager) applyDelivery(next settings.Delivery) {
 	m.delivery = next
 	m.deliveryInvalid = false
-	// Membership and the preview policy change together: a newly added mailbox
-	// either appears in this snapshot or starts with the new policy.
+	// Membership and code detection change together: a newly added mailbox
+	// either appears in this snapshot or starts with the new detection setting.
 	m.mu.Lock()
-	m.preview.Store(next.RecordsPreview())
 	m.detectCodes.Store(next.Channel == "native")
 	boxes := m.snapshotLocked()
 	m.mu.Unlock()
 	for _, b := range boxes {
 		if state := b.state.Load(); state != nil {
-			state.monitor.SetPreview(m.preview.Load())
 			state.monitor.SetDetectCodes(m.detectCodes.Load())
 		}
 	}
-	m.dispatcher.Configure(m.deliverySender(next), next.RetryCount, m.preview.Load())
+	m.dispatcher.Configure(m.deliverySender(next), next.RetryCount, m.delivery.RecordsPreview())
 	m.log.Info("Delivery settings updated", "mailbox_id", "", "channel", next.Channel, "revision", next.Revision)
 }
 

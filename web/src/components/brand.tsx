@@ -1,11 +1,17 @@
-import { Mail } from "lucide-react";
+import coreIcon from "@/assets/core-icon.svg";
 import { useI18n } from "@/lib/i18n";
 
 export function Brand() {
   const { t } = useI18n();
   return (
     <div className="flex items-center gap-2.5 font-semibold">
-      <Mail aria-hidden="true" className="size-6 text-primary" />
+      <img
+        src={coreIcon}
+        alt=""
+        width={24}
+        height={24}
+        className="size-6 shrink-0"
+      />
       <b translate="no">{t("ui.brand")}</b>
     </div>
   );

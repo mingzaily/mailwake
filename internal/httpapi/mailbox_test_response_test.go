@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/mingzaily/mailwake/internal/fault"
@@ -56,5 +57,54 @@ func TestMailboxProbeErrorsHaveSameClientContract(t *testing.T) {
 	app := f.do(t, "POST", "/api/v1/app/mailboxes/test", map[string]any{}, map[string]string{"Authorization": "Bearer " + credential})
 	if web.Code != 429 || app.Code != web.Code || app.Body.String() != web.Body.String() {
 		t.Fatalf("web=%d %s; app=%d %s", web.Code, web.Body.String(), app.Code, app.Body.String())
+	}
+}
+
+type displayMailboxRuntime struct{ Runtime }
+
+func (r displayMailboxRuntime) Mailbox(id string) (settings.MailboxView, error) {
+	return settings.MailboxView{ID: id, FolderDisplay: &mail.FolderDisplay{FolderNames: map[string]string{"Private/Folder": "Folder"}}}, nil
+}
+func (r displayMailboxRuntime) Mailboxes() []settings.MailboxView {
+	value, _ := r.Mailbox("box")
+	return []settings.MailboxView{value}
+}
+func (r displayMailboxRuntime) CreateMailbox(context.Context, settings.MailboxUpdate) (settings.MailboxView, error) {
+	return r.Mailbox("box")
+}
+func (r displayMailboxRuntime) UpdateMailbox(context.Context, string, settings.MailboxUpdate) error {
+	return nil
+}
+func TestFolderDisplayIsLimitedToOwnerMailboxResponses(t *testing.T) {
+	f := newAppFixture(t, displayMailboxRuntime{newTestRuntime("", nil, nil)})
+	credential, _ := f.invite(t, []string{"mailboxes"})
+	for _, tc := range []struct {
+		method, path string
+		body         any
+	}{{"GET", "/mailboxes", nil}, {"GET", "/mailboxes/box", nil}, {"POST", "/mailboxes", map[string]any{}}, {"PUT", "/mailboxes/box", map[string]any{"revision": 1}}} {
+		web := f.do(t, tc.method, "/api/v1"+tc.path, tc.body, nil)
+		app := f.do(t, tc.method, "/api/v1/app"+tc.path, tc.body, map[string]string{"Authorization": "Bearer " + credential})
+		if web.Code >= 300 || app.Code >= 300 {
+			t.Fatalf("status web=%d app=%d", web.Code, app.Code)
+		}
+		if !strings.Contains(web.Body.String(), "Private/Folder") || strings.Contains(app.Body.String(), "folder_display") {
+			t.Fatalf("directory boundary: web=%s app=%s", web.Body, app.Body)
+		}
+	}
+}
+
+type staleFolderRuntime struct{ Runtime }
+
+func (staleFolderRuntime) Folders(context.Context, string) (*mail.FolderDiscovery, error) {
+	return nil, fault.New("settings_conflict")
+}
+func TestScanConfigurationConflictReturns409(t *testing.T) {
+	f := newAppFixture(t, staleFolderRuntime{newTestRuntime("", nil, nil)})
+	credential, _ := f.invite(t, []string{"folders"})
+	for path, headers := range map[string]map[string]string{"/api/v1/mailboxes/box/folders": nil, "/api/v1/app/mailboxes/box/folders": {"Authorization": "Bearer " + credential}} {
+		w := f.do(t, "GET", path, nil, headers)
+		if w.Code != 409 || !strings.Contains(w.Body.String(), "settings_conflict") {
+			t.Fatalf("%s: %d %s", path, w.Code, w.Body)
+		}
 	}
 }

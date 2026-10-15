@@ -60,3 +60,28 @@ test.each([
     );
   },
 );
+
+test("server-derived leaf names retain custom spelling and role precedence", () => {
+  const names = {
+    "其他文件夹/A区域": "A区域",
+    "Projects.Drafts": "Drafts",
+    "[Gmail]/重要": "重要",
+  };
+  expect(folderLabel("其他文件夹/A区域", {}, t, names)).toBe("A区域");
+  expect(folderLabel("Projects.Drafts", {}, t, names)).toBe("Drafts");
+  expect(folderLabel("[Gmail]/重要", {}, t, names)).toBe("重要");
+  expect(
+    folderLabel("Projects.Drafts", { "Projects.Drafts": "drafts" }, t, names),
+  ).toBe("草稿箱");
+  expect(folderLabel("Literal/Slash", {}, t)).toBe("Literal/Slash");
+  expect(folderLabel("Trailing/", {}, t, { "Trailing/": "" })).toBe(
+    "Trailing/",
+  );
+});
+
+test.each(["constructor", "__proto__", "toString"])(
+  "literal folder names remain text: %s",
+  (name) => {
+    expect(folderLabel(name, {}, t)).toBe(name);
+  },
+);

@@ -2,7 +2,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ClearHistoryButton } from "@/components/clear-history-button";
 import { useI18n } from "@/lib/i18n";
 import { useDeliveries } from "@/lib/queries";
-import { ErrorNotice, PageHeading, Panel } from "@/components/common";
+import {
+  ErrorNotice,
+  LoadingState,
+  PageHeading,
+  Panel,
+} from "@/components/common";
 import { DeliveryTable } from "@/components/status-tables";
 export function Deliveries() {
   const { t } = useI18n();
@@ -28,7 +33,8 @@ export function Deliveries() {
       />
       <ErrorNotice error={query.error} />
       <Panel>
-        <DeliveryTable deliveries={query.data?.deliveries ?? []} />
+        {query.isPending && <LoadingState />}
+        {query.data && <DeliveryTable deliveries={query.data.deliveries} />}
       </Panel>
     </>
   );

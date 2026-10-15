@@ -33,7 +33,7 @@ func TestReconnectLogsKeepRawErrorsPrivate(t *testing.T) {
 			defer store.Close()
 			var output bytes.Buffer
 			log := logging.New(&output)
-			e := New(failingLogSource{tc.err}, store, "mbx_test", mail.Subscriptions{Folders: mail.RealtimeFolders([]string{"INBOX"})}, time.Minute, true, log)
+			e := New(failingLogSource{tc.err}, store, "mbx_test", mail.Subscriptions{Folders: mail.RealtimeFolders([]string{"INBOX"})}, time.Minute, log)
 			ctx, cancel := context.WithCancel(t.Context())
 			done := make(chan struct{})
 			go func() { defer close(done); e.Run(ctx) }()

@@ -5,6 +5,7 @@ export type Folder = { name: string; check: Check };
 export type Subscriptions = { revision: number; folders: Folder[] };
 export type Credential = { configured: boolean };
 export type Mailbox = {
+  folder_display?: Pick<FolderDiscovery, "folder_roles" | "folder_names">;
   id: string;
   label: string;
   revision: number;
@@ -106,4 +107,5 @@ export type Diagnostics = {
 export type FolderDiscovery = {
   folders: string[];
   folder_roles?: Record<string, string>;
+  folder_names?: Record<string, string>;
 };

@@ -209,7 +209,7 @@ func TestEngineRestartResumesAndKeepsPreviewPrivate(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	start := func() (context.CancelFunc, <-chan struct{}) {
 		runCtx, cancel := context.WithCancel(ctx)
-		monitor := engine.New(source, store, "primary", mail.Subscriptions{Revision: 1, Folders: mail.RealtimeFolders([]string{"Clients"})}, 50*time.Millisecond, false, logger)
+		monitor := engine.New(source, store, "primary", mail.Subscriptions{Revision: 1, Folders: mail.RealtimeFolders([]string{"Clients"})}, 50*time.Millisecond, logger)
 		done := make(chan struct{})
 		go func() { defer close(done); monitor.Run(runCtx) }()
 		return cancel, done
@@ -330,7 +330,7 @@ func TestLiveResubscriptionStartsFromNewBaseline(t *testing.T) {
 		t.Fatal(err)
 	}
 	closed := make(chan string, 10)
-	monitor := engine.New(observedSource{source, closed}, store, "a", initial, 50*time.Millisecond, false, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	monitor := engine.New(observedSource{source, closed}, store, "a", initial, 50*time.Millisecond, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan struct{})
 	go func() { defer close(done); monitor.Run(ctx) }()
@@ -384,7 +384,7 @@ func TestStaleMailFiledIntoFolderIsSkipped(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer store.Close()
-	monitor := engine.New(source, store, "a", mail.Subscriptions{Revision: 1, Folders: mail.RealtimeFolders([]string{"Clients"})}, 50*time.Millisecond, false, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	monitor := engine.New(source, store, "a", mail.Subscriptions{Revision: 1, Folders: mail.RealtimeFolders([]string{"Clients"})}, 50*time.Millisecond, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan struct{})
 	go func() { defer close(done); monitor.Run(ctx) }()

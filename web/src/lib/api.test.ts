@@ -47,10 +47,18 @@ test.each([400, 409, 429])(
   },
 );
 test("only protected 401 expires session; login failure stays in its form", async () => {
-  fetchMock.mockImplementation(() =>
+  fetchMock.mockImplementation((path, options) =>
     Promise.resolve(
       new Response(
-        JSON.stringify({ error: { code: "unauthorized", message: "expired" } }),
+        JSON.stringify({
+          error: {
+            code:
+              path === "/api/v1/session" && options.method === "POST"
+                ? "login_credentials_invalid"
+                : "unauthorized",
+            message: "localized error",
+          },
+        }),
         { status: 401 },
       ),
     ),

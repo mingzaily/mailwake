@@ -109,7 +109,7 @@ func scheduledEngine(t *testing.T, source mail.Source, folders []mail.Folder) (*
 	if err := store.SaveSubscriptions(t.Context(), "mbx_test", state); err != nil {
 		t.Fatal(err)
 	}
-	e := New(source, store, "mbx_test", state, time.Minute, true, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	e := New(source, store, "mbx_test", state, time.Minute, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	return e, store
 }
 func TestScheduledOrderIntervalsAndSingleConnection(t *testing.T) {

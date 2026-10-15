@@ -131,6 +131,7 @@ func TestMailboxReplacementAndEncryptedViews(t *testing.T) {
 		t.Fatal("password-only replacement reset progress", cp, err)
 	}
 	input.Host = "second"
+	input.Password = ptr("synthetic credential private")
 	if err := s.UpdateMailbox(t.Context(), input); err != nil {
 		t.Fatal(err)
 	}

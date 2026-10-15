@@ -94,8 +94,9 @@ func (s *Source) connect(ctx context.Context) (*connection, error) {
 	}
 	x := &connection{conn: conn, timeout: s.timeout, updates: make(chan struct{}, 1)}
 	options := &imapclient.Options{
-		TLSConfig:   s.tlsConfig,
-		WordDecoder: headerDecoder,
+		TLSConfig:             s.tlsConfig,
+		MaxBufferedFetchBytes: content.MaxReadBytes + 1,
+		WordDecoder:           headerDecoder,
 		UnilateralDataHandler: &imapclient.UnilateralDataHandler{
 			Mailbox: func(data *imapclient.UnilateralDataMailbox) {
 				if data.NumMessages != nil {
@@ -184,18 +185,27 @@ func (s *Source) Folders(ctx context.Context) (*mail.FolderDiscovery, error) {
 	defer x.Close()
 	folders := []string{}
 	roles := map[string]string{}
+	names := map[string]string{}
 	err = x.command(ctx, "imap_discovery_failed", func() error {
 		cmd := x.client.List("", "*", &protocol.ListOptions{ReturnSpecialUse: x.caps.Has(protocol.CapSpecialUse)})
 		defer cmd.Close()
 		for item := cmd.Next(); item != nil; item = cmd.Next() {
 			selectable := true
 			for _, attr := range item.Attrs {
-				if attr == protocol.MailboxAttrNoSelect {
+				// RFC 5258: NonExistent also implies Noselect.
+				if attr == protocol.MailboxAttrNoSelect || attr == protocol.MailboxAttrNonExistent {
 					selectable = false
 				}
 			}
 			if selectable {
 				folders = append(folders, item.Mailbox)
+				if item.Delim != 0 {
+					if index := strings.LastIndex(item.Mailbox, string(item.Delim)); index >= 0 {
+						if leaf := item.Mailbox[index+len(string(item.Delim)):]; leaf != "" {
+							names[item.Mailbox] = leaf
+						}
+					}
+				}
 				if role := folderRole(item.Mailbox, item.Attrs); role != "" {
 					roles[item.Mailbox] = role
 				}
@@ -211,7 +221,7 @@ func (s *Source) Folders(ctx context.Context) (*mail.FolderDiscovery, error) {
 		return nil, err
 	}
 	sort.Strings(folders)
-	return &mail.FolderDiscovery{Folders: folders, FolderRoles: roles}, nil
+	return &mail.FolderDiscovery{Folders: folders, FolderRoles: roles, FolderNames: names}, nil
 }
 
 func (s *Source) Open(ctx context.Context, folder string) (mail.Session, error) {
@@ -336,44 +346,45 @@ func (s *session) Poll(ctx context.Context, checkpoint string, detectCodes bool)
 		options.BodySection = []*protocol.FetchItemBodySection{section}
 		options.RFC822Size = true
 	}
-	messages := make(map[protocol.UID]mail.Message, len(uids))
-	err = s.command(ctx, "imap_metadata_failed", func() error {
-		cmd := s.client.Fetch(set, options)
-		defer cmd.Close()
-		for data := cmd.Next(); data != nil; data = cmd.Next() {
-			item, err := data.Collect()
-			if err != nil {
-				return err
-			}
-			msg := mail.Message{Location: &mail.Location{UIDValidity: s.validity, UID: uint32(item.UID)}, Key: fmt.Sprintf("%d:%d", s.validity, item.UID), ReceivedAt: item.InternalDate}
-			if item.Envelope != nil {
-				msg.Subject = item.Envelope.Subject
-				if len(item.Envelope.From) > 0 {
-					msg.Sender = item.Envelope.From[0].Addr()
-				}
-			}
-			if detectCodes {
-				raw := item.FindBodySection(section)
-				// Parse complete messages only; partial MIME can yield incomplete codes.
-				if int64(len(raw)) == item.RFC822Size && item.RFC822Size <= maxCodeMessageBytes {
-					if parsed, err := content.Extract(bytes.NewReader(raw), msg.Subject); err == nil {
-						msg.Code = parsed.Code
-					}
-				}
-			}
-			// Retain only notification fields as the next message arrives.
-			messages[item.UID] = msg
-		}
-		return cmd.Close()
-	})
+	items, err := s.fetch(ctx, "imap_metadata_failed", set, options, int64(limit*maxCodeMessageBytes))
 	if err != nil {
 		return mail.Batch{}, err
 	}
-	// Keep UID order and skip messages expunged between SEARCH and FETCH.
+	// Verify missing metadata against current membership before skipping expunged mail.
+	var missing protocol.UIDSet
 	for _, uid := range uids {
-		if msg, ok := messages[uid]; ok {
-			batch.Messages = append(batch.Messages, msg)
+		item := items[uid]
+		if item == nil || item.Envelope == nil || item.InternalDate.IsZero() {
+			missing.AddNum(uid)
 		}
+	}
+	if len(missing) > 0 {
+		remaining, err := s.search(ctx, missing)
+		if err != nil {
+			return mail.Batch{}, err
+		}
+		if len(remaining) > 0 {
+			return mail.Batch{}, fault.New("imap_metadata_failed")
+		}
+	}
+	for _, uid := range uids {
+		if missing.Contains(uid) {
+			continue
+		}
+		item := items[uid]
+		msg := mail.Message{Location: &mail.Location{UIDValidity: s.validity, UID: uint32(uid)}, Key: fmt.Sprintf("%d:%d", s.validity, uid), ReceivedAt: item.InternalDate, Subject: item.Envelope.Subject}
+		if len(item.Envelope.From) > 0 {
+			msg.Sender = item.Envelope.From[0].Addr()
+		}
+		if detectCodes {
+			raw := item.FindBodySection(section)
+			if int64(len(raw)) == item.RFC822Size && item.RFC822Size <= maxCodeMessageBytes {
+				if parsed, err := content.Extract(bytes.NewReader(raw), msg.Subject); err == nil {
+					msg.Code = parsed.Code
+				}
+			}
+		}
+		batch.Messages = append(batch.Messages, msg)
 	}
 	last := uids[len(uids)-1]
 	b, _ := json.Marshal(cursor{Validity: s.validity, Next: uint32(last) + 1})

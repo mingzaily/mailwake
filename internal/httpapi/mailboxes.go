@@ -7,10 +7,19 @@ import (
 	"github.com/mingzaily/mailwake/internal/settings"
 )
 
-type mailboxHandlers struct{ runtime MailboxRuntime }
+type mailboxHandlers struct {
+	runtime              MailboxRuntime
+	includeFolderDisplay bool
+}
 
 func (h mailboxHandlers) List(c *gin.Context) {
-	c.JSON(200, gin.H{"mailboxes": h.runtime.Mailboxes()})
+	items := h.runtime.Mailboxes()
+	if !h.includeFolderDisplay {
+		for i := range items {
+			items[i].FolderDisplay = nil
+		}
+	}
+	c.JSON(200, gin.H{"mailboxes": items})
 }
 
 func (h mailboxHandlers) Create(c *gin.Context) {
@@ -27,6 +36,9 @@ func (h mailboxHandlers) Create(c *gin.Context) {
 		respondFault(c, err)
 		return
 	}
+	if !h.includeFolderDisplay {
+		view.FolderDisplay = nil
+	}
 	c.JSON(201, view)
 }
 
@@ -35,6 +47,9 @@ func (h mailboxHandlers) Get(c *gin.Context) {
 	if err != nil {
 		respondFault(c, err)
 		return
+	}
+	if !h.includeFolderDisplay {
+		view.FolderDisplay = nil
 	}
 	c.JSON(200, view)
 }
@@ -57,6 +72,9 @@ func (h mailboxHandlers) Update(c *gin.Context) {
 		respondFault(c, err)
 		return
 	}
+	if !h.includeFolderDisplay {
+		view.FolderDisplay = nil
+	}
 	c.JSON(200, view)
 }
 
@@ -73,7 +91,7 @@ func (h mailboxHandlers) Folders(c *gin.Context) {
 	if err != nil {
 		failure := fault.From(err, "imap_discovery_failed")
 		switch failure.Code {
-		case "mailbox_not_found", "mailbox_required", "connection_budget_exceeded", "discovery_busy":
+		case "mailbox_not_found", "mailbox_required", "connection_budget_exceeded", "discovery_busy", "settings_conflict", "database_unavailable":
 			respondFault(c, failure)
 		default:
 			respondError(c, 502, failure)

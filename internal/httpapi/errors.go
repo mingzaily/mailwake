@@ -38,12 +38,13 @@ func respondFault(c *gin.Context, err error) {
 		status = http.StatusServiceUnavailable
 	case "mailbox_duplicate", "setup_complete", "settings_conflict", "subscriptions_conflict":
 		status = http.StatusConflict
-	case "unauthorized":
+	case "unauthorized", "login_credentials_invalid":
 		status = http.StatusUnauthorized
 	case "setup_required", "csrf_invalid":
 		status = http.StatusForbidden
 	case "setup_code_invalid", "current_password_invalid", "configuration_invalid", "connection_budget_exceeded", "connection_limit_invalid", "mailbox_required", "delivery_test_failed",
 		"native_target_required", "native_target_unavailable", "credential_required", "config_imap_address_invalid", "config_account_required", "config_language_invalid", "config_retry_count_invalid",
+		"mailbox_password_required_for_change", "bark_key_required_for_change",
 		"config_preview_invalid", "config_bark_endpoint_invalid", "config_webhook_url_invalid", "config_webhook_secret_invalid", "config_delivery_channel_invalid",
 		"request_invalid", "scope_invalid", "core_origin_invalid":
 		status = http.StatusBadRequest

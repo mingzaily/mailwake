@@ -2,6 +2,7 @@ import {
   useActionError,
   BusyButton,
   ErrorNotice,
+  LoadingState,
   InlineConfirm,
   PageHeading,
   Panel,
@@ -234,52 +235,54 @@ function Tokens() {
           </Field>
         </form>
       )}
-      {query.data?.tokens.length ? (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>{t("ui.token_name")}</TableHead>
-              <TableHead>{t("ui.created_at")}</TableHead>
-              <TableHead>{t("ui.last_used_at")}</TableHead>
-              <TableHead className="text-center">{t("ui.actions")}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {query.data.tokens.map((token) => (
-              <TableRow key={token.id}>
-                <TableCell className="max-w-64 whitespace-normal break-words">
-                  {token.name}
-                </TableCell>
-                <TableCell>
-                  <Time value={token.created_at} />
-                </TableCell>
-                <TableCell>
-                  {token.last_used_at ? (
-                    <Time value={token.last_used_at} />
-                  ) : (
-                    <span className="text-muted-foreground">
-                      {t("ui.never")}
-                    </span>
-                  )}
-                </TableCell>
-                <TableCell className="text-center">
-                  <div className="inline-flex text-left">
-                    <InlineConfirm
-                      label={t("ui.revoke")}
-                      question={t("ui.revoke_question", { name: token.name })}
-                      confirm={t("ui.confirm_revoke")}
-                      busy={busy === token.id}
-                      onConfirm={() => revoke(token.id)}
-                    />
-                  </div>
-                </TableCell>
+      {query.isPending && <LoadingState />}
+      {query.data &&
+        (query.data.tokens.length ? (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t("ui.token_name")}</TableHead>
+                <TableHead>{t("ui.created_at")}</TableHead>
+                <TableHead>{t("ui.last_used_at")}</TableHead>
+                <TableHead className="text-center">{t("ui.actions")}</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      ) : (
-        <p className="text-sm text-muted-foreground">{t("ui.no_tokens")}</p>
-      )}
+            </TableHeader>
+            <TableBody>
+              {query.data.tokens.map((token) => (
+                <TableRow key={token.id}>
+                  <TableCell className="max-w-64 whitespace-normal break-words">
+                    {token.name}
+                  </TableCell>
+                  <TableCell>
+                    <Time value={token.created_at} />
+                  </TableCell>
+                  <TableCell>
+                    {token.last_used_at ? (
+                      <Time value={token.last_used_at} />
+                    ) : (
+                      <span className="text-muted-foreground">
+                        {t("ui.never")}
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <div className="inline-flex text-left">
+                      <InlineConfirm
+                        label={t("ui.revoke")}
+                        question={t("ui.revoke_question", { name: token.name })}
+                        confirm={t("ui.confirm_revoke")}
+                        busy={busy === token.id}
+                        onConfirm={() => revoke(token.id)}
+                      />
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        ) : (
+          <p className="text-sm text-muted-foreground">{t("ui.no_tokens")}</p>
+        ))}
     </div>
   );
 }

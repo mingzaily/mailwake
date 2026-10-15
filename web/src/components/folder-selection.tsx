@@ -22,18 +22,20 @@ export function FolderSelection({
   folders,
   available,
   roles = {},
+  names = {},
   disabled = false,
   onChange,
 }: {
   folders: Folder[];
   available: string[];
   roles?: Record<string, string>;
+  names?: Record<string, string>;
   disabled?: boolean;
   onChange: (folders: Folder[]) => void;
 }) {
   const { t } = useI18n();
   const id = useId();
-  const names = [
+  const paths = [
     ...new Set([...available, ...folders.map((folder) => folder.name)]),
   ].sort((a, b) => a.localeCompare(b));
   const selectedFolders = new Map(
@@ -42,7 +44,7 @@ export function FolderSelection({
   return (
     <FieldSet disabled={disabled}>
       <FieldLegend>{t("ui.choose_folders")}</FieldLegend>
-      {names.length ? (
+      {paths.length ? (
         <Table>
           <TableHeader>
             <TableRow>
@@ -51,8 +53,8 @@ export function FolderSelection({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {names.map((name, index) => {
-              const translated = folderLabel(name, roles, t);
+            {paths.map((name, index) => {
+              const translated = folderLabel(name, roles, t, names);
               const label =
                 translated === name ? name : `${translated} (${name})`;
               const selected = selectedFolders.get(name);
@@ -78,7 +80,7 @@ export function FolderSelection({
                         htmlFor={`${id}-${index}`}
                         className="min-w-0 break-all"
                       >
-                        <FolderName name={name} roles={roles} />
+                        <FolderName name={name} roles={roles} names={names} />
                       </FieldLabel>
                     </Field>
                   </TableCell>

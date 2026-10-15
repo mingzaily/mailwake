@@ -78,3 +78,12 @@ func (r *Repository) RevokeNativePairing(ctx context.Context, id string, unlink 
 	_, err := r.store.RevokeNativePairingWithDelivery(ctx, id, unlink, change)
 	return next, err
 }
+
+// RefreshMailboxDisplay stores server-derived presentation data without changing configuration revision.
+func (r *Repository) RefreshMailboxDisplay(ctx context.Context, value Mailbox) error {
+	encrypted, err := r.encrypt(storage.MailboxConfigurationName(value.ID), value)
+	if err != nil {
+		return err
+	}
+	return r.store.RefreshMailboxDisplay(ctx, value.ID, value.Revision, encrypted)
+}

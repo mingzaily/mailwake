@@ -93,7 +93,7 @@ function Console() {
     );
   if (!authenticated)
     return (
-      <PageBoundary key="auth">
+      <PageBoundary key="auth" fullScreen>
         <AuthScreen
           setup={setup}
           error={
@@ -116,7 +116,7 @@ function Console() {
     );
   if (wizard)
     return (
-      <PageBoundary key="setup">
+      <PageBoundary key="setup" fullScreen>
         <SetupWizard
           done={() => {
             setWizard(false);
@@ -126,7 +126,7 @@ function Console() {
       </PageBoundary>
     );
   return (
-    <PageBoundary key="console">
+    <PageBoundary key="console" fullScreen>
       <Shell
         username={session.data?.username}
         page={page}

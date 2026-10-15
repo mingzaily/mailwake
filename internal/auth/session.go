@@ -21,7 +21,7 @@ func (s *Service) Login(ctx context.Context, source, username, password string) 
 	valid := VerifyPassword(a.PasswordHash, password)
 	if !valid || a.Username != username {
 		s.failed(source)
-		return Grant{}, fault.New("unauthorized")
+		return Grant{}, fault.New("login_credentials_invalid")
 	}
 	grant, session := newGrant()
 	if err := s.store.CreateSession(ctx, a.PasswordHash, session); err != nil {

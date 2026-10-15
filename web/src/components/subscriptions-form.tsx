@@ -24,16 +24,22 @@ import { Alert, AlertDescription } from "./ui/alert";
 export function SubscriptionsEditor({
   mailbox,
   discovered = [],
-  roles = {},
+  roles = mailbox.folder_display?.folder_roles ?? {},
+  names = mailbox.folder_display?.folder_names ?? {},
   onSaved,
 }: {
   mailbox: Mailbox;
   discovered?: string[];
   roles?: Record<string, string>;
+  names?: Record<string, string>;
   onSaved?: () => void;
 }) {
   const { t } = useI18n();
-  const [available, setAvailable] = useState<string[]>(discovered);
+  const [directory, setDirectory] = useState<FolderDiscovery>({
+    folders: discovered,
+    folder_roles: roles,
+    folder_names: names,
+  });
   const [busy, setBusy] = useState(false);
   const query = useQuery({
     queryKey: ["subscriptions", mailbox.id],
@@ -44,7 +50,7 @@ export function SubscriptionsEditor({
     return (
       <>
         <ErrorNotice error={query.error} />
-        <p>{t("ui.loading")}</p>
+        {query.isPending && <p role="status">{t("ui.loading")}</p>}
       </>
     );
   return (
@@ -54,9 +60,10 @@ export function SubscriptionsEditor({
       busy={busy}
       setBusy={setBusy}
       initial={query.data}
-      discovered={[...new Set([...discovered, ...available])]}
-      roles={roles}
-      onDiscovered={setAvailable}
+      discovered={directory.folders}
+      roles={directory.folder_roles ?? {}}
+      names={directory.folder_names ?? {}}
+      onDiscovered={setDirectory}
       onSaved={onSaved}
       reload={() => void query.refetch()}
     />
@@ -68,7 +75,8 @@ function SubscriptionFields({
   busy,
   setBusy,
   discovered,
-  roles: initialRoles,
+  roles,
+  names,
   onDiscovered,
   onSaved,
   reload,
@@ -79,14 +87,14 @@ function SubscriptionFields({
   setBusy: (busy: boolean) => void;
   discovered: string[];
   roles: Record<string, string>;
-  onDiscovered: (folders: string[]) => void;
+  names: Record<string, string>;
+  onDiscovered: (directory: FolderDiscovery) => void;
   onSaved?: () => void;
   reload: () => void;
 }) {
   const { t } = useI18n();
   const toast = useToast();
   const client = useQueryClient();
-  const [roles, setRoles] = useState(initialRoles);
   const [folders, setFolders] = useState<Folder[]>(initial.folders);
   const [error, setError] = useActionError();
   const over = connectionUsage(folders) > mailbox.connection_limit - 1;
@@ -97,8 +105,8 @@ function SubscriptionFields({
       const result = await api<FolderDiscovery>(
         `/mailboxes/${mailbox.id}/folders`,
       );
-      onDiscovered(result.folders);
-      setRoles(result.folder_roles ?? {});
+      onDiscovered(result);
+      void client.invalidateQueries({ queryKey: ["mailboxes"] });
     } catch (error) {
       setError(error);
     } finally {
@@ -140,6 +148,7 @@ function SubscriptionFields({
         folders={folders}
         available={discovered}
         roles={roles}
+        names={names}
         onChange={setFolders}
       />
       <FormActions>

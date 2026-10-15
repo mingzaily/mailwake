@@ -13,6 +13,10 @@ func TestDeliveryMessageLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := s.SaveDelivery(t.Context(), []byte("synthetic"), "subject", "webhook", false, 0); err != nil {
+		t.Fatal(err)
+	}
+
 	defer s.Close()
 	for _, id := range []string{"accepted", "native-dead", "pending"} {
 		if err := s.Enqueue(t.Context(), event.Notification{ID: id, MailboxID: "mbx_work", Account: "Original name", Folder: "Clients", Subject: "Report", Sender: "private sender"}); err != nil {
@@ -56,7 +60,7 @@ func TestDeliveryMessageLifecycle(t *testing.T) {
 			}
 		}
 	}
-	if err := s.SaveDelivery(t.Context(), []byte("encrypted"), "off", "webhook", true, 0); err != nil {
+	if err := s.SaveDelivery(t.Context(), []byte("encrypted"), "off", "webhook", true, 1); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Enqueue(t.Context(), event.Notification{ID: "late", Subject: "Late subject", Account: "Other"}); err != nil {

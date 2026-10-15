@@ -214,6 +214,11 @@ func TestDispatcherKeepsVerificationCodeOnlyForNative(t *testing.T) {
 					t.Fatal(err)
 				}
 				defer store.Close()
+				// Start with retained metadata to exercise the dispatch-time policy.
+				if err := store.SaveDelivery(t.Context(), []byte("synthetic"), "subject", "webhook", false, 0); err != nil {
+					t.Fatal(err)
+				}
+
 				n := event.Notification{ID: "code-event", Code: "482913", Sender: "sender@example.org", Subject: "Sign in"}
 				if err := store.Enqueue(t.Context(), n); err != nil {
 					t.Fatal(err)
@@ -235,6 +240,57 @@ func TestDispatcherKeepsVerificationCodeOnlyForNative(t *testing.T) {
 					t.Fatalf("unexpected event: %+v", sent)
 				}
 			})
+		}
+	}
+}
+
+func TestConfiguringChannelDeliversBacklogWithoutInventingTitles(t *testing.T) {
+	store, err := storage.Open(t.Context(), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	if err := store.Enqueue(t.Context(), event.Notification{ID: "before", Subject: "Old private subject"}); err != nil {
+		t.Fatal(err)
+	}
+	d := New(store, nil, 0, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if worked, err := d.deliverOne(t.Context(), time.Now().Add(time.Second)); err != nil || worked {
+		t.Fatal("unconfigured dispatch", worked, err)
+	}
+	if err := store.SaveDelivery(t.Context(), []byte("synthetic"), "subject", "bark", false, 0); err != nil {
+		t.Fatal(err)
+	}
+	var bodies []string
+	sender := channelEventSender{channel: "bark", senderFunc: func(_ context.Context, n event.Notification) error {
+		bodies = append(bodies, Render("zh-CN", n).Body)
+		return nil
+	}}
+	d.Configure(sender, 0, true)
+	if worked, err := d.deliverOne(t.Context(), time.Now().Add(time.Second)); err != nil || !worked {
+		t.Fatal("backlog dispatch", worked, err)
+	}
+	if err := store.Enqueue(t.Context(), event.Notification{ID: "after", Subject: "新的邮件主题"}); err != nil {
+		t.Fatal(err)
+	}
+	if worked, err := d.deliverOne(t.Context(), time.Now().Add(time.Second)); err != nil || !worked {
+		t.Fatal("new dispatch", worked, err)
+	}
+	if len(bodies) != 2 || bodies[0] != "收到新邮件" || bodies[1] != "新的邮件主题" {
+		t.Fatalf("notification bodies: %q", bodies)
+	}
+	items, err := store.Recent(t.Context())
+	if err != nil || len(items) != 2 {
+		t.Fatal("missing history", err)
+	}
+	for _, item := range items {
+		if item.State != "accepted" || item.Message == nil {
+			t.Fatalf("history: %+v", item)
+		}
+		if item.ID == "before" && item.Message.Subject != nil {
+			t.Fatal("old title invented")
+		}
+		if item.ID == "after" && (item.Message.Subject == nil || *item.Message.Subject != "新的邮件主题") {
+			t.Fatal("new title lost")
 		}
 	}
 }

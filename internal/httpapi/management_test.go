@@ -28,7 +28,7 @@ func TestSubscriptionAPIAndPrivateDiagnostics(t *testing.T) {
 		t.Fatal(err)
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	monitor := engine.New(folderSource{}, store, "private-account", initial, time.Minute, false, logger)
+	monitor := engine.New(folderSource{}, store, "private-account", initial, time.Minute, logger)
 	authService, grant := testAdministrator(t, store)
 	router := New(authService, newTestRuntime("bark", monitor, folderSource{}), store, logger, Integrations{})
 	call := func(method, path, body string, auth bool) *httptest.ResponseRecorder {

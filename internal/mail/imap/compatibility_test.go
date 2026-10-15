@@ -131,7 +131,7 @@ func TestFolderOpenResponseCodeInLastError(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer store.Close()
-			monitor := engine.New(source, store, "test", mail.Subscriptions{Revision: 1, Folders: mail.RealtimeFolders([]string{"Clients"})}, time.Minute, false, slog.New(slog.NewTextHandler(io.Discard, nil)))
+			monitor := engine.New(source, store, "test", mail.Subscriptions{Revision: 1, Folders: mail.RealtimeFolders([]string{"Clients"})}, time.Minute, slog.New(slog.NewTextHandler(io.Discard, nil)))
 			ctx, cancel := context.WithCancel(t.Context())
 			done := make(chan struct{})
 			go func() { defer close(done); monitor.Run(ctx) }()

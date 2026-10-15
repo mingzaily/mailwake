@@ -2,6 +2,7 @@ import { useEffect, useId, useRef } from "react";
 import { useI18n } from "@/lib/i18n";
 import type { Delivery } from "@/lib/types";
 import { Button } from "./ui/button";
+import { FolderName } from "./folder-name";
 import { Time } from "./common";
 
 export function DeliveryDetails({
@@ -32,11 +33,19 @@ export function DeliveryDetails({
     [t("ui.delivery_id"), item.id],
     [
       t("ui.delivery_source"),
-      item.message?.test
-        ? "—"
-        : item.message
-          ? `${item.message.mailbox_label || item.message.mailbox_id} / ${item.message.folder}`
-          : t("ui.source_unavailable"),
+      item.message?.test ? (
+        "—"
+      ) : item.message ? (
+        <span>
+          {item.message.mailbox_label || item.message.mailbox_id} /{" "}
+          <FolderName
+            name={item.message.folder}
+            mailboxId={item.message.mailbox_id}
+          />
+        </span>
+      ) : (
+        t("ui.source_unavailable")
+      ),
     ],
     [t("ui.state"), t(`state.${item.state}`)],
     [t("ui.attempts"), item.attempts],

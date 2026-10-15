@@ -157,6 +157,7 @@ func TestMultipleMailboxLifetimesEventsAndProgress(t *testing.T) {
 		t.Fatal("changing one mailbox interrupted another")
 	}
 	input.Host = "replacement"
+	input.Password = ptr("replacement-password")
 	if err := m.UpdateMailbox(t.Context(), a, input); err != nil {
 		t.Fatal(err)
 	}

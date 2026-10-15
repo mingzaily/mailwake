@@ -10,7 +10,9 @@ The documentation site owns endpoint tables, request examples and script usage. 
 
 Before setup, protected management endpoints return `setup_required`. Browser sessions use HttpOnly cookies and CSRF on mutations. Script APIs use Bearer tokens. App controller credentials have separate device and scope boundaries. Validate at the owning boundary and pass resolved authorization onward.
 
-Configuration mutations use revision optimistic concurrency. Preserve write-only credentials when omitted, return a conflict for stale revisions, and keep user input available for correction. Test observable status codes and persisted state, including unauthorized access, scope isolation, stale revisions, invalid values and atomic updates.
+`POST /api/v1/session` returns 401 `login_credentials_invalid` for an incorrect username or password, with the same message for either field. Protected requests with missing or invalid session/API credentials return 401 `unauthorized`. Failed logins retain the shared failure limit and issue no session cookie.
+
+Configuration mutations use revision optimistic concurrency. Preserve omitted write-only credentials only for the same target (see below), return a conflict for stale revisions, and keep user input available for correction. Test observable status codes and persisted state, including unauthorized access, scope isolation, stale revisions, invalid values and atomic updates.
 
 ## Service composition and response boundaries
 
@@ -44,7 +46,7 @@ English is the default. The API, Web console and notification renderers share th
 - `GET /locales/default.json` serves the negotiated catalog; `GET /locales/{canonical-code}.json` serves that catalog explicitly. Unknown catalog paths return `locale_not_supported`.
 - Delivery settings `language` controls Core-rendered notifications independently of the request or console language. It accepts the canonical codes and supported regional variants, persists the canonical code, and defaults to `en` when omitted or empty. An unsupported explicit value returns 400 `config_language_invalid`.
 - Relay generates Native test notification text using the paired device’s language. The Core notification language does not override that language. Relay and App language support is implemented in their respective modules.
-- Standard folder roles and common folder names are localized in the console. Raw IMAP paths, custom names and `folder_roles` remain unchanged in APIs; Apps localize these roles with their own catalogs. Notification titles continue to use the original leaf folder name. User-entered names, email subjects, message bodies and verification codes remain literal.
+- Standard folder roles and common folder names are localized in the console. Raw IMAP paths and `folder_roles` remain unchanged in APIs; discovery also returns optional `folder_names`, a path-to-leaf map derived from each LIST response delimiter. NIL delimiters and empty leaf names retain the original path. Web owner mailbox responses include optional `folder_display` with the saved `folder_names` and `folder_roles`; App mailbox responses omit that directory to preserve the folders scope boundary. Display refresh keeps the configuration revision and returns `settings_conflict` (409) if the mailbox changes during scanning. Apps localize these roles with their own catalogs. Notification titles continue to use the original leaf folder name. User-entered names, email subjects, message bodies and verification codes remain literal.
 - Logs and CLI output use English. Business errors retain stable English `snake_case` codes and named parameters; storage keeps codes and parameters, and display layers translate messages. Dates and numbers in API responses keep their existing machine-readable formats; the console formats timestamps using its chosen locale.
 
 ```json
@@ -58,6 +60,8 @@ English is the default. The API, Web console and notification renderers share th
 
 `last_error` in delivery records and `notice` in folder status use the same `{code, message, params?}` shape, for example `bark_http_error` with `{"status":"503"}`. Branch on `code`; show `message`.
 
+`connections_in_use` reports currently occupied connection slots, including transient management operations. Scheduled checks release their connection between rounds. The console computes configured monitoring demand from folder check modes; this differs from the instantaneous API count.
+
 Each mailbox reserves one connection for its folder discovery and connection tests. Watcher demand is `realtime Folder count + (1 if any scheduled Folders exist, otherwise 0)`, at most `connection_limit - 1` connections (9 by default); all operations for that mailbox together stay within `connection_limit` (2–100). Saved configurations with a limit of 1 start in recovery mode with `configuration_invalid`.
 
 ## Native target and content contracts
@@ -67,3 +71,11 @@ The native notification target is one active pairing. Revoking the selected targ
 Message content requires a valid controller credential, explicit content scope, a signed message reference and a currently subscribed folder. Keep body and image payloads within the limits in [HTML content](html-content.md) and outside persistent history and diagnostics.
 
 When changing API behavior, update the public API article in both supported content languages and the corresponding tests in `internal/httpapi/`. Keep its error codes, privacy semantics and response shapes aligned with this implementation.
+
+## Credential target binding
+
+Mailbox tests and saves require an explicit valid password when `host`, `port` or `username` changes and a password is already saved. Otherwise they return HTTP 400 `mailbox_password_required_for_change` before opening a connection. Changes to labels or connection limits retain the password when those three fields stay equal.
+
+Bark tests and saves require an explicit valid device key when the effective `bark.endpoint` changes and a key is already saved. Otherwise they return HTTP 400 `bark_key_required_for_change` before sending. This also applies while another channel is selected, preserving the binding when Bark is enabled later. Omitting the endpoint preserves its saved value; first-time configuration defaults to `https://api.day.app`. Endpoint comparison includes the entire configured address, including port, path and trailing slash. Re-enter the key for any address change.
+
+These checks share the settings merge boundary for Web and App requests. Omitted or null credentials reuse saved values only for the same target; empty, whitespace-only or newline-containing replacement values are rejected. A rejected change preserves the stored configuration, revision and active runtime. Tests using explicitly supplied replacement credentials leave configuration unchanged. Core decrypts credentials to connect to the selected service; these rules restrict management operations, while server operators with the encryption key can still read credentials.

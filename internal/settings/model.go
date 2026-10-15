@@ -15,14 +15,15 @@ import (
 )
 
 type Mailbox struct {
-	ID              string `json:"id"`
-	Label           string `json:"label"`
-	Revision        int64  `json:"-"`
-	ConnectionLimit int    `json:"connection_limit"`
-	Host            string `json:"host"`
-	Port            int    `json:"port"`
-	Username        string `json:"username"`
-	Password        string `json:"password"`
+	FolderDisplay   *mail.FolderDisplay `json:"folder_display,omitempty"`
+	ID              string              `json:"id"`
+	Label           string              `json:"label"`
+	Revision        int64               `json:"-"`
+	ConnectionLimit int                 `json:"connection_limit"`
+	Host            string              `json:"host"`
+	Port            int                 `json:"port"`
+	Username        string              `json:"username"`
+	Password        string              `json:"password"`
 }
 type MailboxUpdate struct {
 	Revision        int64   `json:"revision"`
@@ -147,6 +148,12 @@ func credential(value string) error {
 
 // Merge applies an update and validates the result.
 func (old Mailbox) Merge(u MailboxUpdate) (Mailbox, error) {
+	// Saved credentials belong to the original server and account.
+	if old.Password != "" && (u.Host != old.Host || u.Port != old.Port || u.Username != old.Username) {
+		if u.Password == nil || credential(*u.Password) != nil {
+			return Mailbox{}, fault.New("mailbox_password_required_for_change")
+		}
+	}
 	m := Mailbox{ID: old.ID, Revision: old.Revision, Label: old.Label, Host: u.Host, Port: u.Port, Username: u.Username, Password: old.Password, ConnectionLimit: old.Limit()}
 	if u.Label != nil {
 		m.Label = *u.Label
@@ -186,6 +193,13 @@ func (old Delivery) Merge(u DeliveryUpdate) (Delivery, error) {
 	}
 	if d.Bark.Endpoint == "" {
 		d.Bark.Endpoint = "https://api.day.app"
+	}
+	// Apply this boundary even while another channel is selected, so a saved
+	// key remains bound to its endpoint when Bark is enabled later.
+	if old.Bark.Key != "" && d.Bark.Endpoint != old.Bark.Endpoint {
+		if u.Bark.Key == nil || credential(*u.Bark.Key) != nil {
+			return Delivery{}, fault.New("bark_key_required_for_change")
+		}
 	}
 	for _, p := range []struct {
 		value  *string

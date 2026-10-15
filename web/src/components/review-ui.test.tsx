@@ -302,9 +302,51 @@ test("overview waits for status before reporting healthy", async () => {
     }),
   );
   mount(<Overview />);
-  expect(screen.getByRole("status").textContent).toBe(catalog["ui.loading"]);
+  expect(
+    screen
+      .getAllByRole("status")
+      .every((element) => element.textContent === catalog["ui.loading"]),
+  ).toBe(true);
   expect(screen.queryByText(catalog["ui.healthy"])).toBeNull();
   finishRead();
   expect(await screen.findByText(catalog["ui.healthy"])).toBeTruthy();
   expect(screen.queryByText(catalog["ui.loading"])).toBeNull();
+});
+
+test("incorrect login credentials keep the form and show an actionable account error", async () => {
+  const done = vi.fn();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            error: {
+              code: "login_credentials_invalid",
+              message: catalog.login_credentials_invalid,
+            },
+          }),
+          { status: 401 },
+        ),
+      ),
+    ),
+  );
+  mount(<AuthScreen setup={false} onSuccess={done} />);
+  fireEvent.change(screen.getByLabelText("用户名"), {
+    target: { value: "synthetic-admin" },
+  });
+  fireEvent.change(screen.getByLabelText("密码"), {
+    target: { value: "synthetic-incorrect" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "登录" }));
+  expect(await screen.findByRole("alert")).toBeTruthy();
+  expect(screen.getByText("用户名或密码错误，请检查后重试。")).toBeTruthy();
+  expect(screen.queryByText(catalog.unauthorized)).toBeNull();
+  expect((screen.getByLabelText("用户名") as HTMLInputElement).value).toBe(
+    "synthetic-admin",
+  );
+  expect((screen.getByLabelText("密码") as HTMLInputElement).value).toBe(
+    "synthetic-incorrect",
+  );
+  expect(done).not.toHaveBeenCalled();
 });

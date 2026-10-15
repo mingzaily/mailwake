@@ -3,11 +3,9 @@ package imap
 import (
 	"bytes"
 	"context"
-	"io"
 	"mime"
 
 	protocol "github.com/emersion/go-imap/v2"
-	"github.com/emersion/go-imap/v2/imapclient"
 	"github.com/emersion/go-message"
 	"github.com/mingzaily/mailwake/internal/content"
 	"github.com/mingzaily/mailwake/internal/fault"
@@ -96,34 +94,20 @@ func (r *contentParts) fetch(ctx context.Context, section *protocol.FetchItemBod
 		return nil, err
 	}
 	section.Partial = &protocol.SectionPartial{Size: int64(limit) + 1}
-	var raw []byte
-	found := false
-	err := r.connection.command(ctx, "message_unavailable", func() error {
-		cmd := r.connection.client.Fetch(protocol.UIDSetNum(r.uid), &protocol.FetchOptions{BodySection: []*protocol.FetchItemBodySection{section}})
-		defer cmd.Close()
-		for data := cmd.Next(); data != nil; data = cmd.Next() {
-			for item := data.Next(); item != nil; item = data.Next() {
-				if body, ok := item.(imapclient.FetchItemDataBodySection); ok {
-					var err error
-					raw, err = io.ReadAll(io.LimitReader(body.Literal, int64(limit)+1))
-					if err != nil {
-						return err
-					}
-					if len(raw) > limit {
-						r.connection.conn.Close()
-						return fault.New("message_too_large")
-					}
-					found = true
-				}
-			}
-		}
-		return cmd.Close()
-	})
+	items, err := r.connection.fetch(ctx, "message_unavailable", protocol.UIDSetNum(r.uid), &protocol.FetchOptions{BodySection: []*protocol.FetchItemBodySection{section}}, int64(limit)+1)
 	if err != nil {
 		return nil, err
 	}
-	if !found {
+	item := items[r.uid]
+	if item == nil {
 		return nil, fault.New("message_not_found")
+	}
+	raw := item.FindBodySection(section)
+	if raw == nil {
+		return nil, fault.New("message_unavailable")
+	}
+	if len(raw) > limit {
+		return nil, fault.New("message_too_large")
 	}
 	r.remaining -= len(raw)
 	return raw, nil
