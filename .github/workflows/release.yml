@@ -76,6 +76,8 @@ jobs:
             cp -R docs "dist/$name/"
             mkdir -p "dist/$name/internal/appmanagement"
             cp internal/appmanagement/README.md "dist/$name/internal/appmanagement/"
+            mkdir -p "dist/$name/deps/go-imap"
+            cp deps/go-imap/MAILWAKE.md deps/go-imap/README.md deps/go-imap/LICENSE "dist/$name/deps/go-imap/"
             tar -C dist -czf "dist/$name.tar.gz" "$name"
           done
           (cd dist && sha256sum *.tar.gz > SHA256SUMS)

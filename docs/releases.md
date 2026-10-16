@@ -4,6 +4,17 @@
 
 This file preserves dated evidence for the revisions and environments named below. Use [Branching workflow](branching.md) for current release policy and [Development](development.md) for current checks. Earlier results establish historical coverage; each candidate needs verification of its own changes.
 
+## rc2 candidate — 2026-10-16
+
+Scope: the changes since `v1.0.0-rc.1`, including complete IMAP FETCH assembly, enqueue-time preview privacy, credential target binding, console state handling and the maintained dependency layout. The implementation reviewed at `605ad32` is unchanged under `internal/` and `web/` in candidate `42b229c`; `88348b3` relocates the maintained module without changing its source. This release preparation adds the changelog, this record and dependency documentation to binary archives.
+
+- Business review: **9.0/10** for the affected Core behavior. Reused the behavioral review of `605ad32` and rechecked shared FETCH budgets, checkpoint failure semantics, persisted preview policy and credential target boundaries. Fresh automated checks passed. Real-provider timing and actual device display remain candidate acceptance work.
+- Code design review: **9.0/10**. Fetch assembly, settings validation and persisted privacy rules stay in their owning layers. The maintained client retains its MIT provenance, reproducible module replacement and regression coverage. Maintaining the source copy requires review when upgrading upstream; no new runtime abstraction is introduced for this release.
+- Local verification: `make check`, `make test` (213 frontend tests, Core and maintained-module race tests) and `make check-build VERSION=v1.0.0-rc.2` passed. Unchanged Go packages reused test caches. An isolated temporary-data process passed startup, health, embedded-console and CSP-header checks. The binary-archive documentation layout passed relative-link checks after including the maintained dependency records.
+- Publication verification: the tag workflow reruns CI before publishing four binary archives, SHA256 checksums and amd64/arm64 container images. Check the completed workflow and actual published artifacts against the final tagged revision; local checks alone do not establish publication success.
+
+Code readiness meets the affected-change quality gate. This maintainer-authorized prerelease supplies a candidate for live acceptance; general release readiness still requires Gmail/QQ monitoring and body reads plus Gmail/Bark preview-transition checks. Verify correct new subjects, unavailable-title semantics for older queued records, continued watcher progress and preserved unread flags. Historical empty-string subjects cannot be reconstructed reliably. Earlier real-device results do not prove these new provider-specific cases.
+
 ## RC source mapping — 2026-10-16
 
 During maintainer-authorized prerelease history consolidation, `v1.0.0-rc.1` was moved from `35313acaec401f581c8a4a015fab36f53941bd3d` to the mainline commit `ee97a75f767115028f4a286dd97dbb2f3f2251cc`. Both commits have the identical source tree `60d212c4f9f88e8a62de74d1a9c5416808589b42`. Existing binaries and images retain their original embedded build revision and checksums. Use this mapping when comparing those artifacts with the tag; the metadata difference does not indicate changed source. This was a one-time history cleanup; subsequent release tags follow the immutable-tag policy.
