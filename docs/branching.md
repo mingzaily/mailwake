@@ -37,13 +37,17 @@ The default flow is `main → dev/vX.Y.Z → main`. Work directly on the active 
 - Follow actual pull-request and branch-protection requirements. Preserve meaningful feature boundaries during integration. Mainline history rewriting requires separate authorization.
 - After accepted changes are retained in the target branch and remotely, and owning sessions have finished, inspect pending edits and useful ignored files before cleaning up worktrees and completed branches. Use the managing tool's archive or cleanup mechanism for tool-managed worktrees. Close abandoned proposals after retaining useful findings.
 
+## Commit messages
+
+Use Conventional Commit types such as `feat`, `fix`, `docs`, `refactor`, `test` and `chore`, with an optional English scope. Write descriptions and bodies in English, for example `docs: clarify release tag conventions`. Preserve technical identifiers and standard trailers in their original form. Apply this rule to new or intentionally consolidated commits; retain published commit messages.
+
 ## Urgent fixes and releases
 
 Fix development-version issues on the development branch. For an urgent production fix, create `hotfix/<topic>` from the actual deployed release tag or verified source SHA. Review and test the fix, and build its release from that branch so unrelated integration work stays outside the patch release.
 
 Integrate the fix into `main`, then synchronize the active development branch using merge or cherry-pick as appropriate. Check for an existing equivalent fix before applying it. For an old-version-only defect, verify and record the correct integration-branch behavior. Close the hotfix after release verification and synchronization are complete.
 
-Create immutable `vX.Y.Z` tags after release acceptance, following CONTRIBUTING. Pushing a version tag can publish artifacts; follow the release authorization for that operation. A development batch name describes planned work, while release tags and records identify shipped source. Keep existing tags stable.
+Create immutable annotated `vX.Y.Z` tags after release acceptance, following CONTRIBUTING. Core versions and release timing are independent of any parent workspace; the parent records the exact Core commit through its submodule pointer. Pushing a version tag can publish artifacts; follow the release authorization for that operation. A development batch name describes planned work, while release tags and records identify shipped source. Keep existing tags stable.
 
 When Core is consumed as a submodule, push the referenced Core commit before publishing the parent pointer. Development integration may reference a pushed development commit; the parent integration branch should reference completed Core work already integrated into `main`. Recheck pointers after rewriting Core development history. Keep this repository independently readable and include only authorized Core content.
 

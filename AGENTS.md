@@ -23,6 +23,7 @@ Start with [README.md](README.md) and [CONTRIBUTING.md](CONTRIBUTING.md). This r
 
 ## Implementation rules
 
+- Git commits use Conventional Commit types and optional English scopes, with English descriptions and bodies (for example, `docs: clarify release tag conventions`).
 - Fix the business rule at its owning layer. Use direct control flow for simple rules and introduce abstractions for concrete responsibilities.
 - Use clear, affirmative English in code, comments, technical documents and logs. Keep contributor documentation and this file in English.
 - Validate external input, authentication, signatures and credentials at their trust boundary once. Carry validated ownership and permissions explicitly to downstream code.
