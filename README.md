@@ -21,9 +21,11 @@ Self-hosted notifications for the IMAP folders you choose. Route important mail 
 | Durable state | Encrypted credentials, SQLite checkpoints and a persistent notification queue |
 
 ```text
-Your mailbox → Your Mailwake Core → Bark / Pushover / Webhook
-                                 → Encrypted Relay → Mailwake App
+Your mailbox → Your outpost → Bark / Pushover / Webhook
+                           → Encrypted Relay → Mailwake App
 ```
+
+A self-hosted Mailwake instance is called an **outpost** in the App and user guides. Contributor references use **Core** for the software and its repository.
 
 The self-hosted console and script API are free. The official App's management features and ordinary native pushes use separate Pro entitlements; owner-approved body reading is free. See [App connection and permissions](https://mailwake.oritx.com/en/docs/connect-app/).
 

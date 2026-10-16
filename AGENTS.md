@@ -32,7 +32,7 @@ Start with [README.md](README.md) and [CONTRIBUTING.md](CONTRIBUTING.md). This r
 - Use concrete types or injected functions for a single implementation and its test substitutes.
 - Keep user-facing messages in every catalog under `internal/i18n/locales/`; `internal/i18n/languages.json` defines the language set. English is the source. Preserve matching keys and placeholders. Business code returns stable error codes and safe parameters; presentation translates them.
 - Keep credentials, message content and credential URLs out of logs and diagnostics. Follow the logging attribute whitelist.
-- Maintain user procedures on the documentation site; link to them from this repository. Update the technical contract in `docs/` and relevant implementation tests together.
+- Maintain user procedures on the documentation site; link to them from this repository. Update the technical contract in `docs/` and relevant implementation tests together. Follow [documentation ownership](docs/README.md): keep current rules in one owning topic and dated verification in release records; review substance and implementation consistency as well as links.
 
 ## Review and verification
 

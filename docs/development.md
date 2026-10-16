@@ -31,33 +31,11 @@ All locked dependency licenses are audited against MIT, ISC, Apache-2.0, BSD, OF
 
 Tests use local TLS IMAP servers, real SQLite databases and local HTTPS notification receivers. They cover folder monitoring and restart recovery, mailbox isolation, concurrent configuration updates, delivery retries, webhook signatures, authentication and log privacy. Real provider rules and device display require manual validation with your own accounts.
 
-```text
-cmd/mailwake/          configuration, assembly, startup and shutdown
-internal/
-  config/              listen address and data directory
-  auth/                setup, passwords, sessions, rate limits and API tokens
-  settings/            mailbox/delivery models, validation, per-mailbox encryption
-  runtime/             per-mailbox engines/budgets, global dispatcher and isolated hot updates
-  mail/                mail source and folder session contracts
-    imap/              go-imap connections, IDLE and UID checkpoints
-  engine/              realtime workers, shared-connection scheduler, progress and status
-  content/             message parsing, HTML to text and verification codes
-  event/               notification values and stable identifiers
-  fault/               language-independent error codes and parameters
-  i18n/locales/        nine catalogs shared by backend and frontend
-  storage/             revision CAS, scoped subscriptions/checkpoints, outbox and database baseline
-  logging/             safe JSON logs, bounded memory ring and query snapshots
-  delivery/            dispatch, retries, results, notification text and HTTP rules
-    bark/ pushover/ webhook/   channel adapters
-  httpapi/             mailbox REST API, cookies, CSRF and anonymous diagnostics
-    webdist/           ignored generated assets and tracked .gitkeep
-  buildinfo/           release version reporting
-web/                   React/TypeScript source, components, Vitest and Vite build
-```
+The [directory ownership table](../CONTRIBUTING.md#directory-ownership) maps packages to responsibilities.
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for conventions, [CHANGELOG.md](../CHANGELOG.md) for releases and [SECURITY.md](../SECURITY.md) to report a vulnerability. Request fields follow the [Bark API](https://github.com/Finb/bark-server/blob/master/docs/API_V2.md) and the [Pushover API](https://pushover.net/api).
 
-Current scope includes password or app-password login, up to 20 IMAP mailboxes and one global notification channel. Free provides self-deployed monitoring and BYO delivery; Pro provides official App management and Native notifications. Gmail uses TLS IMAP and an app password. Microsoft Graph is listed as unavailable until its backend is implemented. go-imap/v2 is pinned to beta.8; please report provider compatibility issues.
+Current scope includes password or app-password login, up to 20 IMAP mailboxes and one global notification channel. Free provides self-deployed monitoring and BYO delivery; Pro provides official App management and Native notifications. Gmail uses TLS IMAP and an app password. Microsoft Graph is listed as unavailable until its backend is implemented. The maintained go-imap source is based on beta.8; see its change record below when investigating provider compatibility.
 ## Isolated local TLS fixtures
 
 The selfhost process accepts explicit test CA files for local TLS IMAP, Native Relay and BYO delivery integration. Configure `MAILWAKE_LOCAL_TEST_TLS=1`, then independently set `MAILWAKE_LOCAL_TEST_IMAP_CA_FILE`, `MAILWAKE_LOCAL_TEST_RELAY_CA_FILE` and/or `MAILWAKE_LOCAL_TEST_DELIVERY_CA_FILE` to an absolute PEM CA file path. With the switch absent or `0`, CA-file configuration is rejected; with the switch `1`, at least one valid CA file is required. Files must be regular files up to 64 KiB and contain CA certificate PEM blocks; symlinks, private keys, leaf certificates and unrelated data fail startup with `config_local_test_tls_invalid`.

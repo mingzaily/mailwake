@@ -11,6 +11,7 @@ NetEase mailboxes (163.com, 126.com and yeah.net) require an **authorization cod
 The connection reuses the post-login capability list for both ID and IDLE. With go-imap beta.8, a NOOP after login waits for the library to invalidate its previous capability cache before Core reads the automatic refresh. Capabilities included in the login response are reused directly; Core sends no additional CAPABILITY command after opening a folder.
 
 A folder rejection with an IMAP response code uses `last_error.code=imap_folder_rejected` and `params.response_code`, such as `UNAVAILABLE` or `NONEXISTENT`. Core keeps only `A-Z`, `0-9`, `-` and `/`, up to 32 characters. The localized message and diagnostics show this sanitized code and omit raw server explanations. An absent or fully filtered code uses `imap_folder_open_failed` without a response-code parameter.
+
 ## Behavior
 
 | Situation | Behavior |
@@ -44,24 +45,17 @@ All scheduled Folders in one mailbox share one connection per due round. Core pr
 
 Each mailbox has its own subscriptions and revision, written to SQLite before its watchers change. Unchanged watchers keep their connection; removed watchers stop before replacements start. Saving a subscription clears the old progress of newly added folders in the same transaction. A successful save means the subscription is stored; check `/api/v1/status` for the live connection state. Unsubscribing from everything persists an empty list.
 
-`delivery.retry_count` defaults to **0**: each task is requested at most once. **2** means the first request plus up to two automatic retries. Allowed values are 0–9. Backoff starts around 5 seconds and caps at 30 minutes; a longer `Retry-After` is honored up to 24 hours, beyond which the task ends as failed. Waits are persisted. Permanent failures such as rejected credentials end immediately; fix the configuration and retry manually. Tasks that have yet to start use the current channel; started native tasks retain the native channel.
-
-The attempt count is saved before each request. By default an interrupted process ends a request that had started instead of sending it again; if the process exits between saving the count and sending, that request may not have been sent. Mailwake treats the request attempt as the delivery boundary and records the channel's response; display on the device is the channel's responsibility.
+Delivery attempts, restart accounting and retry limits follow [Delivery](notifications.md#dispatch-and-retry-invariants).
 
 Folder progress and queued notifications are saved in one SQLite transaction. The event namespace includes the stable mailbox ID and its identity (host, port, username), followed by folder, UIDVALIDITY and UID. Two mailboxes with the same folder and UID produce different events. Run one Core per data directory; changing a mailbox’s host, port or username clears only its progress and establishes a new baseline. Updating its password, display name or budget preserves progress. Other mailboxes keep their connections and progress. Old queued notifications remain deliverable.
 
 When server rules file mail directly, subscribe to the destination folder. Deduplication is per folder: the same message in two subscribed folders produces two notifications. Mail that enters and leaves a folder between two checks may be missed.
+
 ## Privacy and data
 
-- Each mailbox is encrypted separately under `mailbox:<id>`, with the full configuration name bound into AES-GCM authentication. Mailbox and channel settings are encrypted using AES-256-GCM with a random 256-bit `secret.key` (0600) in the data directory. This protects a database file or dump leaked on its own. Anyone who can read the entire directory, including the key, can decrypt it. Protect the volume and backups together. A missing original key makes encrypted configuration unavailable.
-- Administrator passwords use Argon2id with encoded parameters. Session IDs, setup codes and API tokens are stored as hashes. API token values appear only in their creation response; the setup code appears only in its startup log line. Credentials are omitted from settings responses, diagnostics and runtime logs.
-- IMAP uses implicit TLS (usually port 993) with certificate verification. Every channel uses HTTPS, never follows redirects and never forwards credentials to another host.
-- With `delivery.preview=off` (default), a task stores the mailbox ID, display name, message location, folder and time. Message bodies are always excluded.
-- With `subject`, pending and failed tasks store sender and subject. Bark/Pushover bodies contain the truncated subject; Webhook additionally carries structured sender and subject. When you use a third-party channel, the notification passes through that service. Message bodies always stay in your mailbox.
-- After the channel accepts a request its delivery payload is cleared. A separate history summary keeps mailbox ID, display name, folder and subject until the record expires; it excludes sender and body. The preview policy at enqueue time determines whether the summary records a subject (always enabled for the native channel). Third-party preview `off`, including the initial unconfigured state, omits subjects from new history entries (`subject: null`); existing history keeps its recorded subjects. Accepted records are kept about 7 days and failed records 30 days for diagnosis and manual retry, pruned hourly in batches.
-- Your deployment configures file permissions, volumes, disk encryption and backups; SQLite uses ordinary local storage.
+Credential encryption, outbox summaries and retention follow [Storage](storage.md); payload preview rules follow [Delivery](notifications.md#privacy-and-persistence). Monitoring keeps message bodies out of persistent state and logs. Native verification-code extraction uses the bounded, in-memory reads in [Native integration](native-push.md).
 
-### Folder presentation metadata
+## Folder presentation metadata
 
 Discovery derives `folder_names` from each LIST item's actual hierarchy delimiter, including non-slash delimiters. NIL delimiters and empty leaves retain the full name. Names and roles are presentation metadata; subscriptions, SELECT, cursors and event identities use the original path.
 
