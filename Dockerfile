@@ -13,7 +13,7 @@ ARG VERSION=devel
 ARG REVISION
 WORKDIR /src
 COPY go.mod go.sum ./
-COPY third_party/go-imap/ ./third_party/go-imap/
+COPY deps/go-imap/ ./deps/go-imap/
 RUN go mod download
 COPY . .
 COPY --from=web /src/internal/httpapi/webdist ./internal/httpapi/webdist

@@ -7,4 +7,4 @@ paths = ['''^internal/native/testdata/test-vectors\.json$''', '''^internal/appma
 
 [[allowlists]]
 description = "Upstream go-imap public TLS test fixture; no deployed credentials"
-paths = ['''^third_party/go-imap/imapclient/client_test\.go$''']
+paths = ['''^deps/go-imap/imapclient/client_test\.go$''']

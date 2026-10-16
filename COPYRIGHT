@@ -21,5 +21,5 @@ license texts at /third-party-notices.txt. Container images also include
 this file in /usr/share/licenses/mailwake/. Frontend sources include
 MIT-licensed shadcn/ui components, adapted for Mailwake's strict CSP.
 
-The maintained go-imap source copy in third_party/go-imap is MIT licensed.
+The maintained go-imap source copy in deps/go-imap is MIT licensed.
 See docs/imap-third-party.txt for its copyright and complete license.

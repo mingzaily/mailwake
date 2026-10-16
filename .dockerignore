@@ -5,8 +5,8 @@
 !cmd/**
 !internal/
 !internal/**
-!third_party/
-!third_party/**
+!deps/
+!deps/**
 **/*_test.go
 **/*_test.mjs
 !LICENSE

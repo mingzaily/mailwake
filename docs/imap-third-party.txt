@@ -1,6 +1,6 @@
 Mailwake includes a modified source copy of go-imap v2.0.0-beta.8.
 Source: https://github.com/emersion/go-imap/tree/v2.0.0-beta.8
-Local source and change record: third_party/go-imap/MAILWAKE.md
+Local source and change record: deps/go-imap/MAILWAKE.md
 
 The MIT License (MIT)
 
