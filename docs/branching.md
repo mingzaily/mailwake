@@ -25,10 +25,13 @@ When the checkout belongs to another batch, changes have unclear ownership, or G
 
 ## Development and integration
 
-The default flow is `main → dev/vX.Y.Z → main`. Work directly on the active dev branch for serial development; keep small fixes and documentation adjustments on the current task branch. For parallel implementation or isolated validation, use `dev/vX.Y.Z → feat/<topic> → dev/vX.Y.Z`. Integrate accepted features into dev, then deliver the completed batch to main.
+The default flow is `main → dev/vX.Y.Z → main`. Work directly on the active dev branch for serial development; keep small fixes and documentation adjustments on the current task branch. For parallel implementation or isolated validation, use `dev/vX.Y.Z → feat/dev/vX.Y.Z/<topic> → dev/vX.Y.Z`. Integrate accepted features into dev, then deliver the completed batch to main.
 
 - Keep implementation, observable-behavior tests and relevant documentation together. Group commits by complete feature or fix.
-- For each feat, record the target dev branch, starting SHA, worktree path and owning session. Create it from the target dev in a separate worktree after checking existing checkouts. The owner commits any required pending changes before other tasks branch from that baseline.
+- Name feature branches `feat/dev/vX.Y.Z/<topic>`, retaining the full source dev name. For example, `feat/dev/v1.0.1/mail-search` starts from, synchronizes with and integrates into `dev/v1.0.1`. Use a short lowercase, hyphenated topic unique within that batch.
+- Before creation and implementation, tell the user the source dev, starting SHA, full feature branch name, worktree path, integration target and owning session. Explicitly select the source dev and verify actual ancestry; the name records intent. The local worktree directory may use a short task name.
+- When moving a task to another batch, coordinate ownership and dependencies, create a correctly named feat from the new target dev, transfer the required commits and verify again. Renaming alone changes the label; update the source base and integration target together.
+- Create each feat from its target dev in a separate worktree after checking existing checkouts. The owner commits any required pending changes before other tasks branch from that baseline.
 - Each parallel implementation session works in its assigned branch and directory. Reuse suitable worktrees and use one checkout per branch. One session owns dev integration, conflict resolution, integration verification and version closeout.
 - Worktrees isolate files and pending edits; branches retain commits. Coordinate shared test ports, external services and other shared resources separately. Keep dev history stable while feature branches depend on it; coordinate dependent sessions before rewriting it.
 - Complete business and design reviews and the AGENTS quality gate before integration. Follow CONTRIBUTING for applicable checks. Verify affected behavior after each integration and combined behavior once related features are integrated.
