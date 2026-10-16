@@ -1,5 +1,11 @@
 # Mailwake Core contributor entry
 
+## Mandatory session preflight
+
+Use `main` for integration, `dev/*` for version development, `feat/*` for independent feature work and `hotfix/*` for urgent production fixes. Apply these project branch prefixes across all tools and sessions. Work directly on the active `dev/vX.Y.Z` for serial development. For parallel implementation or isolated validation, branch `feat/<topic>` from that dev branch into a separate worktree and integrate back into dev. One session owns dev integration and version closeout; completed dev batches integrate into `main`.
+
+Every session must read [Branching workflow](docs/branching.md) before starting task work, including documentation changes and reviews. Before editing, inspect the current branch, worktree status, upstream relationship and worktree occupancy, and identify the target development batch. State the selected branch and relevant risks before writing. Reuse an applicable development branch; when the checkout conflicts with the task, explain the mismatch and recommend a concrete branch/base before dependent edits. Ask only for missing decisions or ownership conflicts, and preserve other sessions' work.
+
 ## Read by task
 
 Start with [README.md](README.md) and [CONTRIBUTING.md](CONTRIBUTING.md). This repository contains the self-hosted Core only. User tutorials live at [Mailwake documentation](https://mailwake.oritx.com/en/docs/); `docs/` contains English contributor references.

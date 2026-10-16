@@ -10,6 +10,8 @@ git config core.hooksPath .githooks
 
 The hook scans staged changes. The allowlist only covers fixed, synthetic interoperability vectors.
 
+Read the [branching workflow](docs/branching.md) before starting work. It defines session preflight, development batches, integration and urgent fixes.
+
 ## Development environment
 
 - Use the Go version declared in `go.mod`.
