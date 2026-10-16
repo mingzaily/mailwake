@@ -8,13 +8,17 @@
 
 ## Dispatch and retry invariants
 
-Persist an event and watcher progress transactionally before dispatch. Record attempts before network I/O so restart preserves retry accounting. One initial attempt is the default; `retry_count` explicitly permits 0–9 additional attempts. Retry transient network failures, HTTP 429 and 5xx under that policy. Treat a 2xx response as channel acceptance. Device display remains a separate outcome.
+Persist an event and watcher progress transactionally before dispatch. Treat a successful channel response, including any provider-level result, as channel acceptance; device display remains a separate outcome.
+
+`delivery.retry_count` defaults to **0**: each task is requested at most once. **2** means the first request plus up to two automatic retries. Allowed values are 0–9. Retry transient network failures, HTTP 429 and 5xx within this allowance. Backoff starts around 5 seconds and caps at 30 minutes; a longer `Retry-After` is honored up to 24 hours, beyond which the task ends as failed. Waits are persisted. Permanent failures such as rejected credentials end immediately; fix the configuration and retry manually. Tasks that have yet to start use the current channel; started native tasks retain the native channel.
+
+The attempt count is saved before each request. By default an interrupted process ends a request that had started instead of sending it again; if the process exits between saving the count and sending, that request may not have been sent. Mailwake treats the request attempt as the delivery boundary and records the channel's response; display on the device is the channel's responsibility.
 
 Webhook requests preserve event identity across retries, sign the timestamp and exact raw body, and follow the published header contract. Keep redirect following disabled. Tests use local HTTPS endpoints and synthetic credentials; check observable requests and outcomes.
 
 ## Channel configuration
 
-Configuration updates use revisions. Channel, preview, language and retry settings apply to all mailboxes. Validate credentials and destinations at the configuration boundary, encrypt saved secrets, and preserve omitted write-only values. Saving validates configuration; only the explicit test operation sends a test notification.
+Configuration updates use revisions. Channel, preview, language and retry settings apply to all mailboxes. Validate credentials and destinations at the configuration boundary, encrypt saved secrets, and preserve omitted write-only values only for the same credential target ([binding rules](api.md#credential-target-binding)). Saving validates configuration; only the explicit test operation sends a test notification.
 
 ## Privacy and persistence
 

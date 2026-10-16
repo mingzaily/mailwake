@@ -70,7 +70,7 @@ The native notification target is one active pairing. Revoking the selected targ
 
 Message content requires a valid controller credential, explicit content scope, a signed message reference and a currently subscribed folder. Keep body and image payloads within the limits in [HTML content](html-content.md) and outside persistent history and diagnostics.
 
-When changing API behavior, update the public API article in both supported content languages and the corresponding tests in `internal/httpapi/`. Keep its error codes, privacy semantics and response shapes aligned with this implementation.
+When changing API behavior, update the public API article in all nine published languages and the corresponding tests in `internal/httpapi/`. Keep its error codes, privacy semantics and response shapes aligned with this implementation.
 
 ## Credential target binding
 

@@ -40,7 +40,7 @@ HTML fallback returns bounded text, `has_remote_images: false` and `truncated: t
 
 ## Real-mail integration steps
 
-Use Core v1.0.0-rc.10 and the iOS build with HTML reading. This prerelease supplies the deployable build for real-mail integration acceptance; rc9 returns the earlier plain-text response. Use synthetic mail content in a real test mailbox, and keep the mailbox credentials in Core's normal encrypted settings.
+Use the Core candidate being accepted and a compatible iOS build with HTML reading. Record both source revisions, build versions, provider and device with the results. Earlier rc9/rc10 names belong to the retired development release sequence; use the current release or candidate revision. Use synthetic mail content in a real test mailbox, and keep the mailbox credentials in Core's normal encrypted settings.
 
 1. Configure a dedicated subscribed folder and authorize the iOS device with `content` scope. Keep the iOS **Automatically Load Remote Images** setting off. Obtain new message references from normal Native notifications; use the references exactly as received. The reading endpoint is free; notification delivery keeps its existing Relay entitlement requirement.
 2. Send separate messages covering plain text; HTML only; plain/HTML alternatives; nested alternative/related with CID PNG/JPEG/GIF/WebP; and GBK or UTF-8 with base64/quoted-printable. Include tables, inline formatting, and a distinct plain fallback. Add SVG, missing CID and a named attachment as negative cases. Include HTML tags for a script, event handler, iframe and form in a synthetic message to verify removal.
@@ -58,23 +58,4 @@ These fixtures validate Core behavior. Real-provider MIME differences and the Co
 
 The additional parser and image decoder licenses are bundled in [third-party notices](html-content-third-party.txt).
 
-## Review record — 2026-10-13
-
-- Business review: verified free owner-authorized reading, signed resource scope, same-message MIME selection, unread state, remote-image privacy and complete fallback on size limits. Fixed invalid CID transfer encodings so they remove the resource while preserving readable content.
-- Design review: kept MIME selection, HTML/CSS allowlists and response budgeting in the content package, with protocol fetching in the IMAP adapter. Bounded repeated CID expansion during sanitization, reused request-local decoded resources and kept notification extraction independent. No known blocking finding remains in the HTML reading path.
-- Validation: full Core race tests, production/test-tag vet, production build and isolated startup/health check passed. Targeted parsing/IMAP/HTTP race tests passed again after the CID correction. A 20-second fuzz run on the patched parser completed 24,637 executions without a failure. Gitleaks found no secrets in the new content implementation, HTTP tests or integration guide.
-- Dependency check: the new content path reports zero reachable vulnerabilities with `govulncheck`; the HTML parser uses `golang.org/x/net v0.55.0` and WebP uses `golang.org/x/image v0.45.0`. The broader Core scan also reports HTTP/2 and HTTP/3 server dependency warnings. Core currently serves a standard `net/http.Server` over TCP and does not activate Gin H2C or QUIC servers; those server paths are outside the enabled protocol configuration. Enabling them requires a separate dependency/toolchain upgrade (the HTTP/2 fixes in x/net v0.60.0 require Go 1.26).
-- Remaining acceptance: actual provider MIME and iOS reading/image-permission flows require the real-mail steps above. The owner authorized publishing rc10 as the deployable integration candidate before completing this acceptance.
-
-### Selective-read follow-up
-
-- Business review: changed the 1 MiB boundary from the whole message to the combined selected text, HTML and referenced CID payloads. Verified skipped attachments/alternatives, related multipart root selection, exact-budget success, one-byte overflow, preserved unread flags and cancellation during part fetching. Invalid CID encodings still preserve readable content. Remote image references remain local data throughout parsing and response serialization.
-- Design review: the IMAP adapter owns the current UID and shared wire-byte budget; the content package owns MIME selection, decoding and sanitization. Shared MIME metadata parsing avoids duplicated rules. CSS declarations are validated before resolving CID resources, so discarded declarations do not trigger image reads. Both review rounds have no known blocking findings.
-- Validation: full Core race tests and both production/test-tag vet passed. Focused race tests passed after the final MIME metadata and charset changes. Production build and isolated startup/health check passed. The follow-up 20-second fuzz run completed 20,861 executions without a failure; scoped Gitleaks and whitespace checks passed.
-
-### rc10 release review
-
-- Business and design reviews found no blocking issue in this change. Full Core race tests, both vet variants, formatting and scoped secret scans passed. An isolated release snapshot excludes unrelated console edits.
-- The complete candidate build includes the Web console and passed startup, health and asset checks. Frontend static checks and all 137 Web tests passed.
-- Real mailbox-to-iOS acceptance remains pending. The rc10 prerelease provides the versioned binaries and container needed to run that acceptance.
-- Container release verification found the content license file excluded by `.dockerignore`. The build-context allowlist now includes that file. A complete container build, isolated health/Web-console smoke test and in-container license check passed after correction. The incomplete rc10 publication is rebuilt from the packaging-fix commit so all artifacts share the release source revision.
+Historical implementation and release checks are retained in [Release records](releases.md#html-content-review--2026-10-13).
