@@ -54,4 +54,4 @@ require (
 )
 
 // Maintained source copy: bounded FETCH routing and multi-response support.
-replace github.com/emersion/go-imap/v2 => ./third_party/go-imap
+replace github.com/emersion/go-imap/v2 => ./deps/go-imap

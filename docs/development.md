@@ -80,4 +80,4 @@ For an IMAP fixture at `localhost:11993`, its certificate must include the `loca
 
 ## Maintained IMAP dependency
 
-`third_party/go-imap/` is the MIT-licensed v2.0.0-beta.8 source with maintained FETCH routing changes. Core uses it through a local `go.mod` replacement. Builds copy this directory before downloading Go modules; binary archives and containers include `docs/imap-third-party.txt`. Read [the source/change record](../third_party/go-imap/MAILWAKE.md) before updating it. Tests cover both the upstream module and Core's shared, bounded FETCH collector.
+`deps/go-imap/` is the MIT-licensed v2.0.0-beta.8 source with maintained FETCH routing changes. Core uses it through a local `go.mod` replacement. Builds copy this directory before downloading Go modules; binary archives and containers include `docs/imap-third-party.txt`. Read [the source/change record](../deps/go-imap/MAILWAKE.md) before updating it. Tests cover both the upstream module and Core's shared, bounded FETCH collector.
