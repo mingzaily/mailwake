@@ -2,6 +2,17 @@
 
 All notable changes to Mailwake Core are documented here. Versions follow [Semantic Versioning](https://semver.org); before 1.0.0, minor versions may change configuration.
 
+## [1.0.0-rc.2] - 2026-10-16
+
+- Preserve complete IMAP FETCH responses across split metadata, BODY-before-UID ordering and cancellation; keep checkpoints unchanged when existing messages have incomplete metadata.
+- Apply the persisted preview policy when enqueueing notifications and distinguish an unavailable historical subject from an actual empty subject.
+- Bind saved mailbox passwords and Bark device keys to their configured targets; changing the target requires explicit replacement credentials.
+- Improve console loading, stale-data handling, folder labels and login feedback while preserving unsaved edits and authorization boundaries.
+- Maintain the patched MIT-licensed go-imap source under `deps/`, with reproducible builds, race tests, vet and license notices.
+- Consolidate contributor contracts, release evidence and outpost terminology. Include the maintained dependency's documentation in binary archives.
+
+This is a prerelease candidate for real-provider and device validation. Gmail/QQ monitoring and body reading, and Gmail/Bark preview transitions still require live acceptance. Existing history whose subject was already stored as an empty string cannot be reconstructed. See [release verification](docs/releases.md#rc2-candidate--2026-10-16).
+
 ## [1.0.0-rc.1] - 2026-10-14
 
 This release starts a new prerelease baseline using the complete current Core implementation. Earlier development RC numbers have been retired. The code is preserved; see the [release record](docs/releases.md) for history and verification details.
