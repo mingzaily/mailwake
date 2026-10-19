@@ -4,6 +4,17 @@
 
 This file preserves dated evidence for the revisions and environments named below. Use [Branching workflow](branching.md) for current release policy and [Development](development.md) for current checks. Earlier results establish historical coverage; each candidate needs verification of its own changes.
 
+## rc3 candidate — 2026-10-19
+
+Scope: opened-body read actions and optional sender display names since `v1.0.0-rc.2`. The implementation is commit `6b2627bb7c6f4716d54c5f26a7567e79189814de`; release preparation changes the changelog and this record only. The maintainer authorized this prerelease for client and real-provider acceptance. Integrate through the protected `main` pull-request workflow before tagging the resulting source as `v1.0.0-rc.3`.
+
+- Business review: **9.0/10**. Rechecked signed message ownership, current subscriptions, permanent IMAP flag permission, independent connection budgets, repeatable writes, preview removal and signed encrypted sender fields. No blocking code findings remain. Real-provider flag propagation and client presentation remain acceptance items.
+- Code design review: **9.0/10**. Native notifications and activities share one field constructor; internal selection uses its concrete type while the public adapter preserves nil on failure. Protocol parsing owns the explicit-empty permission distinction. The maintained parser change remains an upstream upgrade obligation.
+- Local verification: 213 frontend tests, full Core and maintained-module race tests, frontend TypeScript/ESLint/UI checks, both Core vet variants and the dependency vet configurations passed. Unchanged Go packages reused caches. `make check-build VERSION=v1.0.0-rc.3` passed, including license checks and unchanged tracked web assets. An isolated temporary-data process passed startup, health, embedded-console and CSP checks. The candidate commit secret scan and whitespace checks passed.
+- Publication verification: the tag workflow repeats CI before publishing four binary archives, SHA256 checksums and amd64/arm64 container images. Verify completed jobs, published assets and embedded source metadata against the final mainline/tag revision after publication.
+
+Code is ready for the authorized prerelease. General release readiness still requires client integration and real Gmail/QQ acceptance: opened and cached bodies synchronize persistent `\Seen`, other flags and watcher progress survive, write rejection is visible, retries recover after reconnect, and named/unnamed/Chinese senders display correctly. Earlier Gmail/Bark preview-transition checks remain pending. Clients that only download bodies retain the existing mailbox flag. This candidate does not establish device acceptance or upgrade a running installation.
+
 ## rc2 candidate — 2026-10-16
 
 Scope: the changes since `v1.0.0-rc.1`, including complete IMAP FETCH assembly, enqueue-time preview privacy, credential target binding, console state handling and the maintained dependency layout. The implementation reviewed at `605ad32` is unchanged under `internal/` and `web/` in candidate `42b229c`; `88348b3` relocates the maintained module without changing its source. This release preparation adds the changelog, this record and dependency documentation to binary archives.
