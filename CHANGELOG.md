@@ -2,6 +2,14 @@
 
 All notable changes to Mailwake Core are documented here. Versions follow [Semantic Versioning](https://semver.org); before 1.0.0, minor versions may change configuration.
 
+## [1.0.0-rc.3] - 2026-10-19
+
+- Add `POST /api/v1/app/content/read` for clients to mark an opened body as read, including cached bodies. Validate the signed reference, current account and subscription, and permanent IMAP `\Seen` permission; preserve other flags and watcher progress.
+- Preserve the From display name as optional `sender_name` through events, the outbox, encrypted notifications and activities. Keep `sender` as the complete mailbox address and clear both fields under the preview privacy policy.
+- Share native payload construction and cover signed references, Unicode/JSON escaping, truncation order and fixed-field size failures with regression tests.
+
+This is a prerelease candidate for client and real-provider acceptance. Clients must implement the read action; notification delivery and body downloads alone preserve the mailbox's unread state. Clients can decode `sender_name` optionally and fall back to `sender`. Live Gmail/QQ flag persistence, preserved star flags, continued monitoring, cached-body retries and device presentation remain pending, alongside the earlier preview-transition checks. See [release verification](docs/releases.md#rc3-candidate--2026-10-19).
+
 ## [1.0.0-rc.2] - 2026-10-16
 
 - Preserve complete IMAP FETCH responses across split metadata, BODY-before-UID ordering and cancellation; keep checkpoints unchanged when existing messages have incomplete metadata.
