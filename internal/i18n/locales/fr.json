@@ -525,7 +525,7 @@
   "signature_invalid": "Relay n’a pas pu vérifier la signature de la requête Core.",
   "signature_expired": "La signature de la requête Core a expiré. Vérifiez l’horloge du serveur.",
   "request_replayed": "Relay a déjà traité cette requête signée.",
-  "ui.scope_content_hint": "Lire le contenu des messages dans tous les dossiers abonnés",
+  "ui.scope_content_hint": "Lire le contenu des dossiers suivis et marquer les messages ouverts comme lus",
   "ui.clear": "Effacer",
   "ui.clear_deliveries": "Effacer l’historique",
   "ui.clear_logs": "Effacer les journaux",

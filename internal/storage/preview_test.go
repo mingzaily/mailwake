@@ -13,7 +13,7 @@ func TestDisablePreviewScrubsQueueAtomically(t *testing.T) {
 	}
 	defer s.Close()
 	for _, state := range []string{"pending", "dead", "accepted"} {
-		if _, err := s.db.Exec(`INSERT INTO outbox(id,payload,state,next_attempt,created_at) VALUES(?, '{"sender":"private-sender","subject":"private-subject","code":"482913","folder":"INBOX"}',?,0,0)`, state, state); err != nil {
+		if _, err := s.db.Exec(`INSERT INTO outbox(id,payload,state,next_attempt,created_at) VALUES(?, '{"sender":"private-sender","sender_name":"Private Name","subject":"private-subject","code":"482913","folder":"INBOX"}',?,0,0)`, state, state); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -41,15 +41,15 @@ func TestDisablePreviewScrubsQueueAtomically(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, state := range []string{"pending", "dead", "accepted"} {
-		var sender, subject, code *string
+		var sender, name, subject, code *string
 		var folder string
-		if err := s.db.QueryRow("SELECT json_type(payload,'$.sender'),json_type(payload,'$.subject'),json_type(payload,'$.code'),json_extract(payload,'$.folder') FROM outbox WHERE id=?", state).Scan(&sender, &subject, &code, &folder); err != nil {
+		if err := s.db.QueryRow("SELECT json_type(payload,'$.sender'),json_type(payload,'$.sender_name'),json_type(payload,'$.subject'),json_type(payload,'$.code'),json_extract(payload,'$.folder') FROM outbox WHERE id=?", state).Scan(&sender, &name, &subject, &code, &folder); err != nil {
 			t.Fatal(err)
 		}
-		if state != "accepted" && (sender != nil || subject != nil || code != nil) {
+		if state != "accepted" && (sender != nil || name != nil || subject != nil || code != nil) {
 			t.Fatal("preview retained", state)
 		}
-		if state == "accepted" && (sender == nil || subject == nil || code == nil) {
+		if state == "accepted" && (sender == nil || name == nil || subject == nil || code == nil) {
 			t.Fatal("accepted row rewritten")
 		}
 		if folder != "INBOX" {
@@ -57,11 +57,11 @@ func TestDisablePreviewScrubsQueueAtomically(t *testing.T) {
 		}
 	}
 	// A batch captured before disabling preview may commit after the scrub transaction.
-	if err := s.Commit(t.Context(), "primary", "INBOX", "", "next", []event.Notification{{ID: "late", Sender: "late sender", Subject: "late subject"}}); err != nil {
+	if err := s.Commit(t.Context(), "primary", "INBOX", "", "next", []event.Notification{{ID: "late", Sender: "late sender", SenderName: "Late Name", Subject: "late subject"}}); err != nil {
 		t.Fatal(err)
 	}
 	var hasPreview bool
-	if err := s.db.QueryRow("SELECT json_type(payload,'$.sender') IS NOT NULL OR json_type(payload,'$.subject') IS NOT NULL FROM outbox WHERE id='late'").Scan(&hasPreview); err != nil || hasPreview {
+	if err := s.db.QueryRow("SELECT json_type(payload,'$.sender') IS NOT NULL OR json_type(payload,'$.sender_name') IS NOT NULL OR json_type(payload,'$.subject') IS NOT NULL FROM outbox WHERE id='late'").Scan(&hasPreview); err != nil || hasPreview {
 		t.Fatal("late batch restored preview", err)
 	}
 }

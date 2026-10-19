@@ -856,6 +856,11 @@ func (c *Client) readResponseData(typ string) error {
 				if err != nil {
 					return err
 				}
+				// An explicit empty list grants no permanent flag changes. Keep it
+				// distinct from an omitted response, which permits all flags.
+				if flags == nil {
+					flags = []imap.Flag{}
+				}
 
 				c.mutex.Lock()
 				if c.state == imap.ConnStateSelected {

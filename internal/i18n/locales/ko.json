@@ -525,7 +525,7 @@
   "signature_invalid": "Relay가 Core 요청 서명을 검증하지 못했습니다.",
   "signature_expired": "Core 요청 서명이 만료되었습니다. 서버 시간을 확인하세요.",
   "request_replayed": "Relay가 이 서명된 요청을 이미 처리했습니다.",
-  "ui.scope_content_hint": "구독 중인 모든 폴더의 메일 본문 읽기",
+  "ui.scope_content_hint": "구독한 모든 폴더의 메일 본문을 읽고 연 메일을 읽음으로 표시",
   "ui.clear": "지우기",
   "ui.clear_deliveries": "기록 지우기",
   "ui.clear_logs": "로그 지우기",

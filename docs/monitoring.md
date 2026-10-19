@@ -17,7 +17,7 @@ A folder rejection with an IMAP response code uses `last_error.code=imap_folder_
 | Situation | Behavior |
 | --- | --- |
 | Subscribing to a folder | Uses UIDNEXT at the time the folder opens as the baseline and skips existing mail |
-| New mail arrives | Reads UID, sender, subject and internal date and queues a notification; subjects and sender names in GBK, Big5, Shift_JIS and other legacy charsets are decoded |
+| New mail arrives | Reads UID, sender address, MIME-decoded From display name, subject and internal date and queues a notification; subjects and sender names in GBK, Big5, Shift_JIS and other legacy charsets are decoded |
 | Mail received more than 24 hours before it appears in the folder | Advances progress without a notification, for example old mail filed by hand or a backlog after long downtime |
 | Realtime Folder supports IDLE | Waits for change notifications and reconciles every 60 seconds; `mode=idle` |
 | Realtime Folder without IDLE | Checks every 60 seconds; `mode=poll` |

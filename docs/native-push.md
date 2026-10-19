@@ -20,7 +20,7 @@ The command acquires the data-directory lock and deletes every paired device at 
 
 Before creating a pairing code, Core compares its clock with the HTTP `Date` from Relay `/v1/info`. A difference above 120 seconds returns `clock_skew` with the approximate difference and NTP guidance. Request timestamps use the measured offset within this tolerance; the signature format stays the same.
 
-Select **Mailwake App** as the notification channel. Native events always include sender and subject, encrypted for the active phone selected by `native_pairing_id`. New notifications and tests use this target; retries retain the original device plan. The third-party preview preference is preserved. Notification plaintext contains version, optional stable mailbox_id, account label, folder, sender, subject and received time. Native notifications also include `code` when a verification code is detected. Only Native reads message content, using `BODY.PEEK[]` limited to the first 256 KiB; truncated messages or MIME parsing failures leave the code empty. Bodies stay in memory during detection and are excluded from storage, logs and notifications. Core truncates subject, then sender, to fit the 2032-byte JSON limit while preserving the code.
+Select **Mailwake App** as the notification channel. Native events always include sender and subject, encrypted for the active phone selected by `native_pairing_id`. New notifications and tests use this target; retries retain the original device plan. The third-party preview preference is preserved. Notification plaintext contains version, optional stable mailbox_id, account label, folder, sender, optional sender_name, subject and received time. `sender` is the first From mailbox address; `sender_name` is its MIME-decoded display name and is omitted when empty. Both ordinary notifications and verification-code activities carry this field. Names come from the message header; domain inference and provider contacts stay outside this path. Native notifications also include `code` when a verification code is detected. Only Native reads message content, using `BODY.PEEK[]` limited to the first 256 KiB; truncated messages or MIME parsing failures leave the code empty. Bodies stay in memory during detection and are excluded from storage, logs and notifications. Core truncates subject, then sender_name, at Unicode boundaries to fit the 2032-byte JSON limit while preserving the complete sender address, code and signed reference. Oversized fixed fields produce `native_payload_too_large`.
 
 Core stores each device's envelope before sending and reuses it on retry or restart. Once a native event starts, its device plan and channel stay fixed through retries. Core `accepted` means every target was accepted by Relay; per-phone records show APNs outcomes after checks scheduled for 10 and 60 seconds after Relay acceptance. These schedules survive restart and overdue checks run when Core resumes. A phone's `accepted` still does not prove display. When Relay returns `pairing_revoked` on submission, or reports a cancelled delivery with that reason, Core marks the device as unpaired with an observation time and cancels its unsent tasks. The Phones list retains the device until an administrator removes it. Revoking the selected native target resets the channel to unconfigured and pauses delivery until the administrator chooses a target again.
 
@@ -56,3 +56,22 @@ Manual acceptance: select a paired phone, note the settings revision, remove the
 Core reads at most 32 due activity submissions per delivery poll, ordered by the persisted next-attempt time and business identity. Transient transport errors, HTTP 429 and 5xx retry after 30, 60, 120, 240 and then 300 seconds, measured from response completion. A longer Relay `Retry-After` takes precedence. The retry deadline and failure count survive restart; retries reuse the original encrypted request and expiry. Relay metadata discovery follows the same delay when it fails transiently.
 
 Expired submissions and failures whose next attempt would reach or exceed the activity expiry finish locally and clear their encrypted request. Permanent submission failures finish immediately. Shutdown cancellation leaves pending work available for recovery. Activity retries and terminal outcomes preserve ordinary notification delivery state.
+
+## Sender fields for clients
+
+```json
+{
+  "v": 1,
+  "mailbox_id": "mbx_work",
+  "account": "Work",
+  "folder": "INBOX",
+  "sender": "alerts@example.org",
+  "sender_name": "通知中心",
+  "subject": "Service update",
+  "received_at": "2026-10-19T08:00:00Z"
+}
+```
+
+For a From address without a name, the payload has `"sender": "alerts@example.org"` and omits `sender_name`. Clients decode the name as optional, retain both fields in local history, and use the address as the display fallback. A display name describes the sender; it provides no identity verification. The event and outbox retain the name under the same preview policy as the address. Third-party channel payloads retain their existing schema.
+
+Reading actions use the separate [mailbox read endpoint](html-content.md#mailbox-read-action). Body downloads remain read-only; opening a locally cached body also requires that action to synchronize the mailbox flag.

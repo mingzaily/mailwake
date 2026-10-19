@@ -525,7 +525,7 @@
   "signature_invalid": "O Relay não conseguiu verificar a assinatura da solicitação Core.",
   "signature_expired": "A assinatura da solicitação Core expirou. Verifique o relógio do servidor.",
   "request_replayed": "O Relay já processou esta solicitação assinada.",
-  "ui.scope_content_hint": "Ler o conteúdo dos e-mails em todas as pastas assinadas",
+  "ui.scope_content_hint": "Ler o conteúdo de todas as pastas acompanhadas e marcar mensagens abertas como lidas",
   "ui.clear": "Limpar",
   "ui.clear_deliveries": "Limpar histórico",
   "ui.clear_logs": "Limpar logs",

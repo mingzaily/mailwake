@@ -119,3 +119,5 @@ func TestDiscoverySharedAdmissionAndCancellation(t *testing.T) {
 func (s *discoverySource) ReadContent(context.Context, string, mail.Location) (mail.Body, error) {
 	return mail.Body{}, nil
 }
+
+func (s *discoverySource) MarkRead(context.Context, string, mail.Location) error { return nil }

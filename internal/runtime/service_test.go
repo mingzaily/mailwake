@@ -271,3 +271,5 @@ func TestConfiguredConnectionBudget(t *testing.T) {
 func (s observedSource) ReadContent(context.Context, string, mail.Location) (mail.Body, error) {
 	return mail.Body{}, nil
 }
+
+func (s observedSource) MarkRead(context.Context, string, mail.Location) error { return nil }

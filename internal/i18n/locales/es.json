@@ -525,7 +525,7 @@
   "signature_invalid": "Relay no pudo verificar la firma de la solicitud Core.",
   "signature_expired": "La firma de la solicitud Core ha caducado. Comprueba el reloj del servidor.",
   "request_replayed": "Relay ya ha procesado esta solicitud firmada.",
-  "ui.scope_content_hint": "Leer el contenido del correo de todas las carpetas suscritas",
+  "ui.scope_content_hint": "Leer el contenido de todas las carpetas suscritas y marcar los mensajes abiertos como leídos",
   "ui.clear": "Borrar",
   "ui.clear_deliveries": "Borrar historial",
   "ui.clear_logs": "Borrar registros",

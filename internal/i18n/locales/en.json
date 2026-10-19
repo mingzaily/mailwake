@@ -525,7 +525,7 @@
   "signature_invalid": "Relay could not verify the Core request signature.",
   "signature_expired": "The Core request signature has expired. Check the server clock.",
   "request_replayed": "Relay has already processed this signed request.",
-  "ui.scope_content_hint": "Read mail content in all subscribed folders",
+  "ui.scope_content_hint": "Read mail content and mark opened messages as read in all subscribed folders",
   "ui.clear": "Clear",
   "ui.clear_deliveries": "Clear records",
   "ui.clear_logs": "Clear logs",

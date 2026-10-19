@@ -170,14 +170,14 @@ func TestSelectedDeviceRestartReusesEnvelopeAndClearsTerminalContent(t *testing.
 	}
 }
 func TestPlaintextLimitAndNativeNoDevices(t *testing.T) {
-	n := event.Notification{Account: "Work", Folder: "Clients", Code: "482913", Sender: strings.Repeat("发件人", 1000), Subject: strings.Repeat("世界<", 1000), ReceivedAt: time.Now()}
+	n := event.Notification{Account: "Work", Folder: "Clients", Code: "482913", Sender: "sender@example.org", SenderName: strings.Repeat("发件人", 1000), Subject: strings.Repeat("世界<", 1000), ReceivedAt: time.Now()}
 	b, err := notificationPlain(n)
 	if err != nil || len(b) > 2032 {
 		t.Fatal(len(b), err)
 	}
 	var p plaintext
 	json.Unmarshal(b, &p)
-	if p.Subject != "" || p.Sender == "" || p.Code != "482913" {
+	if p.Subject != "" || p.Sender != n.Sender || p.SenderName == "" || p.Code != "482913" {
 		t.Fatal("truncation order changed")
 	}
 	n.Account = strings.Repeat("x", 2040)

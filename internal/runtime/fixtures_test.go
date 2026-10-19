@@ -79,3 +79,5 @@ func newManager(ctx context.Context, store *storage.Store, vault *settings.Vault
 	}
 	return newManagerWithFactories(ctx, store, vault, log, Dependencies{Identity: identity, Native: push}, sourceFactory, senderFactory)
 }
+
+func (s *singleMailboxService) MarkRead(context.Context, string, mail.Location) error { return nil }

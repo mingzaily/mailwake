@@ -201,3 +201,34 @@ func TestContentReadUsesReservedConnectionAndReleasesItOnCancellation(t *testing
 		t.Fatal("cancelled read retained connection", err)
 	}
 }
+
+func (b budgetTestSource) MarkRead(ctx context.Context, folder string, location Location) error {
+	_, err := b.ReadContent(ctx, folder, location)
+	return err
+}
+
+func TestReadActionSharesTheReservedConnectionBudget(t *testing.T) {
+	budget := NewConnectionBudget(2)
+	entered := make(chan struct{})
+	source := budget.Wrap(budgetTestSource{read: func(ctx context.Context) (Body, error) { close(entered); <-ctx.Done(); return Body{}, ctx.Err() }})
+	watch, err := source.Open(t.Context(), "INBOX")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer watch.Close()
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- source.MarkRead(ctx, "INBOX", Location{UIDValidity: 1, UID: 1}) }()
+	<-entered
+	if err := source.MarkRead(t.Context(), "INBOX", Location{UIDValidity: 1, UID: 1}); fault.From(err, "").Code != "connection_budget_exceeded" {
+		t.Fatal(err)
+	}
+	cancel()
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+	if _, err := source.Folders(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+}

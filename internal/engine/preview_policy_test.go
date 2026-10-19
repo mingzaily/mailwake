@@ -66,7 +66,10 @@ func TestEnqueueUsesPolicyCommittedDuringMailboxRead(t *testing.T) {
 			if err != nil || task == nil {
 				t.Fatal("missing task", err)
 			}
-			if !enabled && (task.Event.Subject != "" || task.Event.Sender != "" || task.Event.Code != "") {
+			if enabled && task.Event.SenderName != "通知中心" {
+				t.Fatal("sender name lost")
+			}
+			if !enabled && (task.Event.Subject != "" || task.Event.Sender != "" || task.Event.SenderName != "" || task.Event.Code != "") {
 				t.Fatal("disabled metadata retained")
 			}
 		})

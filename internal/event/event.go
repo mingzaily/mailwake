@@ -17,6 +17,7 @@ type Notification struct {
 	Account    string         `json:"account"`
 	Folder     string         `json:"folder"`
 	Sender     string         `json:"sender"`
+	SenderName string         `json:"sender_name,omitempty"`
 	Subject    string         `json:"subject"`
 	Code       string         `json:"code,omitempty"`
 	ReceivedAt time.Time      `json:"received_at"`

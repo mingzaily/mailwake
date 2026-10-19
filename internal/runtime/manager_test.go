@@ -448,3 +448,9 @@ func (s gatedMailbox) ReadContent(context.Context, string, mail.Location) (mail.
 func (s codeRequestSource) ReadContent(context.Context, string, mail.Location) (mail.Body, error) {
 	return mail.Body{}, nil
 }
+
+func (*multiSource) MarkRead(context.Context, string, mail.Location) error { return nil }
+
+func (s gatedMailbox) MarkRead(context.Context, string, mail.Location) error { return nil }
+
+func (s codeRequestSource) MarkRead(context.Context, string, mail.Location) error { return nil }

@@ -42,7 +42,7 @@ func (s *Service) planActivities(n event.Notification, devices []storage.NativeP
 		return nil, err
 	}
 	content := activityContent{ActivityID: n.ID, EventID: n.ID, Event: "start", ReceivedAt: n.ReceivedAt.Unix(), ExpiresAt: expiresAt, UpdatedAt: n.ReceivedAt.Unix(),
-		Notification: plaintext{V: 1, MailboxID: n.MailboxID, Account: n.Account, Folder: n.Folder, Sender: n.Sender, Subject: n.Subject, Code: n.Code, ReceivedAt: n.ReceivedAt.UTC().Format(time.RFC3339Nano), MessageRef: reference}}
+		Notification: newPlaintext(n, reference)}
 	plain, err := fitPlaintext(&content.Notification, func() ([]byte, error) { return json.Marshal(content) })
 	if err != nil {
 		return nil, err
