@@ -50,7 +50,7 @@ func fixtureWithFetch(t *testing.T, observe func(*protocol.FetchOptions)) (*Sour
 	}
 	backend.AddUser(user)
 	server := imapserver.New(&imapserver.Options{NewSession: func(*imapserver.Conn) (imapserver.Session, *imapserver.GreetingData, error) {
-		return &fetchObservedSession{Session: backend.NewSession(), observe: observe}, nil, nil
+		return &fixtureSession{Session: backend.NewSession(), observe: observe}, nil, nil
 	}, Caps: protocol.CapSet{protocol.CapIMAP4rev1: {}, protocol.CapIdle: {}}, Logger: log.New(io.Discard, "", 0)})
 	done := make(chan struct{})
 	go func() { defer close(done); server.Serve(listener) }()
@@ -75,6 +75,19 @@ func TestRejectedLoginReportsAuthFailure(t *testing.T) {
 	_, err := s.Open(t.Context(), "Clients")
 	if code := fault.From(err, "").Code; code != mail.CodeAuthFailed {
 		t.Fatalf("rejected credentials code %q (%v)", code, err)
+	}
+}
+
+func TestSelectMissingFolderReturnsNoSession(t *testing.T) {
+	source, _ := fixture(t)
+	connection, err := source.OpenScheduled(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connection.Close()
+	selected, err := connection.Select(t.Context(), "Missing")
+	if err == nil || selected != nil {
+		t.Fatalf("missing folder returned a session: %v, %v", selected, err)
 	}
 }
 
@@ -402,13 +415,22 @@ func TestStaleMailFiledIntoFolderIsSkipped(t *testing.T) {
 	}
 }
 
-// Observe the server-side request to verify the body access and PEEK boundary.
-type fetchObservedSession struct {
+// Advertise the fixture's supported flags and observe body access and PEEK requests.
+type fixtureSession struct {
 	imapserver.Session
 	observe func(*protocol.FetchOptions)
 }
 
-func (s *fetchObservedSession) Fetch(w *imapserver.FetchWriter, set protocol.NumSet, options *protocol.FetchOptions) error {
+func (s *fixtureSession) Select(mailbox string, options *protocol.SelectOptions) (*protocol.SelectData, error) {
+	data, err := s.Session.Select(mailbox, options)
+	if err == nil {
+		// The memory server supports these permanent flags, including on empty mailboxes.
+		data.PermanentFlags = []protocol.Flag{protocol.FlagSeen, protocol.FlagAnswered, protocol.FlagFlagged, protocol.FlagDeleted, protocol.FlagDraft, protocol.FlagWildcard}
+	}
+	return data, err
+}
+
+func (s *fixtureSession) Fetch(w *imapserver.FetchWriter, set protocol.NumSet, options *protocol.FetchOptions) error {
 	if s.observe != nil {
 		s.observe(options)
 	}

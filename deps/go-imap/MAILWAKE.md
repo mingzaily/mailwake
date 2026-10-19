@@ -5,6 +5,7 @@ This directory copies `github.com/emersion/go-imap/v2 v2.0.0-beta.8` from its ve
 Production changes are confined to `imapclient/client.go` and `imapclient/fetch.go`. The upstream `imapclient/fetch_test.go` also accepts the separate flag update produced by a non-PEEK read while verifying the exact body:
 
 - Deliver every matching FETCH response until the tagged command completes. Flags and static metadata can arrive separately for the same UID. Callers combine the responses by UID.
+- Preserve an explicit empty `PERMANENTFLAGS` response as an empty slice, distinct from an omitted response (`nil`). RFC 3501 section 6.3.1 gives omitted responses the default of allowing permanent flag changes; Core uses this distinction when marking mail read.
 - Keep a literal's terminal read result after EOF or transport failure. Subsequent cleanup returns that result while the decoder resumes, preserving exclusive access to the shared transport reader during cancellation.
 - Buffer body literals that precede UID until the decoder can route the message to the correct pending command. This also preserves routing for unsolicited or unrelated UIDs. After UID, literals continue streaming.
 - `Options.MaxBufferedFetchBytes` bounds total pre-UID body bytes per response (default 16 MiB). At most 32 data items can precede UID. Exceeding either limit terminates the connection, allowing the caller to preserve progress. Core sets the byte limit to its MIME read budget plus one byte and independently enforces requested section and batch budgets.

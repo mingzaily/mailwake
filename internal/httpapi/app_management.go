@@ -111,6 +111,20 @@ func appManagementRoutes(r *gin.Engine, admin *gin.RouterGroup, runtime Runtime,
 		}
 		c.JSON(200, result)
 	})
+	app.Handle("POST", "/content/read", "content", func(c *gin.Context) {
+		c.Header("Cache-Control", "no-store")
+		var input struct {
+			Reference coreidentity.MessageReference `json:"reference"`
+		}
+		if !decodeRequest(c, &input) {
+			return
+		}
+		if err := runtime.MarkRead(c.Request.Context(), input.Reference); err != nil {
+			respondFault(c, err)
+			return
+		}
+		c.Status(204)
+	})
 	app.Handle("GET", "/folder-mailboxes", "folders", func(c *gin.Context) {
 		items := []gin.H{}
 		for _, mailbox := range runtime.Mailboxes() {

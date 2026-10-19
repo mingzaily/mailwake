@@ -16,6 +16,7 @@ type Runtime interface {
 	MailboxRuntime
 	DeliveryRuntime
 	DiagnosticsRuntime
+	MarkRead(context.Context, coreidentity.MessageReference) error
 	ReadContent(context.Context, coreidentity.MessageReference) (mail.Body, error)
 }
 type MailboxRuntime interface {

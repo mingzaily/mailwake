@@ -320,7 +320,7 @@ func (e *Engine) sync(ctx context.Context, folder string, session mail.Session) 
 		}
 		messageID := event.ID(e.eventNamespace, folder, msg.Key)
 		n := event.Notification{Location: msg.Location, ID: messageID, Account: label, AccountID: e.eventNamespace, MailboxID: e.account, Folder: folder, ReceivedAt: msg.ReceivedAt}
-		n.Sender, n.Subject, n.Code = msg.Sender, msg.Subject, msg.Code
+		n.Sender, n.SenderName, n.Subject, n.Code = msg.Sender, msg.SenderName, msg.Subject, msg.Code
 		items = append(items, n)
 	}
 	if err := e.store.Commit(ctx, e.account, folder, previous, batch.Checkpoint, items); err != nil {

@@ -18,12 +18,14 @@ import (
 )
 
 type serverOptions struct {
-	silent      string
-	caps        string
-	loginCaps   bool
-	requireID   bool
-	rejectID    bool
-	openFailure string
+	silent         string
+	caps           string
+	loginCaps      bool
+	requireID      bool
+	rejectID       bool
+	openFailure    string
+	storeFailure   string
+	permanentFlags string
 }
 
 // silentServer answers ordinary commands and deliberately withholds one response.
@@ -103,7 +105,7 @@ func scriptedServer(t *testing.T, options serverOptions) (*Source, <-chan string
 					continue
 				}
 				fmt.Fprintf(conn, "* LIST () \"/\" \"Clients\"\r\n%s OK listed\r\n", tag)
-			case "EXAMINE":
+			case "EXAMINE", "SELECT":
 				if options.requireID && !identified {
 					fmt.Fprintf(conn, "%s NO SELECT Unsafe Login\r\n", tag)
 					continue
@@ -113,7 +115,20 @@ func scriptedServer(t *testing.T, options serverOptions) (*Source, <-chan string
 					continue
 				}
 				selected = true
-				fmt.Fprintf(conn, "* 0 EXISTS\r\n* OK [UIDVALIDITY 1] epoch\r\n* OK [UIDNEXT 1] next\r\n%s OK [READ-ONLY] selected\r\n", tag)
+				if options.permanentFlags != "" {
+					fmt.Fprintf(conn, "* OK [PERMANENTFLAGS %s] permanent flags\r\n", options.permanentFlags)
+				}
+				access := "READ-ONLY"
+				if command == "SELECT" {
+					access = "READ-WRITE"
+				}
+				fmt.Fprintf(conn, "* 0 EXISTS\r\n* OK [UIDVALIDITY 1] epoch\r\n* OK [UIDNEXT 1] next\r\n%s OK [%s] selected\r\n", tag, access)
+			case "STORE":
+				if options.storeFailure != "" {
+					fmt.Fprintf(conn, "%s NO %s\r\n", tag, options.storeFailure)
+					continue
+				}
+				fmt.Fprintf(conn, "* 1 FETCH (UID 1 FLAGS (\\Seen))\r\n%s OK stored\r\n", tag)
 			case "CAPABILITY":
 				fmt.Fprintf(conn, "* CAPABILITY %s\r\n%s OK capabilities\r\n", options.caps, tag)
 			case "SEARCH":

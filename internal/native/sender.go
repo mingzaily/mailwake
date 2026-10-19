@@ -23,6 +23,7 @@ type plaintext struct {
 	Account    string                         `json:"account"`
 	Folder     string                         `json:"folder"`
 	Sender     string                         `json:"sender"`
+	SenderName string                         `json:"sender_name,omitempty"`
 	Subject    string                         `json:"subject"`
 	Code       string                         `json:"code,omitempty"`
 	ReceivedAt string                         `json:"received_at"`
@@ -32,8 +33,18 @@ func notificationPlain(n event.Notification) ([]byte, error) {
 	return notificationPlainWithReference(n, nil)
 }
 func notificationPlainWithReference(n event.Notification, reference *coreidentity.MessageReference) ([]byte, error) {
-	p := plaintext{MessageRef: reference, V: 1, MailboxID: n.MailboxID, Account: n.Account, Folder: n.Folder, Sender: n.Sender, Subject: n.Subject, Code: n.Code, ReceivedAt: n.ReceivedAt.UTC().Format(time.RFC3339Nano)}
+	p := newPlaintext(n, reference)
 	return fitPlaintext(&p, func() ([]byte, error) { return json.Marshal(p) })
+}
+
+func newPlaintext(n event.Notification, reference *coreidentity.MessageReference) plaintext {
+	return plaintext{
+		V: 1, MessageRef: reference,
+		MailboxID: n.MailboxID, Account: n.Account, Folder: n.Folder,
+		Sender: n.Sender, SenderName: n.SenderName,
+		Subject: n.Subject, Code: n.Code,
+		ReceivedAt: n.ReceivedAt.UTC().Format(time.RFC3339Nano),
+	}
 }
 
 func fitPlaintext(p *plaintext, encode func() ([]byte, error)) ([]byte, error) {
@@ -41,7 +52,7 @@ func fitPlaintext(p *plaintext, encode func() ([]byte, error)) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, field := range []*string{&p.Subject, &p.Sender} {
+	for _, field := range []*string{&p.Subject, &p.SenderName} {
 		if len(b) <= 2032 {
 			break
 		}

@@ -206,3 +206,7 @@ func (s failingSource) ReadContent(context.Context, string, mail.Location) (mail
 func (folderSource) ReadContent(context.Context, string, mail.Location) (mail.Body, error) {
 	return mail.Body{}, nil
 }
+
+func (s failingSource) MarkRead(context.Context, string, mail.Location) error { return nil }
+
+func (folderSource) MarkRead(context.Context, string, mail.Location) error { return nil }

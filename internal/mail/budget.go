@@ -121,6 +121,14 @@ func (c *budgetConnection) Close() error {
 	return c.err
 }
 
+func (s budgetSource) MarkRead(ctx context.Context, folder string, location Location) error {
+	if err := s.budget.acquire(ctx, false); err != nil {
+		return err
+	}
+	defer s.budget.release(false)
+	return s.source.MarkRead(ctx, folder, location)
+}
+
 func (s budgetSource) ReadContent(ctx context.Context, folder string, location Location) (Body, error) {
 	if err := s.budget.acquire(ctx, false); err != nil {
 		return Body{}, err

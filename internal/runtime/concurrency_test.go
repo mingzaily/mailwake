@@ -218,3 +218,5 @@ func TestFullSubscriptionsAllowMailboxManagement(t *testing.T) {
 func (s slowSource) ReadContent(context.Context, string, mail.Location) (mail.Body, error) {
 	return mail.Body{}, nil
 }
+
+func (s slowSource) MarkRead(context.Context, string, mail.Location) error { return nil }

@@ -208,7 +208,7 @@ func TestMailboxIdentitySeparatesEventIDs(t *testing.T) {
 type codeSession struct{ testSession }
 
 func (codeSession) Poll(_ context.Context, _ string, detectCodes bool) (mail.Batch, error) {
-	msg := mail.Message{Key: "code-message", Sender: "sender@example.org", Subject: "Sign in", ReceivedAt: time.Now()}
+	msg := mail.Message{Key: "code-message", Sender: "sender@example.org", SenderName: "通知中心", Subject: "Sign in", ReceivedAt: time.Now()}
 	if detectCodes {
 		msg.Code = "482913"
 	}
@@ -265,3 +265,9 @@ func (rejectingSource) ReadContent(context.Context, string, mail.Location) (mail
 func (steadySource) ReadContent(context.Context, string, mail.Location) (mail.Body, error) {
 	return mail.Body{}, nil
 }
+
+func (flappingSource) MarkRead(context.Context, string, mail.Location) error { return nil }
+
+func (rejectingSource) MarkRead(context.Context, string, mail.Location) error { return nil }
+
+func (steadySource) MarkRead(context.Context, string, mail.Location) error { return nil }

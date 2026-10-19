@@ -13,6 +13,7 @@ import (
 
 	"github.com/mingzaily/mailwake/internal/content"
 	"github.com/mingzaily/mailwake/internal/coreidentity"
+	"github.com/mingzaily/mailwake/internal/fault"
 	"github.com/mingzaily/mailwake/internal/mail"
 )
 
@@ -77,5 +78,53 @@ func TestContentResponseJSONBudgetIncludesEscaping(t *testing.T) {
 	var body mail.Body
 	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &body) != nil || w.Body.Len() > content.MaxResponseBytes || body.HTML != "" || body.HasRemoteImages || !body.Truncated || len(body.Text) != content.MaxTextBytes {
 		t.Fatalf("response status=%d bytes=%d", w.Code, w.Body.Len())
+	}
+}
+
+type readActionRuntime struct {
+	Runtime
+	mark func(coreidentity.MessageReference) error
+}
+
+func (r readActionRuntime) MarkRead(_ context.Context, ref coreidentity.MessageReference) error {
+	return r.mark(ref)
+}
+
+func TestReadActionForwardsReferenceAndReportsFailures(t *testing.T) {
+	reference := coreidentity.MessageReference{CoreID: "core", MailboxID: "mailbox", AccountID: "account", Folder: "INBOX", Location: mail.Location{UIDValidity: 7, UID: 9}, Signature: "signature"}
+	var marked bool
+	var failure error
+	runtime := readActionRuntime{Runtime: newTestRuntime("bark", nil, nil), mark: func(ref coreidentity.MessageReference) error {
+		if ref != reference {
+			t.Errorf("reference differs: %+v", ref)
+		}
+		if failure != nil {
+			return failure
+		}
+		marked = true
+		return nil
+	}}
+	f := newAppFixture(t, runtime)
+	credential, _ := f.invite(t, []string{"content"})
+	headers := map[string]string{"Authorization": "Bearer " + credential}
+	body := map[string]any{"reference": reference}
+	w := f.do(t, "POST", appPrefix+"/content/read", body, headers)
+	if w.Code != 204 || !marked || w.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("read action: %d %s", w.Code, w.Body.String())
+	}
+	for _, tc := range []struct {
+		code   string
+		status int
+	}{{"message_not_found", 404}, {"message_unavailable", 503}, {"message_timeout", 504}} {
+		marked = false
+		failure = fault.New(tc.code)
+		w = f.do(t, "POST", appPrefix+"/content/read", body, headers)
+		if w.Code != tc.status || marked || !strings.Contains(w.Body.String(), tc.code) {
+			t.Fatalf("failure: %d %s", w.Code, w.Body.String())
+		}
+	}
+	f.do(t, "DELETE", appPrefix+"/controller", nil, headers)
+	if w := f.do(t, "POST", appPrefix+"/content/read", body, headers); w.Code != 401 {
+		t.Fatal(w.Code)
 	}
 }

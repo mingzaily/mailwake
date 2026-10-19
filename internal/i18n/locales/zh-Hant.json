@@ -525,7 +525,7 @@
   "signature_invalid": "Relay 無法驗證伺服器請求籤名。",
   "signature_expired": "伺服器請求籤名已過期，請檢查伺服器時間。",
   "request_replayed": "Relay 已處理過此簽名請求。",
-  "ui.scope_content_hint": "讀取所有已訂閱資料夾內的郵件內文",
+  "ui.scope_content_hint": "讀取所有已訂閱資料夾的正文，並將開啟的郵件標記為已讀",
   "ui.clear": "清除",
   "ui.clear_deliveries": "清除記錄",
   "ui.clear_logs": "清除日誌",

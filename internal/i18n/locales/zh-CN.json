@@ -525,7 +525,7 @@
   "signature_invalid": "Relay 无法验证服务器请求签名。",
   "signature_expired": "服务器请求签名已过期，请检查服务器时间。",
   "request_replayed": "Relay 已处理过此签名请求。",
-  "ui.scope_content_hint": "读取所有已订阅文件夹内的邮件正文",
+  "ui.scope_content_hint": "读取所有已订阅文件夹的正文，并将打开的邮件标记为已读",
   "ui.clear": "清除",
   "ui.clear_deliveries": "清除记录",
   "ui.clear_logs": "清除日志",

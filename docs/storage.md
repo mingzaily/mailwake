@@ -28,7 +28,7 @@ Administrator passwords use Argon2id with encoded parameters. Session IDs, setup
 
 ## Outbox payloads and history
 
-The enqueue transaction applies the persisted [preview policy](notifications.md#privacy-and-persistence). With third-party preview `off`, tasks retain mailbox identity, display name, message location, folder and time; `subject` adds sender and subject. Native payloads always include encrypted sender and subject. Message bodies remain outside persistent outbox state, history and logs.
+The enqueue transaction applies the persisted [preview policy](notifications.md#privacy-and-persistence). With third-party preview `off`, tasks retain mailbox identity, display name, message location, folder and time; `subject` adds sender, optional sender_name and subject. Native payloads always include encrypted sender, optional sender_name and subject. The optional name lives in the event JSON, so the schema baseline is unchanged. Disabling preview clears the name with the address from pending and failed payloads. Message bodies remain outside persistent outbox state, history and logs.
 
 After channel acceptance, the delivery payload is cleared. A separate history summary retains mailbox ID, display name, folder and the subject permitted at enqueue time; it excludes sender and body. Preview `off`, including the initial unconfigured state, produces `subject: null`. Existing summaries retain their recorded subjects when preview settings change. Native terminal records also clear envelopes and signatures, so native failures support diagnosis rather than manual replay.
 

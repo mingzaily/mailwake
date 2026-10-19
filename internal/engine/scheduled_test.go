@@ -230,3 +230,5 @@ func (s *scheduledSource) assertConnections(t *testing.T, opened, closed, peak i
 func (s *scheduledSource) ReadContent(context.Context, string, mail.Location) (mail.Body, error) {
 	return mail.Body{}, nil
 }
+
+func (s *scheduledSource) MarkRead(context.Context, string, mail.Location) error { return nil }

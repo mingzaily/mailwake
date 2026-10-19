@@ -215,3 +215,5 @@ func TestDuplicateUpdatePreservesLiveMailbox(t *testing.T) {
 func (s admissionSource) ReadContent(context.Context, string, mail.Location) (mail.Body, error) {
 	return mail.Body{}, nil
 }
+
+func (s admissionSource) MarkRead(context.Context, string, mail.Location) error { return nil }

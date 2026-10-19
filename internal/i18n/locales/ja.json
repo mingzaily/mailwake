@@ -525,7 +525,7 @@
   "signature_invalid": "Relay は Core リクエストの署名を検証できませんでした。",
   "signature_expired": "Core リクエストの署名期限が切れました。サーバーの時計を確認してください。",
   "request_replayed": "Relay はこの署名付きリクエストを処理済みです。",
-  "ui.scope_content_hint": "購読中のすべてのフォルダーのメール本文を読む",
+  "ui.scope_content_hint": "購読中の全フォルダのメール本文を読み、開いたメールを既読にする",
   "ui.clear": "消去",
   "ui.clear_deliveries": "履歴を消去",
   "ui.clear_logs": "ログを消去",

@@ -19,6 +19,7 @@ type Location struct {
 type Message struct {
 	Location   *Location
 	Key        string
+	SenderName string
 	Sender     string
 	Subject    string
 	Code       string
@@ -35,6 +36,7 @@ type Batch struct {
 }
 
 type Source interface {
+	MarkRead(context.Context, string, Location) error
 	ReadContent(context.Context, string, Location) (Body, error)
 	Folders(context.Context) (*FolderDiscovery, error)
 	Open(context.Context, string) (Session, error)

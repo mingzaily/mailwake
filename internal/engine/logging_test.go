@@ -59,3 +59,5 @@ func TestReconnectLogsKeepRawErrorsPrivate(t *testing.T) {
 func (s failingLogSource) ReadContent(context.Context, string, mail.Location) (mail.Body, error) {
 	return mail.Body{}, nil
 }
+
+func (s failingLogSource) MarkRead(context.Context, string, mail.Location) error { return nil }

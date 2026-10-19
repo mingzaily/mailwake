@@ -94,3 +94,5 @@ func (testRuntime) TestSavedDelivery(context.Context) error {
 func (r testRuntime) ReadContent(context.Context, coreidentity.MessageReference) (mail.Body, error) {
 	return mail.Body{Text: "test body"}, nil
 }
+
+func (r testRuntime) MarkRead(context.Context, coreidentity.MessageReference) error { return nil }

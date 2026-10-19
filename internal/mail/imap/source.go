@@ -240,11 +240,19 @@ func (s *Source) OpenScheduled(ctx context.Context) (mail.FolderConnection, erro
 	return s.connect(ctx)
 }
 func (x *connection) Select(ctx context.Context, folder string) (mail.Session, error) {
+	selected, err := x.selectFolder(ctx, folder, true)
+	if err != nil {
+		return nil, err
+	}
+	return selected, nil
+}
+
+func (x *connection) selectFolder(ctx context.Context, folder string, readOnly bool) (*session, error) {
 	var rejected *protocol.Error
 	var selected *protocol.SelectData
 	err := x.command(ctx, "imap_folder_open_failed", func() error {
 		var err error
-		selected, err = x.client.Select(folder, &protocol.SelectOptions{ReadOnly: true}).Wait()
+		selected, err = x.client.Select(folder, &protocol.SelectOptions{ReadOnly: readOnly}).Wait()
 		if errors.As(err, &rejected) {
 			if code := responseCode(string(rejected.Code)); code != "" {
 				return &fault.Error{Code: "imap_folder_rejected", Params: map[string]string{"response_code": code}}
@@ -261,7 +269,7 @@ func (x *connection) Select(ctx context.Context, folder string) (mail.Session, e
 	if selected.UIDValidity == 0 {
 		return nil, &mail.FolderError{Err: fault.New("imap_uid_invalid")}
 	}
-	return &session{connection: x, folder: folder, validity: selected.UIDValidity, uidNext: uint32(selected.UIDNext), idle: x.caps.Has(protocol.CapIdle)}, nil
+	return &session{connection: x, folder: folder, validity: selected.UIDValidity, permanentFlags: selected.PermanentFlags, uidNext: uint32(selected.UIDNext), idle: x.caps.Has(protocol.CapIdle)}, nil
 }
 
 // responseCode keeps a bounded protocol identifier and discards server-controlled punctuation.
@@ -278,8 +286,9 @@ func responseCode(raw string) string {
 
 type session struct {
 	*connection
-	folder   string
-	validity uint32
+	folder         string
+	validity       uint32
+	permanentFlags []protocol.Flag
 	// uidNext is the UIDNEXT reported by SELECT, used as the baseline of a new checkpoint.
 	uidNext uint32
 	idle    bool
@@ -375,6 +384,7 @@ func (s *session) Poll(ctx context.Context, checkpoint string, detectCodes bool)
 		msg := mail.Message{Location: &mail.Location{UIDValidity: s.validity, UID: uint32(uid)}, Key: fmt.Sprintf("%d:%d", s.validity, uid), ReceivedAt: item.InternalDate, Subject: item.Envelope.Subject}
 		if len(item.Envelope.From) > 0 {
 			msg.Sender = item.Envelope.From[0].Addr()
+			msg.SenderName = item.Envelope.From[0].Name
 		}
 		if detectCodes {
 			raw := item.FindBodySection(section)

@@ -69,7 +69,7 @@ func saveDelivery(ctx context.Context, tx *sql.Tx, change DeliveryChange) error 
 		return err
 	}
 	if clearPreview {
-		if _, err := tx.ExecContext(ctx, "UPDATE outbox SET payload=json_remove(payload,'$.sender','$.subject','$.code') WHERE state<>'accepted'"); err != nil {
+		if _, err := tx.ExecContext(ctx, "UPDATE outbox SET payload=json_remove(payload,'$.sender','$.sender_name','$.subject','$.code') WHERE state<>'accepted'"); err != nil {
 			return err
 		}
 	}

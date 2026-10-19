@@ -525,7 +525,7 @@
   "signature_invalid": "Relay konnte die Signatur der Core-Anfrage nicht prüfen.",
   "signature_expired": "Die Signatur der Core-Anfrage ist abgelaufen. Prüfe die Serveruhr.",
   "request_replayed": "Relay hat diese signierte Anfrage bereits verarbeitet.",
-  "ui.scope_content_hint": "Nachrichteninhalte in allen abonnierten Ordnern lesen",
+  "ui.scope_content_hint": "E-Mail-Inhalte aller abonnierten Ordner lesen und geöffnete Nachrichten als gelesen markieren",
   "ui.clear": "Löschen",
   "ui.clear_deliveries": "Verlauf löschen",
   "ui.clear_logs": "Logs löschen",
