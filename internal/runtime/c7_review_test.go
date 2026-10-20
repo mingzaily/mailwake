@@ -145,11 +145,11 @@ func TestCreateMailboxSharesTestAdmission(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	done := make(chan error, 2)
-	go func() { _, err := m.CreateMailbox(ctx, input); done <- err }()
+	go func() { _, err := m.CreateMailbox(ctx, settings.MailboxCreate{MailboxUpdate: input}); done <- err }()
 	go func() { _, err := m.TestMailbox(ctx, "", input); done <- err }()
 	<-started
 	<-started
-	if _, err := m.CreateMailbox(ctx, input); fault.From(err, "").Code != "discovery_busy" {
+	if _, err := m.CreateMailbox(ctx, settings.MailboxCreate{MailboxUpdate: input}); fault.From(err, "").Code != "discovery_busy" {
 		t.Fatal(err)
 	}
 	req := httptest.NewRequest("POST", "http://core.test/api/v1/mailboxes", strings.NewReader(`{"host":"imap.test","port":993,"username":"user","password":"synthetic"}`))
@@ -165,7 +165,7 @@ func TestCreateMailboxSharesTestAdmission(t *testing.T) {
 	<-done
 	<-done
 	close(release)
-	if _, err := m.CreateMailbox(t.Context(), input); err != nil {
+	if _, err := m.CreateMailbox(t.Context(), settings.MailboxCreate{MailboxUpdate: input}); err != nil {
 		t.Fatal("admission leaked after cancellation", err)
 	}
 }

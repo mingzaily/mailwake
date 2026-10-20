@@ -45,7 +45,7 @@ func TestConcurrentDuplicateMailboxes(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, err := m.CreateMailbox(t.Context(), settings.MailboxUpdate{Host: host, Port: 993, Username: host, Password: ptr("synthetic")})
+			_, err := m.CreateMailbox(t.Context(), settings.MailboxCreate{MailboxUpdate: settings.MailboxUpdate{Host: host, Port: 993, Username: host, Password: ptr("synthetic")}})
 			results <- err
 		}()
 	}

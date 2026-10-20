@@ -149,7 +149,16 @@ func appManagementRoutes(r *gin.Engine, admin *gin.RouterGroup, runtime Runtime,
 	})
 	mailboxes := mailboxHandlers{runtime: runtime}
 	app.Handle("GET", "/mailboxes", "mailboxes", mailboxes.List)
-	app.Handle("POST", "/mailboxes", "mailboxes", mailboxes.Create)
+	app.HandleController("POST", "/mailboxes", "mailboxes", func(c *gin.Context, controller storage.AppController) {
+		mailboxes.create(c, controller.HasScope("folders"))
+	})
+	app.HandleController("POST", "/mailboxes/scan", "mailboxes", func(c *gin.Context, controller storage.AppController) {
+		if !controller.HasScope("folders") {
+			respondError(c, 403, fault.New("forbidden"))
+			return
+		}
+		mailboxTestHandler(runtime, func(c *gin.Context, folders *mail.FolderDiscovery) { c.JSON(200, folders) })(c)
+	})
 	app.Handle("GET", "/mailboxes/:id", "mailboxes", mailboxes.Get)
 	app.Handle("PUT", "/mailboxes/:id", "mailboxes", mailboxes.Update)
 	app.Handle("DELETE", "/mailboxes/:id", "mailboxes", mailboxes.Delete)

@@ -89,3 +89,33 @@ func TestMailboxLimitInsideTransaction(t *testing.T) {
 		t.Fatal(records, err)
 	}
 }
+
+func TestCreateMailboxAndInitialFoldersRollbackTogether(t *testing.T) {
+	s, err := Open(t.Context(), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	_, err = s.db.ExecContext(t.Context(), "CREATE TRIGGER reject_initial_folders BEFORE INSERT ON mailbox_subscriptions BEGIN SELECT RAISE(ABORT, 'synthetic failure'); END")
+	if err != nil {
+		t.Fatal(err)
+	}
+	folders := []mail.Folder{{Name: "INBOX", Check: "5m"}}
+	if err := s.CreateMailboxRecord(t.Context(), "new", []byte("encrypted"), folders); err == nil {
+		t.Fatal("expected persistence error")
+	}
+	records, err := s.MailboxConfigurations(t.Context())
+	if err != nil || len(records) != 0 {
+		t.Fatalf("partial mailbox: %v %v", records, err)
+	}
+	if _, err := s.db.ExecContext(t.Context(), "DROP TRIGGER reject_initial_folders"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CreateMailboxRecord(t.Context(), "new", []byte("encrypted"), folders); err != nil {
+		t.Fatal(err)
+	}
+	state, err := s.LoadSubscriptions(t.Context(), "new")
+	if err != nil || len(state.Folders) != 1 || state.Folders[0] != folders[0] {
+		t.Fatalf("retry: %+v %v", state, err)
+	}
+}

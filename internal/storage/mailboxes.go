@@ -3,9 +3,11 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 
 	"github.com/mingzaily/mailwake/internal/fault"
+	"github.com/mingzaily/mailwake/internal/mail"
 )
 
 const MaxMailboxes = 20
@@ -45,6 +47,14 @@ func (s *Store) MailboxConfigurations(ctx context.Context) ([]ConfigurationRecor
 
 // SaveMailboxRecord checks the persisted revision before changing this mailbox's progress.
 func (s *Store) SaveMailboxRecord(ctx context.Context, id string, revision int64, encrypted []byte, reset bool) error {
+	return s.saveMailboxRecord(ctx, id, revision, encrypted, reset, []mail.Folder{})
+}
+
+func (s *Store) CreateMailboxRecord(ctx context.Context, id string, encrypted []byte, folders []mail.Folder) error {
+	return s.saveMailboxRecord(ctx, id, 0, encrypted, false, folders)
+}
+
+func (s *Store) saveMailboxRecord(ctx context.Context, id string, revision int64, encrypted []byte, reset bool, folders []mail.Folder) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -62,7 +72,11 @@ func (s *Store) SaveMailboxRecord(ctx context.Context, id string, revision int64
 		if _, err := tx.ExecContext(ctx, "INSERT INTO configuration(name,revision,encrypted) VALUES(?,1,?)", name, encrypted); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, "INSERT INTO mailbox_subscriptions(account,revision,folders) VALUES(?,1,'[]')", id); err != nil {
+		initial, err := json.Marshal(folders)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, "INSERT INTO mailbox_subscriptions(account,revision,folders) VALUES(?,1,?)", id, string(initial)); err != nil {
 			return err
 		}
 	} else {

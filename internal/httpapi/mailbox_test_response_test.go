@@ -69,7 +69,7 @@ func (r displayMailboxRuntime) Mailboxes() []settings.MailboxView {
 	value, _ := r.Mailbox("box")
 	return []settings.MailboxView{value}
 }
-func (r displayMailboxRuntime) CreateMailbox(context.Context, settings.MailboxUpdate) (settings.MailboxView, error) {
+func (r displayMailboxRuntime) CreateMailbox(context.Context, settings.MailboxCreate) (settings.MailboxView, error) {
 	return r.Mailbox("box")
 }
 func (r displayMailboxRuntime) UpdateMailbox(context.Context, string, settings.MailboxUpdate) error {
@@ -105,6 +105,42 @@ func TestScanConfigurationConflictReturns409(t *testing.T) {
 		w := f.do(t, "GET", path, nil, headers)
 		if w.Code != 409 || !strings.Contains(w.Body.String(), "settings_conflict") {
 			t.Fatalf("%s: %d %s", path, w.Code, w.Body)
+		}
+	}
+}
+
+func TestDraftScanRequiresBothScopesAndReturnsFoldersWithoutCreatingMailbox(t *testing.T) {
+	runtime := mailboxProbeRuntime{Runtime: newTestRuntime("", nil, nil), probe: func(context.Context, string, settings.MailboxUpdate) (*mail.FolderDiscovery, error) {
+		return &mail.FolderDiscovery{Folders: []string{"INBOX", "Projects"}, FolderRoles: map[string]string{"INBOX": "inbox"}}, nil
+	}}
+	f := newAppFixture(t, runtime)
+	for _, scopes := range [][]string{{"mailboxes"}, {"folders"}, {"mailboxes", "folders"}} {
+		credential, _ := f.invite(t, scopes)
+		w := f.do(t, "POST", "/api/v1/app/mailboxes/scan", map[string]any{}, map[string]string{"Authorization": "Bearer " + credential})
+		if len(scopes) == 1 {
+			if w.Code != 403 {
+				t.Fatalf("scopes=%v status=%d", scopes, w.Code)
+			}
+		} else {
+			var folders mail.FolderDiscovery
+			if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &folders) != nil || len(folders.Folders) != 2 || folders.FolderRoles["INBOX"] != "inbox" {
+				t.Fatalf("scan: %d %s", w.Code, w.Body)
+			}
+		}
+	}
+}
+
+func TestMailboxCreationWithSubscriptionsRequiresFolderPermission(t *testing.T) {
+	f := newAppFixture(t, displayMailboxRuntime{newTestRuntime("", nil, nil)})
+	for _, scopes := range [][]string{{"mailboxes"}, {"mailboxes", "folders"}} {
+		credential, _ := f.invite(t, scopes)
+		w := f.do(t, "POST", "/api/v1/app/mailboxes", map[string]any{"folders": []map[string]string{{"name": "INBOX", "check": "5m"}}}, map[string]string{"Authorization": "Bearer " + credential})
+		expected := 201
+		if len(scopes) == 1 {
+			expected = 403
+		}
+		if w.Code != expected {
+			t.Fatalf("scopes=%v status=%d %s", scopes, w.Code, w.Body)
 		}
 	}
 }

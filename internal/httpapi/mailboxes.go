@@ -22,9 +22,15 @@ func (h mailboxHandlers) List(c *gin.Context) {
 	c.JSON(200, gin.H{"mailboxes": items})
 }
 
-func (h mailboxHandlers) Create(c *gin.Context) {
-	var input settings.MailboxUpdate
+func (h mailboxHandlers) Create(c *gin.Context) { h.create(c, true) }
+
+func (h mailboxHandlers) create(c *gin.Context, allowFolders bool) {
+	var input settings.MailboxCreate
 	if !decodeRequest(c, &input) {
+		return
+	}
+	if len(input.Folders) > 0 && !allowFolders {
+		respondError(c, 403, fault.New("forbidden"))
 		return
 	}
 	if input.Revision != 0 {

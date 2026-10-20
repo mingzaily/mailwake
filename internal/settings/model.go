@@ -35,6 +35,12 @@ type MailboxUpdate struct {
 	Password        *string `json:"password"`
 }
 
+// MailboxCreate persists credentials and the initial subscriptions together.
+type MailboxCreate struct {
+	MailboxUpdate
+	Folders []mail.Folder `json:"folders"`
+}
+
 func (m Mailbox) Identity() string {
 	return event.ID(m.ID, net.JoinHostPort(m.Host, strconv.Itoa(m.Port)), m.Username)
 }
