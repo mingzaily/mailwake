@@ -4,6 +4,18 @@
 
 This file preserves dated evidence for the revisions and environments named below. Use [Branching workflow](branching.md) for current release policy and [Development](development.md) for current checks. Earlier results establish historical coverage; each candidate needs verification of its own changes.
 
+## rc4 candidate — 2026-10-20
+
+Scope: draft mailbox discovery and atomic creation of a mailbox with its initial subscriptions since `v1.0.0-rc.3`. The implementation is `38127ae0773974464c80fde15df7c3b14d5a46c4`; the preceding mainline synchronization has the same source tree as rc3. Release preparation changes only the changelog and this record. The maintainer authorized rc4 for client and real-provider acceptance.
+
+- Business review: **9.2/10**. Rechecked owner-approved scopes, draft probes without persistence, subscription normalization, connection budgets, fresh directory validation, duplicate identity checks, transactional rollback and watcher startup after commit. No blocking code findings remain. Real-provider and matching-client acceptance remain pending.
+- Code design review: **9.2/10**. HTTP resolves permissions once, runtime coordinates validation and lifecycle, settings encrypts credentials, and storage commits both initial records. Existing discovery, subscription validation and monitoring capabilities are reused. The new creation input keeps initial subscriptions separate from ordinary mailbox updates.
+- Review verification at `38127ae`: full Core Go tests, race tests for HTTP API/runtime/settings/storage/mail/engine, both production and test-tag Go vet, and whitespace checks passed. Some packages reused Go test caches for identical inputs.
+- Release preparation verification: `make check`, `make test` (213 frontend tests plus full Core and maintained go-imap race tests), and `make check-build VERSION=v1.0.0-rc.4` passed on the unchanged implementation. License checks and tracked Web asset checks passed. An isolated temporary-data process passed startup, health, embedded-console, CSP-header and rc4 version checks. The candidate commit range passed the secret scan.
+- Publication verification: the tag workflow repeats CI before publishing four binary archives, SHA256 checksums and Linux amd64/arm64 container images. Verify completed jobs, assets, checksums and embedded source metadata against the final tag revision.
+
+Code meets the affected-change development gate. This authorized prerelease supplies the candidate for live acceptance: with the matching App, scan a real mailbox, cancel and confirm that configuration remains absent, save selected folders, verify both initial revisions and restart persistence, and receive the first new-message notification. General release acceptance also retains the earlier provider/device checks until evidence is associated with the final candidate. Publishing artifacts leaves running installations under operator control.
+
 ## rc3 candidate — 2026-10-19
 
 Scope: opened-body read actions and optional sender display names since `v1.0.0-rc.2`. The implementation is commit `6b2627bb7c6f4716d54c5f26a7567e79189814de`; release preparation changes the changelog and this record only. The maintainer authorized this prerelease for client and real-provider acceptance. Integrate through the protected `main` pull-request workflow before tagging the resulting source as `v1.0.0-rc.3`.
