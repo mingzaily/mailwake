@@ -60,7 +60,7 @@ func (r testRuntime) Mailboxes() []settings.MailboxView {
 func (testRuntime) Mailbox(id string) (settings.MailboxView, error) {
 	return settings.MailboxView{ID: id}, nil
 }
-func (testRuntime) CreateMailbox(context.Context, settings.MailboxUpdate) (settings.MailboxView, error) {
+func (testRuntime) CreateMailbox(context.Context, settings.MailboxCreate) (settings.MailboxView, error) {
 	return settings.MailboxView{}, fault.New("mailbox_required")
 }
 func (testRuntime) DeleteMailbox(context.Context, string) error {

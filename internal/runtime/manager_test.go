@@ -78,7 +78,7 @@ func managerFixture(t *testing.T, factory func(settings.Mailbox) mail.Source) (*
 func addMailbox(t *testing.T, m *Manager, host string, limit int) (string, settings.MailboxUpdate) {
 	t.Helper()
 	input := settings.MailboxUpdate{Host: host, Port: 993, Username: "user@example.test", Label: ptr(host), Password: ptr("test-password"), ConnectionLimit: &limit}
-	view, err := m.CreateMailbox(t.Context(), input)
+	view, err := m.CreateMailbox(t.Context(), settings.MailboxCreate{MailboxUpdate: input})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -454,3 +454,35 @@ func (*multiSource) MarkRead(context.Context, string, mail.Location) error { ret
 func (s gatedMailbox) MarkRead(context.Context, string, mail.Location) error { return nil }
 
 func (s codeRequestSource) MarkRead(context.Context, string, mail.Location) error { return nil }
+
+func TestDraftScanAndAtomicMailboxSubscriptions(t *testing.T) {
+	m, store, _ := managerFixture(t, func(settings.Mailbox) mail.Source { return &multiSource{} })
+	input := settings.MailboxUpdate{Host: "imap.test", Port: 993, Username: "reader@example.test", Password: ptr("synthetic")}
+	if _, err := m.TestMailbox(t.Context(), "", input); err != nil {
+		t.Fatal(err)
+	}
+	if len(m.Mailboxes()) != 0 {
+		t.Fatal("draft probe created a mailbox")
+	}
+	bad := settings.MailboxCreate{MailboxUpdate: input, Folders: []mail.Folder{{Name: "missing", Check: "5m"}}}
+	if _, err := m.CreateMailbox(t.Context(), bad); fault.From(err, "").Code != "config_folders_invalid" {
+		t.Fatal(err)
+	}
+	records, err := store.MailboxConfigurations(t.Context())
+	if err != nil || len(records) != 0 {
+		t.Fatalf("failed save persisted mailbox: %v %v", records, err)
+	}
+	good := settings.MailboxCreate{MailboxUpdate: input, Folders: []mail.Folder{{Name: "INBOX", Check: "5m"}}}
+	value, err := m.CreateMailbox(t.Context(), good)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := m.Subscriptions(value.ID)
+	if err != nil || state.Revision != 1 || len(state.Folders) != 1 || state.Folders[0].Check != "5m" {
+		t.Fatalf("active: %+v %v", state, err)
+	}
+	saved, err := store.LoadSubscriptions(t.Context(), value.ID)
+	if err != nil || saved.Revision != 1 || len(saved.Folders) != 1 || saved.Folders[0] != state.Folders[0] {
+		t.Fatalf("persisted: %+v %v", saved, err)
+	}
+}

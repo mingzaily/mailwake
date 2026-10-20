@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	"github.com/mingzaily/mailwake/internal/mail"
 	"github.com/mingzaily/mailwake/internal/storage"
 )
 
@@ -34,6 +35,15 @@ func (r *Repository) Mailboxes(ctx context.Context) ([]StoredMailbox, error) {
 		values = append(values, StoredMailbox{Mailbox: m, Invalid: invalid})
 	}
 	return values, nil
+}
+
+// CreateMailboxRecord saves both initial states in one storage transaction.
+func (r *Repository) CreateMailboxRecord(ctx context.Context, next Mailbox, folders []mail.Folder) error {
+	encrypted, err := r.encrypt(storage.MailboxConfigurationName(next.ID), next)
+	if err != nil {
+		return err
+	}
+	return r.store.CreateMailboxRecord(ctx, next.ID, encrypted, folders)
 }
 
 // SaveMailboxRecord stores next if the saved revision still equals revision (0 creates it).

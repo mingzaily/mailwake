@@ -22,7 +22,7 @@ type Runtime interface {
 type MailboxRuntime interface {
 	Mailboxes() []settings.MailboxView
 	Mailbox(string) (settings.MailboxView, error)
-	CreateMailbox(context.Context, settings.MailboxUpdate) (settings.MailboxView, error)
+	CreateMailbox(context.Context, settings.MailboxCreate) (settings.MailboxView, error)
 	UpdateMailbox(context.Context, string, settings.MailboxUpdate) error
 	DeleteMailbox(context.Context, string) error
 	TestMailbox(context.Context, string, settings.MailboxUpdate) (*mail.FolderDiscovery, error)

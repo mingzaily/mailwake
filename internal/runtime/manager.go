@@ -288,7 +288,7 @@ func probeMailbox(ctx context.Context, source mail.Source) (*mail.FolderDiscover
 	}
 	return folders, nil
 }
-func (m *Manager) CreateMailbox(ctx context.Context, input settings.MailboxUpdate) (settings.MailboxView, error) {
+func (m *Manager) CreateMailbox(ctx context.Context, input settings.MailboxCreate) (settings.MailboxView, error) {
 	if err := m.beginDiscovery(); err != nil {
 		return settings.MailboxView{}, err
 	}
@@ -300,8 +300,15 @@ func (m *Manager) CreateMailbox(ctx context.Context, input settings.MailboxUpdat
 		return settings.MailboxView{}, fault.New("mailbox_limit_exceeded")
 	}
 	base := settings.NewMailbox()
-	next, err := base.Merge(input)
+	next, err := base.Merge(input.MailboxUpdate)
 	if err != nil {
+		return settings.MailboxView{}, err
+	}
+	folders, err := mail.NormalizeSubscriptions(input.Folders)
+	if err != nil {
+		return settings.MailboxView{}, err
+	}
+	if err := mail.CheckConnectionBudget(folders, next.Limit()); err != nil {
 		return settings.MailboxView{}, err
 	}
 	b := &mailboxRuntime{config: next, budget: mail.NewConnectionBudget(next.Limit())}
@@ -309,6 +316,15 @@ func (m *Manager) CreateMailbox(ctx context.Context, input settings.MailboxUpdat
 	directory, err := probeMailbox(ctx, b.source)
 	if err != nil {
 		return settings.MailboxView{}, err
+	}
+	available := make(map[string]bool, len(directory.Folders))
+	for _, name := range directory.Folders {
+		available[name] = true
+	}
+	for _, folder := range folders {
+		if !available[folder.Name] {
+			return settings.MailboxView{}, fault.New("config_folders_invalid")
+		}
 	}
 	next.FolderDisplay = directory.Display()
 	b.config = next
@@ -320,13 +336,13 @@ func (m *Manager) CreateMailbox(ctx context.Context, input settings.MailboxUpdat
 	if err := m.checkDuplicate(next); err != nil {
 		return settings.MailboxView{}, err
 	}
-	if err := m.settings.SaveMailboxRecord(ctx, base, next, 0); err != nil {
+	if err := m.settings.CreateMailboxRecord(ctx, next, folders); err != nil {
 		return settings.MailboxView{}, err
 	}
 	m.identities[next.ID] = identityOf(next)
 	m.publishIdentities()
 	b.config.Revision = 1
-	m.startMailbox(b, mail.Subscriptions{Revision: 1, Folders: mail.RealtimeFolders([]string{})})
+	m.startMailbox(b, mail.Subscriptions{Revision: 1, Folders: folders})
 	m.mailboxes[next.ID] = b
 	m.log.Info("Mailbox created", "mailbox_id", next.ID, "revision", b.config.Revision)
 	return b.config.View(b.budget.InUse()), nil
