@@ -2,8 +2,12 @@ import { useQuery } from "@tanstack/react-query";
 import { api, downloadJSON } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import type { Diagnostics as Report } from "@/lib/types";
-import { ErrorNotice, PageHeading, Panel } from "@/components/common";
-import { Button } from "@/components/ui/button";
+import {
+  BusyButton,
+  ErrorNotice,
+  PageHeading,
+  Panel,
+} from "@/components/common";
 export function Diagnostics() {
   const { t } = useI18n();
   const query = useQuery({
@@ -41,14 +45,17 @@ export function Diagnostics() {
         <div className="p-4 md:p-5 flex flex-col gap-4">
           <p className="text-muted-foreground">{t("ui.diagnostics_hint")}</p>
           <div>
-            <Button
-              disabled={!query.data}
-              onClick={() =>
-                downloadJSON(query.data, "mailwake-diagnostics.json")
-              }
+            <BusyButton
+              busy={query.isFetching}
+              onClick={async () => {
+                const report = await query.refetch();
+                if (report.isSuccess) {
+                  downloadJSON(report.data, "mailwake-diagnostics.json");
+                }
+              }}
             >
               {t("ui.download_report")}
-            </Button>
+            </BusyButton>
           </div>
         </div>
       </Panel>

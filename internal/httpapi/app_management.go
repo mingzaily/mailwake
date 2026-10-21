@@ -3,6 +3,7 @@ package httpapi
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/mingzaily/mailwake/internal/appmanagement"
 	"github.com/mingzaily/mailwake/internal/coreidentity"
 	"github.com/mingzaily/mailwake/internal/fault"
+	"github.com/mingzaily/mailwake/internal/logging"
 	"github.com/mingzaily/mailwake/internal/mail"
 	"github.com/mingzaily/mailwake/internal/storage"
 )
@@ -22,7 +24,7 @@ func credentialHash(credential string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func appManagementRoutes(r *gin.Engine, admin *gin.RouterGroup, runtime Runtime, store *storage.Store, service *appmanagement.Service) {
+func appManagementRoutes(r *gin.Engine, admin *gin.RouterGroup, runtime Runtime, store *storage.Store, service *appmanagement.Service, log *slog.Logger) {
 	if service == nil {
 		return
 	}
@@ -173,7 +175,7 @@ func appManagementRoutes(r *gin.Engine, admin *gin.RouterGroup, runtime Runtime,
 	app.Handle("PUT", "/settings/delivery", "channels", delivery.Update)
 	app.Handle("POST", "/settings/delivery/test", "channels", delivery.Test)
 	app.Handle("DELETE", "/settings/delivery", "channels", delivery.Delete)
-	app.Handle("GET", "/diagnostics", "diagnostics", diagnosticsHandler(runtime, store))
+	app.Handle("GET", "/diagnostics", "diagnostics", diagnosticsHandler(runtime, store, log))
 	app.Handle("GET", "/status", "diagnostics", statusHandler(runtime, store))
 	app.Handle("GET", "/deliveries", "diagnostics", deliveriesHandler(store))
 
@@ -212,6 +214,7 @@ func (r appRouteRegistrar) Handle(method, path, scope string, handler gin.Handle
 }
 func (r appRouteRegistrar) HandleController(method, path, scope string, handler func(*gin.Context, storage.AppController)) {
 	r.group.Handle(method, path, func(c *gin.Context) {
+		logging.RequestStage(c.Request.Context(), "authentication")
 		credential, ok := strings.CutPrefix(c.GetHeader("Authorization"), "Bearer ")
 		if !ok || !strings.HasPrefix(credential, "mwac_") {
 			respondError(c, 401, fault.New("unauthorized"))
@@ -222,6 +225,7 @@ func (r appRouteRegistrar) HandleController(method, path, scope string, handler 
 			respondFault(c, err)
 			return
 		}
+		logging.RequestStage(c.Request.Context(), "authorization")
 		if scope != "" && !controller.HasScope(scope) {
 			code := "forbidden"
 			if scope == "content" {
@@ -230,6 +234,7 @@ func (r appRouteRegistrar) HandleController(method, path, scope string, handler 
 			respondError(c, 403, fault.New(code))
 			return
 		}
+		logging.RequestStage(c.Request.Context(), "handler")
 		handler(c, controller)
 	})
 }

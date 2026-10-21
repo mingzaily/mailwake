@@ -12,6 +12,7 @@ import (
 
 	"github.com/mingzaily/mailwake/internal/coreidentity"
 	"github.com/mingzaily/mailwake/internal/fault"
+	"github.com/mingzaily/mailwake/internal/logging"
 	"github.com/mingzaily/mailwake/internal/mail"
 	"github.com/mingzaily/mailwake/internal/settings"
 )
@@ -186,7 +187,12 @@ func TestMarkReadValidatesReferenceAccountAndSubscription(t *testing.T) {
 			case "timeout":
 				want = "message_timeout"
 			}
-			err := m.MarkRead(t.Context(), ref)
+			ctx, trace := logging.WithRequestTrace(t.Context())
+			err := m.MarkRead(ctx, ref)
+			stages := map[string]string{"tampered": "reference", "deleted": "mailbox", "replaced": "account_identity", "unsubscribed": "subscription"}
+			if stage, ok := stages[change]; ok && trace.Stage != stage {
+				t.Fatalf("stage=%s want=%s", trace.Stage, stage)
+			}
 			if want == "" {
 				if err != nil || !marked {
 					t.Fatalf("read: %v %v", marked, err)

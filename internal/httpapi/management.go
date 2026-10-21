@@ -1,15 +1,17 @@
 package httpapi
 
 import (
+	"log/slog"
 	"runtime"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/mingzaily/mailwake/internal/buildinfo"
+	"github.com/mingzaily/mailwake/internal/logging"
 	"github.com/mingzaily/mailwake/internal/storage"
 )
 
-func diagnosticsHandler(monitor DiagnosticsRuntime, store *storage.Store) gin.HandlerFunc {
+func diagnosticsHandler(monitor DiagnosticsRuntime, store *storage.Store, log *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		counts, err := store.Summary(c.Request.Context())
 		if err != nil {
@@ -67,6 +69,12 @@ func diagnosticsHandler(monitor DiagnosticsRuntime, store *storage.Store) gin.Ha
 		}
 		version, revision := buildinfo.Current()
 		c.Header("Content-Disposition", `attachment; filename="mailwake-diagnostics.json"`)
-		c.JSON(200, gin.H{"schema_version": 1, "generated_at": time.Now().UTC(), "build": gin.H{"version": version, "revision": revision, "go_version": runtime.Version(), "os": runtime.GOOS, "arch": runtime.GOARCH}, "mailboxes": boxes, "watches": watches, "delivery": counts})
+		c.JSON(200, gin.H{
+			"schema_version": 2, "generated_at": time.Now().UTC(),
+			"build":     gin.H{"version": version, "revision": revision, "go_version": runtime.Version(), "os": runtime.GOOS, "arch": runtime.GOARCH},
+			"mailboxes": boxes, "watches": watches, "delivery": counts,
+			"app_requests":          logging.AppRequests(log),
+			"app_request_retention": gin.H{"storage": "memory", "limit": logging.AppRequestLimit, "shared_log_capacity": logging.Capacity},
+		})
 	}
 }

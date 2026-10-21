@@ -728,6 +728,7 @@ func (c *Client) readResponseTagged(tag, typ string) (startTLS *startTLSCommand,
 		if !c.dec.ExpectAtom(&code) {
 			return nil, fmt.Errorf("in resp-text-code: %v", c.dec.Err())
 		}
+		code = strings.ToUpper(code)
 		// TODO: LONGENTRIES and MAXSIZE from METADATA
 		switch code {
 		case "CAPABILITY": // capability-data
@@ -841,6 +842,7 @@ func (c *Client) readResponseData(typ string) error {
 			if !c.dec.ExpectAtom(&code) {
 				return fmt.Errorf("in resp-text-code: %v", c.dec.Err())
 			}
+			code = strings.ToUpper(code)
 			switch code {
 			case "CAPABILITY": // capability-data
 				caps, err := readCapabilities(c.dec)

@@ -2,6 +2,15 @@
 
 All notable changes to Mailwake Core are documented here. Versions follow [Semantic Versioning](https://semver.org); before 1.0.0, minor versions may change configuration.
 
+## [1.0.0-rc.5] - 2026-10-21
+
+- Verify the target UID and current flags when marking an opened message read. Already-read messages succeed idempotently; unread messages receive an additive silent Seen update followed by a state check. Preserve other flags and watcher progress.
+- Distinguish missing folders/messages and changed UIDVALIDITY from provider refusals and timeouts. Normalize IMAP response-code case so folder errors and permanent flag permissions retain their meaning.
+- Include safe App request summaries in diagnostic exports (`schema_version: 2`), with server-generated request IDs, HTTP status, duration, stage, outcome and error codes. Include routing failures while keeping raw paths, credentials, signed references and message content private. Retain at most 300 requests from the shared 2000-event memory log.
+- Refresh diagnostic reports before downloading and display refresh failures. Reuse the shared FETCH collector for read-state checks and add HTTP-to-TLS-IMAP integration regressions.
+
+This prerelease supplies a candidate for live Gmail and matching-client validation. The original Gmail 404 cause remains unconfirmed. Test unread, already-read and repeated opens, then moved/deleted messages with cached bodies; export diagnostics immediately after reproducing. Restarting Core or clearing its memory log removes request history. See [release verification](docs/releases.md#rc5-candidate--2026-10-21).
+
 ## [1.0.0-rc.4] - 2026-10-20
 
 - Add `POST /api/v1/app/mailboxes/scan` to validate a mailbox draft and return selectable folders and display metadata before saving. Require both mailbox and folder permissions and keep the probe free of persisted configuration and active watchers.

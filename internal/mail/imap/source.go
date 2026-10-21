@@ -24,6 +24,7 @@ import (
 	"github.com/mingzaily/mailwake/internal/buildinfo"
 	"github.com/mingzaily/mailwake/internal/content"
 	"github.com/mingzaily/mailwake/internal/fault"
+	"github.com/mingzaily/mailwake/internal/logging"
 	"github.com/mingzaily/mailwake/internal/mail"
 )
 
@@ -255,6 +256,7 @@ func (x *connection) selectFolder(ctx context.Context, folder string, readOnly b
 		selected, err = x.client.Select(folder, &protocol.SelectOptions{ReadOnly: readOnly}).Wait()
 		if errors.As(err, &rejected) {
 			if code := responseCode(string(rejected.Code)); code != "" {
+				logging.RequestResponseCode(ctx, string(rejected.Code))
 				return &fault.Error{Code: "imap_folder_rejected", Params: map[string]string{"response_code": code}}
 			}
 		}
@@ -262,7 +264,7 @@ func (x *connection) selectFolder(ctx context.Context, folder string, readOnly b
 	})
 	if err != nil {
 		if rejected != nil {
-			return nil, &mail.FolderError{Err: err}
+			return nil, &mail.FolderError{Err: err, Missing: rejected.Code == protocol.ResponseCodeNonExistent}
 		}
 		return nil, err
 	}

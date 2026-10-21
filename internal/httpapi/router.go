@@ -42,6 +42,7 @@ type Integrations struct {
 func New(authService *auth.Service, runtime Runtime, store *storage.Store, log *slog.Logger, integrations Integrations) http.Handler {
 	styleHashes := managementStyleHashes(assets)
 	r := gin.New()
+	r.Use(appRequestDiagnostics(log))
 	_ = r.SetTrustedProxies([]string{"127.0.0.0/8", "::1/128", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7"})
 	r.HandleMethodNotAllowed = true
 	r.Use(func(c *gin.Context) {
@@ -158,7 +159,7 @@ func New(authService *auth.Service, runtime Runtime, store *storage.Store, log *
 	api.POST("/settings/delivery/test", delivery.Test)
 	api.DELETE("/settings/delivery", delivery.Delete)
 	nativeRoutes(api, integrations.Native)
-	appManagementRoutes(r, api, runtime, store, integrations.Management)
+	appManagementRoutes(r, api, runtime, store, integrations.Management, log)
 	mailboxes := mailboxHandlers{runtime: runtime, includeFolderDisplay: true}
 	api.GET("/mailboxes", mailboxes.List)
 	api.POST("/mailboxes", mailboxes.Create)
@@ -171,7 +172,7 @@ func New(authService *auth.Service, runtime Runtime, store *storage.Store, log *
 	testMailbox := mailboxTestHandler(runtime, func(c *gin.Context, folders *mail.FolderDiscovery) { c.JSON(200, folders) })
 	api.POST("/mailboxes/test", testMailbox)
 	api.POST("/mailboxes/:id/test", testMailbox)
-	api.GET("/diagnostics", diagnosticsHandler(runtime, store))
+	api.GET("/diagnostics", diagnosticsHandler(runtime, store, log))
 	api.GET("/status", statusHandler(runtime, store))
 	api.GET("/deliveries", deliveriesHandler(store))
 	api.DELETE("/deliveries", func(c *gin.Context) {
@@ -233,6 +234,9 @@ func localize(c *gin.Context, failure *fault.Error) *localizedError {
 	return &localizedError{Code: failure.Code, Message: i18n.Message(c.GetString("language"), failure.Code, failure.Params), Params: failure.Params}
 }
 func respondError(c *gin.Context, status int, failure *fault.Error) {
+	if failure != nil {
+		c.Set("diagnostic_error_code", failure.Code)
+	}
 	c.AbortWithStatusJSON(status, gin.H{"error": localize(c, failure)})
 }
 func databaseError(c *gin.Context) { respondError(c, 503, fault.New("database_unavailable")) }

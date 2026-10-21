@@ -20,6 +20,12 @@ func (x *connection) fetch(ctx context.Context, code string, set protocol.UIDSet
 			part := &imapclient.FetchMessageBuffer{SeqNum: data.SeqNum}
 			for item := data.Next(); item != nil; item = data.Next() {
 				switch item := item.(type) {
+				case imapclient.FetchItemDataFlags:
+					part.Flags = item.Flags
+					// Preserve FLAGS () as present, distinct from missing data.
+					if part.Flags == nil {
+						part.Flags = []protocol.Flag{}
+					}
 				case imapclient.FetchItemDataUID:
 					part.UID = item.UID
 				case imapclient.FetchItemDataEnvelope:
@@ -68,6 +74,9 @@ func (x *connection) fetch(ctx context.Context, code string, set protocol.UIDSet
 			if current == nil {
 				messages[part.UID] = part
 				continue
+			}
+			if part.Flags != nil {
+				current.Flags = part.Flags
 			}
 			if part.Envelope != nil {
 				current.Envelope = part.Envelope

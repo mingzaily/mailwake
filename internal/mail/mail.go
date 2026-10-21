@@ -63,7 +63,11 @@ type FolderConnection interface {
 }
 
 // FolderError rejects one folder while leaving the shared connection usable.
-type FolderError struct{ Err error }
+type FolderError struct {
+	Err error
+	// Missing is true when the provider explicitly reports an absent folder.
+	Missing bool
+}
 
 func (e *FolderError) Error() string { return e.Err.Error() }
 func (e *FolderError) Unwrap() error { return e.Err }
