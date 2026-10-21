@@ -147,7 +147,22 @@ func (s *bodySanitizer) attributes(n *html.Node) []html.Attribute {
 		}
 		seen[a.Key] = true
 		value := ""
+		allowEmpty := false
 		switch a.Key {
+		case "aria-hidden":
+			candidate := strings.ToLower(strings.Trim(a.Val, " \t\r\n\f"))
+			switch candidate {
+			case "true", "false", "undefined":
+				value = candidate
+			}
+		case "hidden":
+			// HTML's empty and invalid-value defaults are Hidden, including "false".
+			allowEmpty = true
+			if strings.EqualFold(a.Val, "until-found") {
+				value = "until-found"
+			}
+		case "role":
+			value = passiveRole(a.Val)
 		case "title", "lang":
 			value = a.Val
 		case "dir":
@@ -177,6 +192,7 @@ func (s *bodySanitizer) attributes(n *html.Node) []html.Attribute {
 		case "alt":
 			if n.Data == "img" {
 				value = a.Val
+				allowEmpty = true
 			}
 		case "width", "height":
 			if dimension.MatchString(a.Val) {
@@ -207,11 +223,25 @@ func (s *bodySanitizer) attributes(n *html.Node) []html.Attribute {
 				value = a.Val
 			}
 		}
-		if value != "" {
+		if value != "" || allowEmpty {
 			out = append(out, html.Attribute{Key: a.Key, Val: value})
 		}
 	}
 	return out
+}
+
+// passiveRole retains only equivalent decorative roles. Requiring every token
+// to be supported preserves fallback meaning instead of selecting a new role.
+func passiveRole(value string) string {
+	roles := strings.FieldsFunc(strings.ToLower(value), func(r rune) bool {
+		return strings.ContainsRune(" \t\r\n\f", r)
+	})
+	for _, role := range roles {
+		if role != "none" && role != "presentation" {
+			return ""
+		}
+	}
+	return strings.Join(roles, " ")
 }
 
 // validURL only validates syntax. It performs no DNS lookup, HTTP request or filesystem access.

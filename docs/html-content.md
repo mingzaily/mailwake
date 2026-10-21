@@ -23,6 +23,23 @@ Safe absolute HTTP(S) `img` sources, `img`/`picture` source sets and inline CSS 
 
 CID references resolve only within the current related MIME presentation. PNG, JPEG, GIF and WebP images are checked against their declared MIME, decoded for validation and embedded as data URLs. Duplicate/missing IDs, SVG, damaged images, invalid image transfer encodings, format mismatches and sender-supplied data URLs are removed. An invalid CID resource leaves the readable message available. Alternative text remains available. Resources from sibling presentations and previous requests are inaccessible. Body text, HTML, embedded images and image URLs remain in request memory; they are excluded from storage, notifications, logs and diagnostics.
 
+## Decorative and accessibility attributes
+
+The sanitized `html` preserves the following attributes on retained allowlisted elements. This extends the HTML contract within the existing response fields; the JSON schema and plain-text fallback algorithm stay unchanged.
+
+| Attribute | Accepted input and sanitized output | Client interpretation |
+| --- | --- | --- |
+| `img alt` | Preserve the supplied value, including empty and whitespace-only strings. Both `alt=""` and a bare `alt` serialize as `alt=""`. An absent attribute stays absent. Other elements discard `alt`. | Empty alt explicitly supplies an empty text alternative. Missing alt supplies no description. Preserve this distinction when classifying images. A named image such as `alt="Claude"` retains its name. |
+| `aria-hidden` | Accept `true`, `false` and `undefined`, normalize case and surrounding ASCII whitespace, and discard other values. | `true` hides the accessibility subtree. A descendant `false` cannot restore accessibility beneath a hidden ancestor. `false` and `undefined` also preserve any native hiding such as `hidden`. ARIA alone leaves visual images, background layers and layout intact. |
+| `hidden` | Preserve `until-found` case-insensitively. Normalize every other present value to `hidden=""`, following HTML's empty and invalid-value defaults. This includes bare `hidden`, `hidden="hidden"`, `hidden="false"` and padded `" until-found "`. Absence stays absent. | Apply native HTML hidden semantics, including ancestor effects and find-in-page behavior for `until-found`. The sanitizer retains the subtree and lets the renderer resolve native behavior and safe CSS. |
+| `role` | Accept only `none`, `presentation`, or ASCII-whitespace-separated lists containing these aliases. Normalize case and separators. Discard empty values and any list containing another token, including interactive or unknown roles. | These aliases remove the element's implicit role. A layout table's presentation role leaves its descendant image descriptions meaningful. The renderer owns required-child role inheritance and native conflict resolution, including focusable links. |
+
+Attributes stay on their original retained elements. Core neither propagates decorative metadata onto descendant images nor removes images based on these attributes. The existing element allowlist still governs retained containers; unsupported wrappers are unwrapped and their attributes are discarded. Duplicate attributes use the first occurrence, and namespace lookalikes are discarded. Other ARIA attributes and role values remain outside this allowlist.
+
+Script, event-attribute, URL and CSS validation remain unchanged. Remote references in decorative or hidden content still contribute to `has_remote_images`; classification never grants network permission. Core performs no image requests. A renderer that extracts images or backgrounds separately must carry the relevant ancestor semantics while preserving the visual/accessible distinction. Previously cached sanitized HTML requires a fresh content response to receive these attributes.
+
+The semantics follow [WAI-ARIA aria-hidden](https://www.w3.org/TR/wai-aria-1.2/#aria-hidden), [presentation and none roles](https://www.w3.org/TR/wai-aria-1.2/#presentation), and [HTML hidden states](https://html.spec.whatwg.org/multipage/interaction.html#the-hidden-attribute). Core's role allowlist deliberately covers the decorative email cases above.
+
 ## Limits and failures
 
 | Boundary | Behavior |
@@ -53,6 +70,8 @@ Use the Core candidate being accepted and a compatible iOS build with HTML readi
 ## Automated verification
 
 The content tests cover representations, encodings, sanitization, image flags, CID formats/isolation, budgets and cancellation. Local TLS IMAP tests exercise selective MIME part fetching, multi-megabyte attachments, skipped unused alternatives/CIDs, exact and cumulative read budgets, absence of image requests, unread flags, missing messages, invalid UIDVALIDITY, moves/deletion, oversize and cancellation. HTTP tests use real owner/device authorization plus the parser: an observable image server and HTTP/DNS traps record zero outbound image operations through response serialization, and an escaping-heavy response verifies the 512 KiB limit. Runtime and native tests exercise signed reference/account boundaries.
+
+The synthetic decorative-email fixture covers a named logo, an ARIA-hidden animation with ordered GIF/PNG background layers, presentation tables, empty-alt social images and an undescribed image. Additional regressions cover bare/absent/duplicate alt, ancestor declarations, invalid values, hidden defaults, unsafe markup and response serialization. The private source email, addresses and login links are excluded from fixtures.
 
 These fixtures validate Core behavior. Real-provider MIME differences and the Core-to-iOS rendering flow require the manual steps above.
 

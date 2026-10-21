@@ -291,6 +291,7 @@ func TestReadBodyRemovesMalformedActiveMarkup(t *testing.T) {
 }
 
 func FuzzReadBody(f *testing.F) {
+	f.Add(htmlMessage(`<section aria-hidden="true"><img alt=""><img></section><div hidden="until-found" role="none presentation">text</div>`))
 	for _, raw := range []string{htmlMessage(`<img src="https://images.test/a"><p>Hello</p>`), htmlMessage(`<div style="background:url('https://images.test/b')">fallback</div>`), multipart("alternative", "a", mimePart("Content-Type: text/plain", "text"), htmlMessage("<table><tr><td>html</td></tr></table>")), "Content-Type: text/plain\r\n\r\nhello"} {
 		f.Add(raw)
 	}
