@@ -33,7 +33,7 @@ Tests use local TLS IMAP servers, real SQLite databases and local HTTPS notifica
 
 The [directory ownership table](../CONTRIBUTING.md#directory-ownership) maps packages to responsibilities.
 
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for conventions, [CHANGELOG.md](../CHANGELOG.md) for releases and [SECURITY.md](../SECURITY.md) to report a vulnerability. Request fields follow the [Bark API](https://github.com/Finb/bark-server/blob/master/docs/API_V2.md) and the [Pushover API](https://pushover.net/api).
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for conventions, [GitHub Releases](https://github.com/mingzaily/mailwake/releases) for releases and [SECURITY.md](../SECURITY.md) to report a vulnerability. Request fields follow the [Bark API](https://github.com/Finb/bark-server/blob/master/docs/API_V2.md) and the [Pushover API](https://pushover.net/api).
 
 Current scope includes password or app-password login, up to 20 IMAP mailboxes and one global notification channel. Free provides self-deployed monitoring and BYO delivery; Pro provides official App management and Native notifications. Gmail uses TLS IMAP and an app password. Microsoft Graph is listed as unavailable until its backend is implemented. The maintained go-imap source is based on beta.8; see its change record below when investigating provider compatibility.
 ## Isolated local TLS fixtures

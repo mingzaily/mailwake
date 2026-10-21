@@ -77,7 +77,7 @@ These fixtures validate Core behavior. Real-provider MIME differences and the Co
 
 The additional parser and image decoder licenses are bundled in [third-party notices](html-content-third-party.txt).
 
-Historical implementation and release checks are retained in [Release records](releases.md#html-content-review--2026-10-13).
+Published versions and their verification are maintained in [GitHub Releases](https://github.com/mingzaily/mailwake/releases).
 
 ## Mailbox read action
 

@@ -50,7 +50,7 @@ Install gitleaks and set `git config core.hooksPath .githooks` after cloning. Re
 - Score the actual result. Below 9.0, fix the root cause and repeat the affected review and verification. Open correctness, security, data-loss or contract defects, failed required checks, and missing evidence for critical changed behavior keep the gate open. Record the actual score or pending assessment until evidence supports completion.
 - Assess changed behavior and affected call chains each time. Earlier scores establish a baseline. Prefer targeted fixes and measured improvements, with abstractions based on demonstrated responsibilities or extension needs.
 - Report scope, both scores with reasons, checks actually run and their results, reused evidence with its revision and applicability, and remaining risks. External dependencies require explicit pending acceptance items with completion criteria. Report code readiness and release readiness separately; release-critical acceptance must pass before release.
-- Update affected contracts and documentation. Preserve dated acceptance evidence in the change or release record, including the revision, environment, coverage and limitations. Keep all contributor-facing records independently readable within this repository.
+- Update affected contracts and documentation. Preserve dated review evidence in the relevant pull request and publication evidence in GitHub Releases, including the revision, environment, coverage and limitations. Keep all contributor-facing records independently readable within this repository.
 
 ## Publication boundary
 

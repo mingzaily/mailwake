@@ -67,7 +67,7 @@ Screenshots use demonstration mailboxes and synthetic messages.
 
 Start with [CONTRIBUTING.md](CONTRIBUTING.md) for the development environment and verification workflow. [docs/](docs/README.md) contains English contributor references for monitoring, delivery, storage, API implementation and the console. [AGENTS.md](AGENTS.md) maps development tasks to those references. User tutorials are maintained on the documentation site.
 
-Report reproducible bugs in [Issues](https://github.com/mingzaily/mailwake/issues). Follow [SECURITY.md](SECURITY.md) for private vulnerability reports. Release history is in [CHANGELOG.md](CHANGELOG.md).
+Report reproducible bugs in [Issues](https://github.com/mingzaily/mailwake/issues). Follow [SECURITY.md](SECURITY.md) for private vulnerability reports. Release history is maintained in [GitHub Releases](https://github.com/mingzaily/mailwake/releases).
 
 ## License
 

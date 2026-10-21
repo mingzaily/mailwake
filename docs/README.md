@@ -8,7 +8,7 @@ This directory contains English technical references for contributors. Installat
 | --- | --- |
 | Session preflight and branch integration | [Branching workflow](branching.md) |
 | Build, fixtures and acceptance | [Development](development.md) |
-| Release baselines and verification | [Release records](releases.md) |
+| Published versions and release verification | [GitHub Releases](https://github.com/mingzaily/mailwake/releases) |
 | IMAP adapters, workers and checkpoints | [Monitoring](monitoring.md) |
 | Dispatcher, retry and preview invariants | [Delivery](notifications.md) |
 | HTTP boundaries, authentication and localization | [API implementation](api.md) |
@@ -18,6 +18,6 @@ This directory contains English technical references for contributors. Installat
 | MIME, HTML, image privacy and content budgets | [HTML content](html-content.md) |
 | SQLite, encryption, schema and persistence | [Storage](storage.md) |
 
-Each topic owns its current implementation contract; link to that contract from related topics. Keep dated review and release evidence in [Release records](releases.md), with the tested revision, environment and limitations. When reviewing content, check it against implementation, consolidate repeated rules and remove completed task instructions after preserving useful evidence. Preserve upstream dependency documentation and license notices.
+Each topic owns its current implementation contract; link to that contract from related topics. Keep dated review evidence in the relevant pull request and publication evidence in [GitHub Releases](https://github.com/mingzaily/mailwake/releases), with the tested revision, environment and limitations. When reviewing content, check it against implementation, consolidate repeated rules and remove completed task instructions after preserving useful evidence. Preserve upstream dependency documentation and license notices.
 
 The task-oriented reading route is [AGENTS.md](../AGENTS.md). Security reports follow [SECURITY.md](../SECURITY.md).
