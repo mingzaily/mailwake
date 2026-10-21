@@ -1,0 +1,49 @@
+name: Promote image
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Published version to promote (for example v1.0.0-rc.1)
+        required: true
+        type: string
+      digest:
+        description: Verified multi-platform image index digest (sha256)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: promote-image
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify version and promote the existing image index
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}
+          VERSION: ${{ inputs.version }}
+          DIGEST: ${{ inputs.digest }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          actual=$(docker buildx imagetools inspect "$IMAGE:$VERSION" --format '{{.Manifest.Digest}}')
+          test "$actual" = "$DIGEST"
+          docker buildx imagetools inspect "$IMAGE@$DIGEST" --raw |
+            jq -e '([.manifests[].platform | select(.os == "linux") | .architecture] | unique) == ["amd64", "arm64"]' >/dev/null
+          docker buildx imagetools create --tag "$IMAGE:latest" "$IMAGE@$DIGEST"
+          actual=$(docker buildx imagetools inspect "$IMAGE:latest" --format '{{.Manifest.Digest}}')
+          test "$actual" = "$DIGEST"
