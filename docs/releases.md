@@ -4,6 +4,17 @@
 
 This file preserves dated evidence for the revisions and environments named below. Use [Branching workflow](branching.md) for current release policy and [Development](development.md) for current checks. Earlier results establish historical coverage; each candidate needs verification of its own changes.
 
+## rc5 candidate — 2026-10-21
+
+The maintainer authorized rc5 after the read-synchronization and App-diagnostics reviews below. Implementation commit: `9ccd96b5333b64e3059e3ebc6b107cc08edc8f3e`. Release preparation adds the changelog and this record. Integration uses the protected main branch's PR and linear-history rules; the immutable tag identifies the final merged source.
+
+- Business logic **9.5/10**: verified signed ownership, current subscription and UID identity, read-state idempotency, permanent flag permissions, post-write state, provider/error semantics, watcher preservation and private diagnostic projections. Both reproduced P2 findings are fixed. The shared memory log has a documented retention window.
+- Code design **9.5/10**: response normalization belongs to the decoder, shared FETCH assembly handles body and flags, and runtime, HTTP instrumentation and export retain their existing boundaries. No known blocking finding remains. Internal stage strings require documentation and regression coverage when extended.
+- Local release verification: `make check`, `make test` (214 frontend tests, Core and maintained-module race suites) and `make check-build VERSION=v1.0.0-rc.5` passed on macOS arm64, Node.js 24.18.1 and Go 1.25.14. Unchanged Go packages reused cached results. The preceding confirmation run forced fresh IMAP, runtime, HTTP and logging race tests. Frontend CSP/license checks and tracked webdist verification passed; staged secret scans and whitespace checks passed.
+- Publication verification: the tag workflow repeats CI before publishing Linux/macOS amd64/arm64 archives, SHA256SUMS and Linux amd64/arm64 GHCR images. Verify the completed workflow, downloaded checksums, embedded version/revision and anonymous image retrieval against the final tag.
+
+Code meets the development quality gate. This explicitly authorized prerelease supplies the artifact for live Gmail and matching iOS acceptance: test unread, already-read and repeated opens, then moved/deleted remote messages with readable cached bodies, and export request diagnostics immediately. Expect 204 for existing read messages, 404 for expired references and accurate provider/timeout failures. The original Gmail incident's precise trigger remains unconfirmed. Formal release readiness retains these acceptance items; publishing the candidate leaves running installations under operator control.
+
 ## Read synchronization and request diagnostics — 2026-10-21 (unreleased)
 
 Initial review source: `dev/v1.0.0`, base `8a1e5abba5f6de3ad225cea407b0795853ed18f6`, uncommitted working changes. SHA-256 of sorted changed/new `.go` and `.tsx` paths plus contents, using `path + NUL + content + NUL`: `33718f865676a57fdf342d5f65966aab18a4bab6876450b288823e9871b8e8e6`. The deployed rc4 revision remains unchanged. The full review below records the subsequent fixes and final assessment.
