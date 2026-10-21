@@ -2,7 +2,24 @@
 
 All notable changes to Mailwake Core are documented here. Versions follow [Semantic Versioning](https://semver.org); before 1.0.0, minor versions may change configuration.
 
-## [1.0.0-rc.5] - 2026-10-21
+## [1.0.0-rc.1] - 2026-10-21
+
+This candidate establishes the feature-complete Core baseline for final integration. The maintainer retired the preceding rc.1–rc.5 publications and restarted the candidate sequence. Identify this release by its date, source revision and checksums; the earlier rc.1 denotes different source. The verified dual-platform image is explicitly promoted to `latest` for the default Compose installation. GitHub retains the prerelease designation.
+
+- Monitor up to 20 IMAP mailboxes with realtime IDLE and scheduled checks, encrypted credentials, persisted folder progress and an atomic notification outbox.
+- Deliver through Bark, Pushover, signed Webhooks or encrypted Mailwake App notifications and activities, with owner-approved scopes, independent resource permissions and safe revocation.
+- Scan mailbox drafts and save selected initial subscriptions atomically. Preserve sender display names and apply persisted notification preview privacy.
+- Read bounded MIME bodies with sanitized HTML, same-message CID images and explicit remote-image permission metadata. Preserve decorative/accessibility declarations, empty image descriptions and layered GIF/PNG backgrounds without changing visual layout.
+- Mark opened or cached messages read idempotently using explicit UID/flag observations and permanent flag permission. Preserve other flags and watcher progress; distinguish missing resources from provider failures.
+- Export safe App request diagnostics with request IDs, stages, outcomes and response codes. Provide the nine-language Web console, Linux/macOS binaries, dual-platform containers, licenses and checksums.
+
+Source and artifact verification are recorded in [release records](docs/releases.md#candidate-baseline-reset--2026-10-21). The candidate retains the existing database baseline; external provider/client acceptance remains scoped to recorded evidence.
+
+## Retired development series — 2026-10-14 to 2026-10-21
+
+The entries below preserve historical changes and acceptance limits. Their publications and version tags have been retired under the maintainer-authorized reset; their source commits remain in Git history.
+
+### [1.0.0-rc.5] - 2026-10-21
 
 - Verify the target UID and current flags when marking an opened message read. Already-read messages succeed idempotently; unread messages receive an additive silent Seen update followed by a state check. Preserve other flags and watcher progress.
 - Distinguish missing folders/messages and changed UIDVALIDITY from provider refusals and timeouts. Normalize IMAP response-code case so folder errors and permanent flag permissions retain their meaning.
@@ -11,7 +28,7 @@ All notable changes to Mailwake Core are documented here. Versions follow [Seman
 
 This prerelease supplies a candidate for live Gmail and matching-client validation. The original Gmail 404 cause remains unconfirmed. Test unread, already-read and repeated opens, then moved/deleted messages with cached bodies; export diagnostics immediately after reproducing. Restarting Core or clearing its memory log removes request history. See [release verification](docs/releases.md#rc5-candidate--2026-10-21).
 
-## [1.0.0-rc.4] - 2026-10-20
+### [1.0.0-rc.4] - 2026-10-20
 
 - Add `POST /api/v1/app/mailboxes/scan` to validate a mailbox draft and return selectable folders and display metadata before saving. Require both mailbox and folder permissions and keep the probe free of persisted configuration and active watchers.
 - Accept initial folder subscriptions when creating a mailbox through the Web/script and App APIs. Validate check methods, connection budgets and the current server directory, then save encrypted credentials and subscriptions in one transaction before starting monitoring.
@@ -19,7 +36,7 @@ This prerelease supplies a candidate for live Gmail and matching-client validati
 
 This is a prerelease candidate for the App's scan-select-save flow. Validate discovery, cancellation, selected-folder persistence and first notification delivery with the matching client and real providers. See [release verification](docs/releases.md#rc4-candidate--2026-10-20).
 
-## [1.0.0-rc.3] - 2026-10-19
+### [1.0.0-rc.3] - 2026-10-19
 
 - Add `POST /api/v1/app/content/read` for clients to mark an opened body as read, including cached bodies. Validate the signed reference, current account and subscription, and permanent IMAP `\Seen` permission; preserve other flags and watcher progress.
 - Preserve the From display name as optional `sender_name` through events, the outbox, encrypted notifications and activities. Keep `sender` as the complete mailbox address and clear both fields under the preview privacy policy.
@@ -27,7 +44,7 @@ This is a prerelease candidate for the App's scan-select-save flow. Validate dis
 
 This is a prerelease candidate for client and real-provider acceptance. Clients must implement the read action; notification delivery and body downloads alone preserve the mailbox's unread state. Clients can decode `sender_name` optionally and fall back to `sender`. Live Gmail/QQ flag persistence, preserved star flags, continued monitoring, cached-body retries and device presentation remain pending, alongside the earlier preview-transition checks. See [release verification](docs/releases.md#rc3-candidate--2026-10-19).
 
-## [1.0.0-rc.2] - 2026-10-16
+### [1.0.0-rc.2] - 2026-10-16
 
 - Preserve complete IMAP FETCH responses across split metadata, BODY-before-UID ordering and cancellation; keep checkpoints unchanged when existing messages have incomplete metadata.
 - Apply the persisted preview policy when enqueueing notifications and distinguish an unavailable historical subject from an actual empty subject.
@@ -38,7 +55,7 @@ This is a prerelease candidate for client and real-provider acceptance. Clients 
 
 This is a prerelease candidate for real-provider and device validation. Gmail/QQ monitoring and body reading, and Gmail/Bark preview transitions still require live acceptance. Existing history whose subject was already stored as an empty string cannot be reconstructed. See [release verification](docs/releases.md#rc2-candidate--2026-10-16).
 
-## [1.0.0-rc.1] - 2026-10-14
+### [1.0.0-rc.1] - 2026-10-14
 
 This release starts a new prerelease baseline using the complete current Core implementation. Earlier development RC numbers have been retired. The code is preserved; see the [release record](docs/releases.md) for history and verification details.
 

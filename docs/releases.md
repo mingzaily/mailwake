@@ -4,6 +4,26 @@
 
 This file preserves dated evidence for the revisions and environments named below. Use [Branching workflow](branching.md) for current release policy and [Development](development.md) for current checks. Earlier results establish historical coverage; each candidate needs verification of its own changes.
 
+## Candidate baseline reset — 2026-10-21
+
+The maintainer authorized retiring the published rc.1–rc.5 series and restarting at `v1.0.0-rc.1` from the current feature-complete Core candidate. Implementation: `1748d4bd55fbcd102580a2b021dead186300617e`, including the decorative HTML semantics fix. This preparation updates publication documentation only. Integration follows the protected main branch's PR and linear-history rules; the new annotated tag identifies the final integrated source. Commit history and the dated evidence below preserve the preceding work.
+
+| Retired publication | Source commit |
+| --- | --- |
+| `v1.0.0-rc.1` (2026-10-14 series) | `ee97a75f767115028f4a286dd97dbb2f3f2251cc` |
+| `v1.0.0-rc.2` | `d6ec5538ca5bbb9ba4023e8e2060e8b541142111` |
+| `v1.0.0-rc.3` | `39c97f28a1e2e953287844dfb4f057016e41f387` |
+| `v1.0.0-rc.4` | `89fcf056ec93c8aec718e798d64eb1d69cb2cd79` |
+| `v1.0.0-rc.5` | `f3c25cc74c140839b0761f35e51078451c7881e2` |
+
+The reset procedure backs up the Git refs, release metadata, binary archives/checksums and OCI image graphs outside the repository before removing the five Releases, their version tags and the 25 associated GHCR manifest versions. The package retains its identity and visibility. Distinguish old and new rc.1 artifacts by date, source revision and checksums; a cached old rc.1 is a different artifact. Subsequent version tags follow the immutable-tag policy.
+
+- Business review: **9.5/10**. The candidate includes all current Core behavior and the reviewed HTML contract. Cleanup targets the enumerated old publication objects; the source history remains available. The explicitly authorized `latest` promotion uses the verified new multi-platform index digest after artifact checks. Version and `latest` must resolve to the same index, with both architectures carrying the expected source revision. GitHub retains the prerelease designation. Real-provider and matching-client acceptance retains the specific limitations recorded below.
+- Code design review: **9.5/10**. Runtime source is unchanged from `1748d4b`; the ordinary release workflow continues to verify CI and publish versioned artifacts. Explicit post-verification promotion handles this candidate's default-installation channel without adding a version-specific workflow branch. Historical changelog entries are grouped as retired evidence. No known blocking finding remains in this release preparation.
+- Fresh local verification: `make check`, `make test` (214 frontend tests plus Core and maintained go-imap race suites) and `make check-build VERSION=v1.0.0-rc.1` passed on macOS arm64, Node.js 24.18.1 and Go 1.25.14. Unchanged Go packages reused caches. The embedded-console build passed CSP/license and tracked-webdist checks. An isolated temporary-data process passed startup, health, embedded-console and CSP-header checks. The HTML-specific regression and fuzz evidence at `1748d4b` applies to identical runtime source.
+
+Publication completion requires a successful tag workflow, four verified binary archives, matching source/version metadata, anonymous amd64/arm64 image retrieval, container startup and equal version/`latest` index digests. This authorized candidate publication updates the default image channel. Running installations follow their operator's update policy. Formal stable-release acceptance still requires the recorded provider/client scenarios and the matching iOS rendering/VoiceOver results; the publication record covers only completed checks.
+
 ## Decorative HTML semantics — 2026-10-21 (unreleased)
 
 Scope: Core HTML attribute sanitization and its content/HTTP tests on `dev/v1.0.0`, based on `204108c22403d27c89dfdaa24d6d47846fa768ce`. SHA-256 over the sorted changed/new `internal/` paths and contents, including the synthetic HTML fixture, using `path + NUL + content + NUL`: `6a217c16938872882048d059190db0e27537fa09c03673a2d2827b05e431f030`. The [HTML attribute contract](html-content.md#decorative-and-accessibility-attributes) owns the accepted values and client interpretation.
