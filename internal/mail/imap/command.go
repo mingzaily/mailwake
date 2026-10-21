@@ -2,9 +2,12 @@ package imap
 
 import (
 	"context"
+	"errors"
 	"time"
 
+	protocol "github.com/emersion/go-imap/v2"
 	"github.com/mingzaily/mailwake/internal/fault"
+	"github.com/mingzaily/mailwake/internal/logging"
 )
 
 const commandTimeout = 30 * time.Second
@@ -31,6 +34,10 @@ func (x *connection) command(ctx context.Context, code string, run func() error)
 		return commandCtx.Err()
 	}
 	if err != nil {
+		var rejected *protocol.Error
+		if errors.As(err, &rejected) && rejected.Code != "" {
+			logging.RequestResponseCode(ctx, string(rejected.Code))
+		}
 		return fault.From(err, code)
 	}
 	return nil

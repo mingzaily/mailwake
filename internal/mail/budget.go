@@ -2,8 +2,10 @@ package mail
 
 import (
 	"context"
-	"github.com/mingzaily/mailwake/internal/fault"
 	"sync"
+
+	"github.com/mingzaily/mailwake/internal/fault"
+	"github.com/mingzaily/mailwake/internal/logging"
 )
 
 const DefaultConnectionLimit = 10
@@ -122,6 +124,7 @@ func (c *budgetConnection) Close() error {
 }
 
 func (s budgetSource) MarkRead(ctx context.Context, folder string, location Location) error {
+	logging.RequestStage(ctx, "connection_budget")
 	if err := s.budget.acquire(ctx, false); err != nil {
 		return err
 	}
@@ -130,6 +133,7 @@ func (s budgetSource) MarkRead(ctx context.Context, folder string, location Loca
 }
 
 func (s budgetSource) ReadContent(ctx context.Context, folder string, location Location) (Body, error) {
+	logging.RequestStage(ctx, "connection_budget")
 	if err := s.budget.acquire(ctx, false); err != nil {
 		return Body{}, err
 	}

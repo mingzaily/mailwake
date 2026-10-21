@@ -20,6 +20,7 @@ import (
 	"github.com/mingzaily/mailwake/internal/appmanagement"
 	"github.com/mingzaily/mailwake/internal/auth"
 	"github.com/mingzaily/mailwake/internal/coreidentity"
+	"github.com/mingzaily/mailwake/internal/logging"
 	"github.com/mingzaily/mailwake/internal/native"
 	"github.com/mingzaily/mailwake/internal/settings"
 	"github.com/mingzaily/mailwake/internal/storage"
@@ -32,6 +33,7 @@ type appFixture struct {
 	grant   auth.Grant
 	coreID  string
 	service *appmanagement.Service
+	log     *slog.Logger
 }
 
 func newAppFixture(t *testing.T, runtimes ...Runtime) appFixture {
@@ -46,7 +48,7 @@ func newAppFixture(t *testing.T, runtimes ...Runtime) appFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	log := logging.New(io.Discard)
 	keys := coreidentity.New(store, vault)
 	nativeService, err := native.New(store, vault, keys, "", log)
 	if err != nil {
@@ -63,7 +65,7 @@ func newAppFixture(t *testing.T, runtimes ...Runtime) appFixture {
 		base = runtimes[0]
 	}
 	router := New(authService, base, store, log, Integrations{Native: nativeService, Management: service})
-	return appFixture{router, grant, identity.ID, service}
+	return appFixture{router, grant, identity.ID, service, log}
 }
 
 func (f appFixture) do(t *testing.T, method, path string, body any, headers map[string]string) *httptest.ResponseRecorder {

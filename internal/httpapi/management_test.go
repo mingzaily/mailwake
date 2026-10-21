@@ -87,7 +87,7 @@ func TestSubscriptionAPIAndPrivateDiagnostics(t *testing.T) {
 		}
 	}
 	var report map[string]any
-	if err := json.Unmarshal(w.Body.Bytes(), &report); err != nil || report["schema_version"] != float64(1) || report["build"] == nil {
+	if err := json.Unmarshal(w.Body.Bytes(), &report); err != nil || report["schema_version"] != float64(2) || report["build"] == nil {
 		t.Fatal(report, err)
 	}
 	store.Close()

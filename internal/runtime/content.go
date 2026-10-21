@@ -6,6 +6,7 @@ import (
 
 	"github.com/mingzaily/mailwake/internal/coreidentity"
 	"github.com/mingzaily/mailwake/internal/fault"
+	"github.com/mingzaily/mailwake/internal/logging"
 	"github.com/mingzaily/mailwake/internal/mail"
 )
 
@@ -33,9 +34,11 @@ func (m *Manager) MarkRead(ctx context.Context, reference coreidentity.MessageRe
 }
 
 func (m *Manager) messageSource(ctx context.Context, reference coreidentity.MessageReference) (mail.Source, error) {
+	logging.RequestStage(ctx, "reference")
 	if err := m.identity.VerifyMessageReference(ctx, reference); err != nil {
 		return nil, err
 	}
+	logging.RequestStage(ctx, "mailbox")
 	b, err := m.mailbox(reference.MailboxID)
 	if err != nil {
 		return nil, fault.New("message_not_found")
@@ -51,9 +54,18 @@ func (m *Manager) messageSource(ctx context.Context, reference coreidentity.Mess
 		}
 	}
 	b.mu.RUnlock()
-	if deleted || !subscribed || reference.AccountID != accountID {
+	if deleted {
 		return nil, fault.New("message_not_found")
 	}
+	logging.RequestStage(ctx, "account_identity")
+	if reference.AccountID != accountID {
+		return nil, fault.New("message_not_found")
+	}
+	logging.RequestStage(ctx, "subscription")
+	if !subscribed {
+		return nil, fault.New("message_not_found")
+	}
+	logging.RequestStage(ctx, "mail_source")
 	if source == nil {
 		return nil, fault.New("message_unavailable")
 	}
@@ -64,6 +76,7 @@ func messageError(ctx context.Context, err error) error {
 	if err == nil {
 		return nil
 	}
+	logging.RequestCause(ctx, fault.From(err, "message_unavailable").Code)
 	if ctx.Err() != nil || fault.From(err, "message_unavailable").Code == "imap_command_timeout" {
 		return fault.New("message_timeout")
 	}

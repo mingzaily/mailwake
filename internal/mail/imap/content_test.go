@@ -328,3 +328,20 @@ func TestReadContentDecodesSelectedPartsAndDropsInvalidCID(t *testing.T) {
 		t.Fatalf("%+v %v", body, err)
 	}
 }
+
+func TestContentFolderFailuresDistinguishAbsenceFromRejection(t *testing.T) {
+	for _, tc := range []struct{ response, code string }{
+		{"[NONEXISTENT] private detail", "message_not_found"},
+		{"[NOPERM] private detail", "imap_folder_rejected"},
+		{"[UNAVAILABLE] private detail", "imap_folder_rejected"},
+		{"[NONEXISTENT!] private detail", "imap_folder_rejected"},
+	} {
+		t.Run(tc.code+tc.response, func(t *testing.T) {
+			source, _, _, _ := scriptedServer(t, serverOptions{caps: "IMAP4rev1", openFailure: tc.response})
+			_, err := source.ReadContent(t.Context(), "Clients", mail.Location{UIDValidity: 1, UID: 1})
+			if err == nil || fault.From(err, "").Code != tc.code || strings.Contains(err.Error(), "private detail") {
+				t.Fatal(err)
+			}
+		})
+	}
+}
