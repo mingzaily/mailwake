@@ -72,7 +72,7 @@ jobs:
             GOOS=$os GOARCH=$arch CGO_ENABLED=0 go build -tags nomsgpack -trimpath \
               -ldflags="-s -w -X github.com/mingzaily/mailwake/internal/buildinfo.Version=${GITHUB_REF_NAME} -X github.com/mingzaily/mailwake/internal/buildinfo.Revision=${GITHUB_SHA}" \
               -o "dist/$name/mailwake" ./cmd/mailwake
-            cp LICENSE COPYRIGHT README.md AGENTS.md CONTRIBUTING.md SECURITY.md CHANGELOG.md compose.yaml internal/httpapi/webdist/third-party-notices.txt "dist/$name/"
+            cp LICENSE COPYRIGHT README.md AGENTS.md CONTRIBUTING.md SECURITY.md compose.yaml internal/httpapi/webdist/third-party-notices.txt "dist/$name/"
             cp -R docs "dist/$name/"
             mkdir -p "dist/$name/internal/appmanagement"
             cp internal/appmanagement/README.md "dist/$name/internal/appmanagement/"
@@ -88,4 +88,4 @@ jobs:
           prerelease=""
           case "$GITHUB_REF_NAME" in *-*) prerelease="--prerelease" ;; esac
           gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/SHA256SUMS \
-            --title "Mailwake Core $GITHUB_REF_NAME" --notes "See CHANGELOG.md." $prerelease
+            --title "Mailwake Core $GITHUB_REF_NAME" --generate-notes $prerelease

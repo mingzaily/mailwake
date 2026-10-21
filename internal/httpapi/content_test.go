@@ -45,7 +45,7 @@ func TestContentResponsePreservesImagesWithoutHTTPOrDNSRequests(t *testing.T) {
 		return nil, errors.New("unexpected DNS lookup")
 	}}
 	t.Cleanup(func() { http.DefaultTransport = oldTransport; net.DefaultResolver = oldResolver })
-	raw := "Content-Type: text/html; charset=utf-8\r\n\r\n" + `<p>Transient body</p><img src="` + images.URL + `/src"><picture><source srcset="` + images.URL + `/small 1x, https://content-image.invalid/large 2x"><img alt="alternate"></picture><div style="background-image:url(` + images.URL + `/background)">layout</div>`
+	raw := "Content-Type: text/html; charset=utf-8\r\n\r\n" + `<p>Transient body</p><img src="` + images.URL + `/src" alt=""><picture><source srcset="` + images.URL + `/small 1x, https://content-image.invalid/large 2x"><img alt="alternate"></picture><div aria-hidden="true" role="presentation" style="background-image:url(` + images.URL + `/background)">layout</div><span hidden>Hidden text</span><img>`
 	f := newAppFixture(t, mimeBodyRuntime{Runtime: newTestRuntime("bark", nil, nil), raw: raw})
 	credential, _ := f.invite(t, []string{"content"})
 	headers := map[string]string{"Authorization": "Bearer " + credential}
@@ -53,6 +53,11 @@ func TestContentResponsePreservesImagesWithoutHTTPOrDNSRequests(t *testing.T) {
 	var body mail.Body
 	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &body) != nil || !body.HasRemoteImages || !strings.Contains(body.HTML, images.URL) || !strings.Contains(body.Text, "Transient body") || w.Header().Get("Cache-Control") != "no-store" {
 		t.Fatalf("response %d %s", w.Code, w.Body.String())
+	}
+	for _, want := range []string{`alt=""`, `alt="alternate"`, `aria-hidden="true"`, `role="presentation"`, `hidden=""`, `<img/>`} {
+		if !strings.Contains(body.HTML, want) {
+			t.Fatalf("serialized HTML lost %s", want)
+		}
 	}
 	if received.Load() != 0 || attempts.Load() != 0 || lookups.Load() != 0 {
 		t.Fatalf("network: received=%d attempted=%d DNS=%d", received.Load(), attempts.Load(), lookups.Load())
