@@ -245,7 +245,8 @@ func TestReadBodyLimitsAndJSONExpansion(t *testing.T) {
 			}
 		})
 	}
-	body := readBody(t, htmlMessage("<p>"+strings.Repeat("x", MaxHTMLBytes-7)+"</p>"))
+	overhead := len(readBody(t, htmlMessage("<p></p>")).HTML)
+	body := readBody(t, htmlMessage("<p>"+strings.Repeat("x", MaxHTMLBytes-overhead)+"</p>"))
 	if len(body.HTML) != MaxHTMLBytes {
 		t.Fatalf("HTML at limit: %d", len(body.HTML))
 	}
@@ -282,7 +283,7 @@ func TestReadBodyRemovesMalformedActiveMarkup(t *testing.T) {
 		`<img src="javascript&colon;alert(1)" onerror="alert(1)"><a href="java&#x09;script:alert(1)">safe</a>`,
 	} {
 		body := readBody(t, htmlMessage(source))
-		for _, bad := range []string{"<script", "<style", "<svg", "<math", "onerror=", "javascript:", "src=\"https://bad.test"} {
+		for _, bad := range []string{"<script", "<svg", "<math", "onerror=", "javascript:", "src=\"https://bad.test"} {
 			if strings.Contains(body.HTML, bad) {
 				t.Fatalf("active markup retained: %s", body.HTML)
 			}
@@ -291,6 +292,14 @@ func TestReadBodyRemovesMalformedActiveMarkup(t *testing.T) {
 }
 
 func FuzzReadBody(f *testing.F) {
+	f.Add(htmlMessage(`<template><meta http-equiv="default-style" content="Other"></template><meta http-equiv="default-style" content="Default"><style title="Default">p{color:red}</style><p>Safe</p>`))
+	f.Add(htmlMessage(`<style title="Default">p{color:rgb(255,0,0!important</style><style title="Alternate">p{display:none}</style><p>Safe</p>`))
+	f.Add(htmlMessage(`<picture><source srcset="https://images.test/wide"><article><img src="https://images.test/fallback"></article></picture>`))
+	f.Add(htmlMessage(`<style>p{color:rgb(255,0,0</style><style>p{background:yellow}</style><p>Safe</p>`))
+	f.Add(htmlMessage(`<div><span>Heading</span><style>span+p{display:none}</style><article><p>Safe</p></article></div>`))
+	f.Add(htmlMessage(`<html lang="ar" dir="rtl"><style>html{color:red}.a,#b>p{overflow:hidden}@media(max-width:630px){.a{display:none!important}}</style><body class="a"><picture><source media="(min-width:631px)" sizes="calc(100vw - 36px)" type="image/png" srcset="cid:logo 610w"><img alt="" src="https://images.test/a"></picture></body></html>`))
+	f.Add(htmlMessage(`<style>p{broken;color:red}@supports(display:grid){p{color:blue}}@media(max-width:630px){p{visibility:hidden</style><p>Safe</p>`))
+	f.Add(htmlMessage(`<style>@media print{broken}p{display:none}</style><p style="@media print{p{visibility:hidden}}">Safe</p>`))
 	f.Add(htmlMessage(`<section aria-hidden="true"><img alt=""><img></section><div hidden="until-found" role="none presentation">text</div>`))
 	for _, raw := range []string{htmlMessage(`<img src="https://images.test/a"><p>Hello</p>`), htmlMessage(`<div style="background:url('https://images.test/b')">fallback</div>`), multipart("alternative", "a", mimePart("Content-Type: text/plain", "text"), htmlMessage("<table><tr><td>html</td></tr></table>")), "Content-Type: text/plain\r\n\r\nhello"} {
 		f.Add(raw)

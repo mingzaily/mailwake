@@ -45,7 +45,7 @@ func TestContentResponsePreservesImagesWithoutHTTPOrDNSRequests(t *testing.T) {
 		return nil, errors.New("unexpected DNS lookup")
 	}}
 	t.Cleanup(func() { http.DefaultTransport = oldTransport; net.DefaultResolver = oldResolver })
-	raw := "Content-Type: text/html; charset=utf-8\r\n\r\n" + `<p>Transient body</p><img src="` + images.URL + `/src" alt=""><picture><source srcset="` + images.URL + `/small 1x, https://content-image.invalid/large 2x"><img alt="alternate"></picture><div aria-hidden="true" role="presentation" style="background-image:url(` + images.URL + `/background)">layout</div><span hidden>Hidden text</span><img>`
+	raw := "Content-Type: text/html; charset=utf-8\r\n\r\n" + `<html lang="en"><head><style>@media (max-width:630px){.art{background-image:url(` + images.URL + `/stylesheet);overflow:hidden}}</style></head><body style="color:#222;background:#fff"><p>Transient body</p><img class="art" src="` + images.URL + `/src" alt=""><picture><source media="(min-width:631px)" type="image/png" sizes="100vw" srcset="` + images.URL + `/small 1x, https://content-image.invalid/large 2x"><img alt="alternate"></picture><div aria-hidden="true" role="presentation" style="background-image:url(` + images.URL + `/background)">layout</div><span hidden>Hidden text</span><img></body></html>`
 	f := newAppFixture(t, mimeBodyRuntime{Runtime: newTestRuntime("bark", nil, nil), raw: raw})
 	credential, _ := f.invite(t, []string{"content"})
 	headers := map[string]string{"Authorization": "Bearer " + credential}
@@ -54,7 +54,7 @@ func TestContentResponsePreservesImagesWithoutHTTPOrDNSRequests(t *testing.T) {
 	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &body) != nil || !body.HasRemoteImages || !strings.Contains(body.HTML, images.URL) || !strings.Contains(body.Text, "Transient body") || w.Header().Get("Cache-Control") != "no-store" {
 		t.Fatalf("response %d %s", w.Code, w.Body.String())
 	}
-	for _, want := range []string{`alt=""`, `alt="alternate"`, `aria-hidden="true"`, `role="presentation"`, `hidden=""`, `<img/>`} {
+	for _, want := range []string{`alt=""`, `alt="alternate"`, `aria-hidden="true"`, `role="presentation"`, `hidden=""`, `<img/>`, `media="(min-width:631px)"`, `type="image/png"`, `sizes="100vw"`, `@media (max-width:630px)`, `/stylesheet`, `mailwake-html`, `background:#fff`} {
 		if !strings.Contains(body.HTML, want) {
 			t.Fatalf("serialized HTML lost %s", want)
 		}

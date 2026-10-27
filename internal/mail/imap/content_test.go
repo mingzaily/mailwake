@@ -217,7 +217,7 @@ func TestReadContentLoadsOnlyReferencedRelatedImages(t *testing.T) {
 		}
 	})
 	raw := contentMultipart("related", "r",
-		contentMultipart("alternative", "a", "Content-Type: text/plain\r\n\r\nFallback", "Content-Type: text/html\r\n\r\n"+`<picture><source srcset="cid:logo 1x"><img src="cid:logo" alt="logo"></picture><div style="background-image:url(cid:logo)"></div>`),
+		contentMultipart("alternative", "a", "Content-Type: text/plain\r\n\r\nFallback", "Content-Type: text/html\r\n\r\n"+`<style>@media(max-width:630px){.art{background-image:url(cid:logo)}}</style><picture><source media="(min-width:631px)" type="image/png" sizes="100vw" srcset="cid:logo 100w"><img src="cid:logo" alt="logo"></picture><div class="art" style="background-image:url(cid:logo)"></div>`),
 		"Content-Type: image/png\r\nContent-ID: <logo>\r\nContent-Transfer-Encoding: base64\r\n\r\n"+contentPNG(t),
 		"Content-Type: image/png\r\nContent-ID: <unused>\r\n\r\n"+strings.Repeat("unused", 300000))
 	added, err := user.Append("Clients", strings.NewReader(raw), &protocol.AppendOptions{})
@@ -225,7 +225,7 @@ func TestReadContentLoadsOnlyReferencedRelatedImages(t *testing.T) {
 		t.Fatal(err)
 	}
 	body, err := source.ReadContent(ctx, "Clients", mail.Location{UIDValidity: added.UIDValidity, UID: uint32(added.UID)})
-	if err != nil || body.Text != "Fallback" || strings.Count(body.HTML, "data:image/png;base64,") != 3 || body.HasRemoteImages {
+	if err != nil || body.Text != "Fallback" || strings.Count(body.HTML, "data:image/png;base64,") != 4 || body.HasRemoteImages {
 		t.Fatalf("%+v %v", body, err)
 	}
 }
@@ -280,7 +280,7 @@ func TestReadContentSkipsCIDReferencesInDiscardedMarkup(t *testing.T) {
 			}
 		}
 	})
-	raw := contentMultipart("related", "r", "Content-Type: text/html\r\n\r\n"+`<p>Readable</p><script><img src="cid:unused"></script><div style="background:url(cid:unused) expression(bad)"></div>`, "Content-Type: image/png\r\nContent-ID: <unused>\r\n\r\n"+strings.Repeat("unused", 300000))
+	raw := contentMultipart("related", "r", "Content-Type: text/html\r\n\r\n"+`<p>Readable</p><script><img src="cid:unused"></script><div style="background:url(cid:unused) expression(bad)"></div><style>@media(hover:hover){p{background:url(cid:unused)}}a:visited{background:url(cid:unused)}</style><picture><source media="(device-width:1px)" srcset="cid:unused 1x"><source type="image/svg+xml" srcset="cid:unused 1x"><img sizes="bad" srcset="cid:unused 1x"></picture>`, "Content-Type: image/png\r\nContent-ID: <unused>\r\n\r\n"+strings.Repeat("unused", 300000))
 	added, err := user.Append("Clients", strings.NewReader(raw), &protocol.AppendOptions{})
 	if err != nil {
 		t.Fatal(err)

@@ -7,8 +7,8 @@ import (
 )
 
 // htmlToText renders HTML as readable text: block elements become line breaks, list items
-// get bullets, links keep their target, and scripts, styles and hidden content are dropped.
-// No resource is ever loaded.
+// get bullets, links keep their target, and non-content elements are dropped.
+// Extraction is viewport-independent and loads no resources or CSS.
 func htmlToText(source string) string {
 	if source == "" {
 		return ""

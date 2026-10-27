@@ -3,7 +3,9 @@ package content
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"image"
 	_ "image/gif"
@@ -16,6 +18,7 @@ import (
 	"strings"
 	"unicode"
 
+	"golang.org/x/image/colornames"
 	_ "golang.org/x/image/webp"
 	"golang.org/x/net/html"
 )
@@ -27,6 +30,7 @@ var (
 	verticalAlign   = wordSet("top middle bottom baseline")
 	imageMedia      = map[string]string{"png": "image/png", "jpeg": "image/jpeg", "gif": "image/gif", "webp": "image/webp"}
 	discardTags     = wordSet("script style title template noscript iframe frame frameset object embed applet svg math form input button select option textarea video audio track canvas base link meta")
+	language        = regexp.MustCompile(`^[a-zA-Z]{1,8}(?:-[a-zA-Z0-9]{1,8})*$`)
 	dimension       = regexp.MustCompile(`^[0-9]{1,5}%?$`)
 )
 
@@ -39,12 +43,19 @@ func wordSet(words string) map[string]bool {
 }
 
 type bodySanitizer struct {
-	ctx       context.Context
-	err       error
-	resources map[string]*bodyPart
-	images    map[string]string
-	oversized bool
-	remote    bool
+	ctx          context.Context
+	err          error
+	resources    map[string]*bodyPart
+	images       map[string]string
+	oversized    bool
+	remote       bool
+	cssPrefix    string
+	css          cssBudget
+	styles       strings.Builder
+	rootHints    strings.Builder
+	elements     []cssElement
+	elementIndex map[*html.Node]int
+	selectors    map[string]string
 }
 
 // sanitizeBody rebuilds an allowlisted HTML tree. No URL is dereferenced.
@@ -56,9 +67,17 @@ func sanitizeBody(ctx context.Context, source string, resources map[string]*body
 	if err != nil {
 		return "", false, false, errInvalidBody
 	}
-	s := bodySanitizer{ctx: ctx, resources: resources, images: map[string]string{}}
+	digest := sha256.Sum256([]byte(source))
+	s := bodySanitizer{ctx: ctx, resources: resources, images: map[string]string{}, cssPrefix: "mw-" + hex.EncodeToString(digest[:8]) + "-"}
+	if err := s.indexElements(doc); err != nil {
+		if errors.Is(err, errHTMLLimit) {
+			return "", false, true, nil
+		}
+		return "", false, false, err
+	}
 	output := &html.Node{Type: html.DocumentNode}
 	retainedBytes := 0
+	var styleElements []*html.Node
 	var visit func(*html.Node, *html.Node) error
 	visit = func(n, parent *html.Node) error {
 		if err := ctx.Err(); err != nil {
@@ -73,15 +92,31 @@ func sanitizeBody(ctx context.Context, source string, resources map[string]*body
 			parent.AppendChild(&html.Node{Type: html.TextNode, Data: n.Data})
 			return nil
 		case html.ElementNode:
+			if n.Namespace == "" && n.Data == "style" {
+				styleElements = append(styleElements, n)
+				return nil
+			}
 			if n.Namespace != "" || discardTags[n.Data] {
 				return nil
 			}
-			if bodyTags[n.Data] {
-				if n.Data == "source" && parent.Data != "picture" {
+			if bodyTags[n.Data] || n.Data == "html" || n.Data == "body" {
+				if n.Data == "source" && n.Parent.Data != "picture" {
 					return nil
 				}
 				clean := &html.Node{Type: html.ElementNode, Data: n.Data, DataAtom: n.DataAtom}
-				clean.Attr = s.attributes(n)
+				var retain bool
+				clean.Attr, retain = s.attributes(n)
+				if !retain {
+					return nil
+				}
+				if n.Data == "html" || n.Data == "body" {
+					clean.Data = "mailwake-" + n.Data
+					clean.DataAtom = 0
+					if n.Data == "html" {
+						clean.Attr = append(clean.Attr, html.Attribute{Key: "data-mailwake-root"}, html.Attribute{Key: "data-mailwake-scope", Val: s.cssPrefix})
+					}
+					s.rootPresentation(n)
+				}
 				if s.err != nil {
 					return s.err
 				}
@@ -91,6 +126,13 @@ func sanitizeBody(ctx context.Context, source string, resources map[string]*body
 				if s.oversized || retainedBytes > MaxHTMLBytes {
 					return errHTMLLimit
 				}
+				parent.AppendChild(clean)
+				s.elements[s.elementIndex[n]].clean = clean
+				parent = clean
+			} else if parent.Data == "picture" {
+				// Picture selection uses direct children. Keep a neutral boundary
+				// when replacing an unsupported wrapper around fallback images.
+				clean := &html.Node{Type: html.ElementNode, Data: "span"}
 				parent.AppendChild(clean)
 				parent = clean
 			}
@@ -110,9 +152,29 @@ func sanitizeBody(ctx context.Context, source string, resources map[string]*body
 		}
 		return "", false, false, err
 	}
+	preferred := s.preferredStyleSet()
+	for _, n := range styleElements {
+		s.styleElement(n, preferred)
+		if s.err != nil {
+			return "", false, false, s.err
+		}
+		if s.oversized {
+			return "", false, true, nil
+		}
+	}
 	if s.oversized {
 		return "", false, true, nil
 	}
+	rootDefault := s.scope() + `:where(:not([hidden]),[hidden="until-found"])`
+	bodyDefault := s.scope() + ` > :where(mailwake-body:not([hidden]),mailwake-body[hidden="until-found"])`
+	baseline := rootDefault + "," + bodyDefault + "{display:block;}"
+	sheet := baseline + s.rootHints.String() + s.styles.String()
+	if len(sheet) > MaxHTMLBytes {
+		return "", false, true, nil
+	}
+	style := &html.Node{Type: html.ElementNode, Data: "style"}
+	style.AppendChild(&html.Node{Type: html.TextNode, Data: sheet})
+	output.InsertBefore(style, output.FirstChild)
 	var out htmlBuffer
 	if err := html.Render(&out, output); err != nil {
 		if errors.Is(err, errHTMLLimit) {
@@ -138,9 +200,24 @@ func (b *htmlBuffer) Write(p []byte) (int, error) {
 func (b *htmlBuffer) WriteString(p string) (int, error) { return b.Write([]byte(p)) }
 func (b *htmlBuffer) WriteByte(p byte) error            { _, err := b.Write([]byte{p}); return err }
 
-func (s *bodySanitizer) attributes(n *html.Node) []html.Attribute {
+// attributes validates image conditions before resolving resources. An unsupported
+// source condition removes the element as a unit, preserving its fallback order.
+func (s *bodySanitizer) attributes(n *html.Node) ([]html.Attribute, bool) {
 	var out []html.Attribute
 	seen := map[string]bool{}
+	sizes, sizesOK := "", true
+	if n.Data == "img" || n.Data == "source" {
+		sizes, sizesOK = imageSizes(firstAttribute(n, "sizes"))
+	}
+	sourceMedia, sourceType := "", ""
+	if n.Data == "source" {
+		var mediaOK bool
+		sourceMedia, mediaOK = mediaCondition(firstAttribute(n, "media"), true)
+		sourceType = strings.ToLower(cssTrim(firstAttribute(n, "type")))
+		if !mediaOK || !sizesOK || (sourceType != "" && sourceType != "image/png" && sourceType != "image/jpeg" && sourceType != "image/gif" && sourceType != "image/webp") {
+			return nil, false
+		}
+	}
 	for _, a := range n.Attr {
 		if a.Namespace != "" || seen[a.Key] {
 			continue
@@ -163,11 +240,28 @@ func (s *bodySanitizer) attributes(n *html.Node) []html.Attribute {
 			}
 		case "role":
 			value = passiveRole(a.Val)
-		case "title", "lang":
+		case "class":
+			value = s.classes(a.Val)
+		case "id":
+			value = s.identifier(a.Val)
+		case "title":
 			value = a.Val
-		case "dir":
-			if directions[a.Val] {
+		case "lang":
+			if len(a.Val) <= 64 && (a.Val == "" || language.MatchString(a.Val)) {
 				value = a.Val
+				allowEmpty = true
+			}
+		case "media":
+			value = sourceMedia
+		case "type":
+			value = sourceType
+		case "sizes":
+			if (n.Data == "img" || n.Data == "source") && sizesOK {
+				value = sizes
+			}
+		case "dir":
+			if candidate := strings.ToLower(a.Val); directions[candidate] {
+				value = candidate
 			}
 		case "style":
 			var remote bool
@@ -184,7 +278,7 @@ func (s *bodySanitizer) attributes(n *html.Node) []html.Attribute {
 				s.remote = s.remote || remote
 			}
 		case "srcset":
-			if n.Data == "img" || n.Data == "source" {
+			if (n.Data == "img" || n.Data == "source") && sizesOK {
 				var remote bool
 				value, remote = s.srcset(a.Val)
 				s.remote = s.remote || remote
@@ -227,7 +321,7 @@ func (s *bodySanitizer) attributes(n *html.Node) []html.Attribute {
 			out = append(out, html.Attribute{Key: a.Key, Val: value})
 		}
 	}
-	return out
+	return out, true
 }
 
 // passiveRole retains only equivalent decorative roles. Requiring every token
@@ -367,4 +461,131 @@ func (s *bodySanitizer) srcset(value string) (string, bool) {
 		remote = remote || isRemote
 	}
 	return strings.Join(candidates, ", "), remote
+}
+
+func firstAttribute(n *html.Node, key string) string {
+	for _, a := range n.Attr {
+		if a.Namespace == "" && a.Key == key {
+			return a.Val
+		}
+	}
+	return ""
+}
+
+func isCSSStyle(n *html.Node) bool {
+	if n.Namespace != "" || n.Data != "style" {
+		return false
+	}
+	mediaType := strings.ToLower(firstAttribute(n, "type"))
+	return mediaType == "" || mediaType == "text/css"
+}
+
+// Resolve the embedded default set in source order. Meta default-style changes
+// the selection; media and CSS filtering preserve that choice.
+func (s *bodySanitizer) preferredStyleSet() string {
+	preferred := ""
+	inert := make([]bool, len(s.elements))
+	for i, e := range s.elements {
+		n := e.source
+		inert[i] = n.Namespace != "" || n.Data == "template" || e.parent >= 0 && inert[e.parent]
+		if inert[i] {
+			continue
+		}
+		if n.Data == "meta" && strings.EqualFold(firstAttribute(n, "http-equiv"), "default-style") {
+			if title := firstAttribute(n, "content"); title != "" {
+				preferred = title
+			}
+		} else if preferred == "" && isCSSStyle(n) {
+			preferred = firstAttribute(n, "title")
+		}
+	}
+	return preferred
+}
+
+func (s *bodySanitizer) styleElement(n *html.Node, preferred string) {
+	if !isCSSStyle(n) {
+		return
+	}
+	if title := firstAttribute(n, "title"); title != "" && title != preferred {
+		return
+	}
+	media, ok := mediaCondition(firstAttribute(n, "media"), true)
+	if !ok {
+		return
+	}
+	var source strings.Builder
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if c.Type == html.TextNode {
+			source.WriteString(c.Data)
+		}
+	}
+	value, remote := s.stylesheet(source.String())
+	if value == "" {
+		return
+	}
+	if media != "" {
+		value = "@media " + media + "{" + value + "}"
+	}
+	if s.styles.Len()+len(value) > MaxHTMLBytes {
+		s.oversized = true
+		return
+	}
+	s.styles.WriteString(value)
+	s.remote = s.remote || remote
+}
+
+// Legacy body colors are author presentational hints with zero specificity.
+// Keep them ahead of the original stylesheet and inline declarations.
+func (s *bodySanitizer) rootPresentation(n *html.Node) {
+	if n.Data != "body" {
+		return
+	}
+	var value strings.Builder
+	for _, hint := range []struct{ attribute, property string }{{"bgcolor", "background-color"}, {"text", "color"}} {
+		if color := legacyColor(firstAttribute(n, hint.attribute)); color != "" {
+			value.WriteString(hint.property + ":" + color + ";")
+		}
+	}
+	if value.Len() > 0 {
+		s.rootHints.WriteString(s.scope() + " > :where(mailwake-body){" + value.String() + "}")
+	}
+}
+
+// Convert the existing ASCII color allowlist using HTML's legacy color rules.
+// Its 24-character limit bounds each RGB component to eight hexadecimal digits.
+func legacyColor(value string) string {
+	if !cssColor.MatchString(value) {
+		return ""
+	}
+	value = strings.ToLower(value)
+	if value == "transparent" {
+		return ""
+	}
+	_, named := colornames.Map[value]
+	// colornames contains CSS3 names; CSS4 adds rebeccapurple.
+	if named || value == "rebeccapurple" || len(value) == 4 && value[0] == '#' {
+		return value
+	}
+	digits := []byte(strings.TrimPrefix(value, "#"))
+	for i, c := range digits {
+		if !strings.ContainsRune("0123456789abcdef", rune(c)) {
+			digits[i] = '0'
+		}
+	}
+	for len(digits)%3 != 0 {
+		digits = append(digits, '0')
+	}
+	width := len(digits) / 3
+	components := []string{string(digits[:width]), string(digits[width : 2*width]), string(digits[2*width:])}
+	for len(components[0]) > 2 && components[0][0] == '0' && components[1][0] == '0' && components[2][0] == '0' {
+		for i := range components {
+			components[i] = components[i][1:]
+		}
+	}
+	var rgb [3]byte
+	for i, component := range components {
+		n, _ := strconv.ParseUint(component[:min(2, len(component))], 16, 8)
+		rgb[i] = byte(n)
+	}
+	return "#" + hex.EncodeToString(rgb[:])
 }

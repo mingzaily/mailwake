@@ -81,7 +81,9 @@ func TestReadBodyPreservesDecorativeEmailStructure(t *testing.T) {
 		t.Fatal("background layers reordered")
 	}
 	visible := readBody(t, htmlMessage(strings.Replace(string(raw), `aria-hidden="true"`, "", 1)))
-	if strings.Replace(body.HTML, ` aria-hidden="true"`, "", 1) != visible.HTML {
+	scope, _ := contentAttribute(contentElements(t, body.HTML, "mailwake-html")[0], "data-mailwake-scope")
+	visibleScope, _ := contentAttribute(contentElements(t, visible.HTML, "mailwake-html")[0], "data-mailwake-scope")
+	if strings.Replace(strings.ReplaceAll(body.HTML, scope, "message-scope"), ` aria-hidden="true"`, "", 1) != strings.ReplaceAll(visible.HTML, visibleScope, "message-scope") {
 		t.Fatal("ARIA changed visual markup")
 	}
 }
