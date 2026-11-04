@@ -13,7 +13,7 @@ import (
 // Requested literals share one byte budget; unrelated body sections are drained.
 func (x *connection) fetch(ctx context.Context, code string, set protocol.UIDSet, options *protocol.FetchOptions, budget int64) (map[protocol.UID]*imapclient.FetchMessageBuffer, error) {
 	messages := make(map[protocol.UID]*imapclient.FetchMessageBuffer)
-	err := x.command(ctx, code, func() error {
+	err := x.command(ctx, code, func(context.Context) error {
 		cmd := x.client.Fetch(set, options)
 		defer cmd.Close()
 		for data := cmd.Next(); data != nil; data = cmd.Next() {

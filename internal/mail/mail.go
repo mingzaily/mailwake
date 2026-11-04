@@ -9,6 +9,11 @@ import (
 // CodeAuthFailed marks credentials the provider rejected. Retrying with the same
 // credentials cannot succeed soon and risks locking the account.
 const CodeAuthFailed = "mail_auth_failed"
+const OutlookReauthorize = "outlook_reauthorize"
+
+func RequiresAuthentication(code string) bool {
+	return code == CodeAuthFailed || code == OutlookReauthorize
+}
 
 // Location is the provider identity within one subscribed folder.
 type Location struct {

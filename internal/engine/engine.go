@@ -245,7 +245,7 @@ func (e *Engine) watch(ctx context.Context, folder string) {
 		// Adapter errors are deliberately safe to expose; database errors stay internal.
 		failure := fault.From(err, "request_failed")
 		state, logKey, delay := "reconnecting", "log.folder_reconnecting", backoff+time.Duration(rand.Int64N(int64(backoff/4)+1))
-		if failure.Code == mail.CodeAuthFailed {
+		if mail.RequiresAuthentication(failure.Code) {
 			state, logKey, delay = "auth_required", "log.folder_auth_required", e.authRetry
 		} else {
 			backoff = min(backoff*2, time.Minute)

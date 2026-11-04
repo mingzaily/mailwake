@@ -39,10 +39,12 @@ type Source struct {
 	log                         *slog.Logger
 	dial                        func(context.Context, string, string) (net.Conn, error)
 	startTLS                    bool
+	accessToken                 func(context.Context) (string, error)
 }
 
 // Options configures the transport, STARTTLS and verified TLS roots.
 type Options struct {
+	AccessToken func(context.Context) (string, error)
 	DialContext func(context.Context, string, string) (net.Conn, error)
 	StartTLS    bool
 	RootCAs     *x509.CertPool
@@ -50,6 +52,7 @@ type Options struct {
 
 func NewWithOptions(host string, port int, username, password string, log *slog.Logger, options Options) *Source {
 	s := New(host, port, username, password, log)
+	s.accessToken = options.AccessToken
 	s.dial, s.startTLS, s.tlsConfig.RootCAs = options.DialContext, options.StartTLS, options.RootCAs
 	return s
 }
@@ -121,14 +124,23 @@ func (s *Source) connect(ctx context.Context) (*connection, error) {
 	} else {
 		x.client = imapclient.New(conn, options)
 	}
-	if err := x.command(ctx, "imap_login_failed", func() error { return loginError(x.client.Login(s.username, s.password).Wait()) }); err != nil {
+	if err := x.command(ctx, "imap_login_failed", func(loginCtx context.Context) error {
+		if s.accessToken == nil {
+			return loginError(x.client.Login(s.username, s.password).Wait(), mail.CodeAuthFailed)
+		}
+		token, err := s.accessToken(loginCtx)
+		if err != nil {
+			return err
+		}
+		return loginError(x.client.Authenticate(xoauth2{s.username, token}), mail.OutlookReauthorize)
+	}); err != nil {
 		x.Close()
 		return nil, err
 	}
 	// beta.8 completes Login before invalidating its capability cache. A NOOP
 	// response is a protocol barrier: the login handler has finished, so Caps
 	// joins the automatic refresh (or uses capabilities included in LOGIN).
-	if err := x.command(ctx, "imap_capability_failed", func() error {
+	if err := x.command(ctx, "imap_capability_failed", func(context.Context) error {
 		if err := x.client.Noop().Wait(); err != nil {
 			return err
 		}
@@ -144,7 +156,7 @@ func (s *Source) connect(ctx context.Context) (*connection, error) {
 	if x.caps.Has(protocol.CapID) {
 		version, _ := buildinfo.Current()
 		var rejected *protocol.Error
-		err := x.command(ctx, "imap_id_failed", func() error {
+		err := x.command(ctx, "imap_id_failed", func(context.Context) error {
 			_, err := x.client.ID(&protocol.IDData{
 				Name: "Mailwake", Version: version, Vendor: "Mailwake",
 				SupportURL: "https://github.com/mingzaily/mailwake",
@@ -169,11 +181,14 @@ func (s *Source) connect(ctx context.Context) (*connection, error) {
 
 func (x *connection) Close() error { x.stop(); return x.client.Close() }
 
-// loginError separates a server rejection of the credentials from transport failures.
-func loginError(err error) error {
+func loginError(err error, authCode string) error {
 	var rejected *protocol.Error
 	if errors.As(err, &rejected) && rejected.Type == protocol.StatusResponseTypeNo {
-		return fault.New(mail.CodeAuthFailed)
+		// Some providers reject credentials with a bare NO.
+		switch rejected.Code {
+		case "", protocol.ResponseCodeAuthenticationFailed, protocol.ResponseCodeAuthorizationFailed, protocol.ResponseCodeExpired:
+			return fault.New(authCode)
+		}
 	}
 	return err
 }
@@ -187,7 +202,7 @@ func (s *Source) Folders(ctx context.Context) (*mail.FolderDiscovery, error) {
 	folders := []string{}
 	roles := map[string]string{}
 	names := map[string]string{}
-	err = x.command(ctx, "imap_discovery_failed", func() error {
+	err = x.command(ctx, "imap_discovery_failed", func(context.Context) error {
 		cmd := x.client.List("", "*", &protocol.ListOptions{ReturnSpecialUse: x.caps.Has(protocol.CapSpecialUse)})
 		defer cmd.Close()
 		for item := cmd.Next(); item != nil; item = cmd.Next() {
@@ -251,7 +266,7 @@ func (x *connection) Select(ctx context.Context, folder string) (mail.Session, e
 func (x *connection) selectFolder(ctx context.Context, folder string, readOnly bool) (*session, error) {
 	var rejected *protocol.Error
 	var selected *protocol.SelectData
-	err := x.command(ctx, "imap_folder_open_failed", func() error {
+	err := x.command(ctx, "imap_folder_open_failed", func(context.Context) error {
 		var err error
 		selected, err = x.client.Select(folder, &protocol.SelectOptions{ReadOnly: readOnly}).Wait()
 		if errors.As(err, &rejected) {
@@ -326,7 +341,7 @@ func (s *session) Poll(ctx context.Context, checkpoint string, detectCodes bool)
 		b, _ := json.Marshal(cursor{Validity: s.validity, Next: next})
 		return mail.Batch{Checkpoint: string(b), Reset: checkpoint != ""}, nil
 	}
-	if err := s.command(ctx, "imap_status_failed", func() error { return s.client.Noop().Wait() }); err != nil {
+	if err := s.command(ctx, "imap_status_failed", func(context.Context) error { return s.client.Noop().Wait() }); err != nil {
 		return mail.Batch{}, err
 	}
 	// The search below covers every change reported so far; later reports wake the next Wait.
@@ -429,7 +444,7 @@ func (s *session) baseline(ctx context.Context) (uint32, error) {
 
 func (s *session) search(ctx context.Context, set protocol.UIDSet) ([]protocol.UID, error) {
 	var uids []protocol.UID
-	err := s.command(ctx, "imap_status_failed", func() error {
+	err := s.command(ctx, "imap_status_failed", func(context.Context) error {
 		data, err := s.client.UIDSearch(&protocol.SearchCriteria{UID: []protocol.UIDSet{set}}, nil).Wait()
 		if err != nil {
 			return err
@@ -455,7 +470,7 @@ func (s *session) Wait(ctx context.Context, interval time.Duration) error {
 		}
 	}
 	var cmd *imapclient.IdleCommand
-	err := s.command(ctx, "imap_idle_start_failed", func() error {
+	err := s.command(ctx, "imap_idle_start_failed", func(context.Context) error {
 		var err error
 		cmd, err = s.client.Idle()
 		return err
@@ -469,7 +484,7 @@ func (s *session) Wait(ctx context.Context, interval time.Duration) error {
 	case <-s.updates:
 	case <-timer.C:
 	}
-	return s.command(ctx, "imap_idle_response_failed", func() error {
+	return s.command(ctx, "imap_idle_response_failed", func(context.Context) error {
 		if err := cmd.Close(); err != nil {
 			return fault.New("imap_idle_stop_failed")
 		}

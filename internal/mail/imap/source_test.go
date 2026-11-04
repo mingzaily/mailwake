@@ -589,3 +589,47 @@ func TestCodeDetectionCatchesUpAcrossReconnects(t *testing.T) {
 		t.Fatalf("catch-up did not finish: %+v, %v", caughtUp, err)
 	}
 }
+
+func TestOutlookFolderDiscoveryAuthenticatesWithBearerToken(t *testing.T) {
+	for _, token := range []string{"fixture-access", "expired", "challenged"} {
+		s, _, _, _ := scriptedServer(t, serverOptions{caps: "IMAP4rev1 AUTH=XOAUTH2"})
+		s.accessToken = func(context.Context) (string, error) { return token, nil }
+		s.timeout = time.Second
+		folders, err := s.Folders(t.Context())
+		if token != "fixture-access" {
+			if fault.From(err, "").Code != mail.OutlookReauthorize {
+				t.Fatal("expected reauthorization", err)
+			}
+		} else if err != nil || !slices.Contains(folders.Folders, "Clients") {
+			t.Fatal("discovery", folders, err)
+		}
+	}
+}
+
+func TestLoginDistinguishesServerErrorsFromRejectedCredentials(t *testing.T) {
+	for _, tc := range []struct {
+		method, response, want string
+	}{
+		{"password", "UNAVAILABLE", "imap_login_failed"},
+		{"password", "LIMIT", "imap_login_failed"},
+		{"password", "SERVERBUG", "imap_login_failed"},
+		{"password", "AUTHENTICATIONFAILED", mail.CodeAuthFailed},
+		{"password", "EXPIRED", mail.CodeAuthFailed},
+		{"outlook", "UNAVAILABLE", "imap_login_failed"},
+		{"outlook", "LIMIT", "imap_login_failed"},
+		{"outlook", "SERVERBUG", "imap_login_failed"},
+		{"outlook", "AUTHENTICATIONFAILED", mail.OutlookReauthorize},
+		{"outlook", "AUTHORIZATIONFAILED", mail.OutlookReauthorize},
+	} {
+		t.Run(tc.method+"/"+tc.response, func(t *testing.T) {
+			s, _, _, _ := scriptedServer(t, serverOptions{loginFailure: tc.response})
+			if tc.method == "outlook" {
+				s.accessToken = func(context.Context) (string, error) { return "fixture-access", nil }
+			}
+			_, err := s.Folders(t.Context())
+			if got := fault.From(err, "").Code; got != tc.want {
+				t.Errorf("folder discovery returned %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

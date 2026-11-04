@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -24,6 +25,7 @@ type serverOptions struct {
 	verifyFailure           string
 	silent                  string
 	caps                    string
+	loginFailure            string
 	loginCaps               bool
 	requireID               bool
 	rejectID                bool
@@ -90,7 +92,27 @@ func scriptedServer(t *testing.T, options serverOptions) (*Source, <-chan string
 				}
 				continue
 			}
+			if (command == "LOGIN" || command == "AUTHENTICATE") && options.loginFailure != "" {
+				fmt.Fprintf(conn, "%s NO [%s] login failed\r\n", tag, options.loginFailure)
+				continue
+			}
 			switch command {
+			case "AUTHENTICATE":
+				fmt.Fprint(conn, "+ \r\n")
+				data, err := reader.ReadString('\n')
+				if err != nil {
+					return
+				}
+				plain, err := base64.StdEncoding.DecodeString(strings.TrimSpace(data))
+				if string(plain) == "user=test\x01auth=Bearer challenged\x01\x01" {
+					fmt.Fprint(conn, "+ e30=\r\n")
+					continue
+				}
+				if len(parts) != 3 || parts[2] != "XOAUTH2" || err != nil || string(plain) != "user=test\x01auth=Bearer fixture-access\x01\x01" {
+					fmt.Fprintf(conn, "%s NO authentication failed\r\n", tag)
+					continue
+				}
+				fmt.Fprintf(conn, "%s OK authenticated\r\n", tag)
 			case "LOGIN":
 				if options.loginCaps {
 					fmt.Fprintf(conn, "%s OK [CAPABILITY %s] logged in\r\n", tag, options.caps)
@@ -326,5 +348,31 @@ func TestCommandTimeoutAllowsHealthyIdleWait(t *testing.T) {
 	}
 	if _, err := sess.Poll(ctx, "", false); err != nil {
 		t.Fatalf("completed command deadline closed a healthy connection: %v", err)
+	}
+}
+
+func TestLoginDeadlineStopsWaitingForOutlookToken(t *testing.T) {
+	source, _, _, _ := scriptedServer(t, serverOptions{})
+	source.timeout = 40 * time.Millisecond
+	source.accessToken = func(ctx context.Context) (string, error) {
+		<-ctx.Done()
+		return "", ctx.Err()
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		_, err := source.Folders(ctx)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if fault.From(err, "").Code != "imap_command_timeout" {
+			t.Errorf("login returned %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		cancel()
+		<-done
+		t.Error("token request outlived the IMAP login deadline")
 	}
 }

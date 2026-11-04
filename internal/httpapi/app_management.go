@@ -159,7 +159,7 @@ func appManagementRoutes(r *gin.Engine, admin *gin.RouterGroup, runtime Runtime,
 			respondError(c, 403, fault.New("forbidden"))
 			return
 		}
-		mailboxTestHandler(runtime, func(c *gin.Context, folders *mail.FolderDiscovery) { c.JSON(200, folders) })(c)
+		mailboxes.test(func(c *gin.Context, folders *mail.FolderDiscovery) { c.JSON(200, folders) })(c)
 	})
 	app.Handle("GET", "/mailboxes/:id", "mailboxes", mailboxes.Get)
 	app.Handle("PUT", "/mailboxes/:id", "mailboxes", mailboxes.Update)
@@ -167,7 +167,7 @@ func appManagementRoutes(r *gin.Engine, admin *gin.RouterGroup, runtime Runtime,
 	app.Handle("GET", "/mailboxes/:id/folders", "folders", mailboxes.Folders)
 	app.Handle("GET", "/mailboxes/:id/subscriptions", "folders", mailboxes.Subscriptions)
 	app.Handle("PUT", "/mailboxes/:id/subscriptions", "folders", mailboxes.UpdateSubscriptions)
-	testMailbox := mailboxTestHandler(runtime, func(c *gin.Context, _ *mail.FolderDiscovery) { c.JSON(200, gin.H{"status": "connected"}) })
+	testMailbox := mailboxes.test(func(c *gin.Context, _ *mail.FolderDiscovery) { c.JSON(200, gin.H{"status": "connected"}) })
 	app.Handle("POST", "/mailboxes/test", "mailboxes", testMailbox)
 	app.Handle("POST", "/mailboxes/:id/test", "mailboxes", testMailbox)
 	delivery := deliveryHandlers{runtime: runtime}

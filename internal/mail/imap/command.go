@@ -14,7 +14,7 @@ const commandTimeout = 30 * time.Second
 
 // command bounds the whole exchange, including waiting for the first response
 // byte. Closing the transport also interrupts library reads and writes.
-func (x *connection) command(ctx context.Context, code string, run func() error) error {
+func (x *connection) command(ctx context.Context, code string, run func(context.Context) error) error {
 	commandCtx, cancel := context.WithTimeout(ctx, x.timeout)
 	defer cancel()
 	closed := make(chan struct{})
@@ -22,7 +22,7 @@ func (x *connection) command(ctx context.Context, code string, run func() error)
 		x.conn.Close()
 		close(closed)
 	})
-	err := run()
+	err := run(commandCtx)
 	// Join an expired callback before another command can use this connection.
 	if !stop() {
 		<-closed

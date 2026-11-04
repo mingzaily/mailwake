@@ -190,7 +190,7 @@ func TestMailboxIdentitySeparatesEventIDs(t *testing.T) {
 	}
 	defer store.Close()
 	for i, identity := range []string{"first-mailbox", "second-mailbox"} {
-		if err := store.SaveMailboxRecord(t.Context(), "mbx_test", int64(i), []byte("encrypted"), true); err != nil {
+		if err := store.WriteMailbox(t.Context(), "mbx_test", int64(i), []byte("encrypted"), storage.MailboxChange{ResetCursors: true}); err != nil {
 			t.Fatal(err)
 		}
 		e := New(nil, store, "mbx_test", mail.Subscriptions{Revision: 1}, time.Minute, slog.Default())

@@ -103,7 +103,7 @@ func TestOverBudgetStartupPausesUntilSubscriptionsRepaired(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.SaveMailboxRecord(t.Context(), "mbx_primary", 0, encrypted, false); err != nil {
+	if err := store.WriteMailbox(t.Context(), "mbx_primary", 0, encrypted, storage.MailboxChange{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := seedSubscriptions(t.Context(), store, "mbx_primary", []string{"one", "two"}); err != nil {
@@ -155,7 +155,7 @@ func TestDecryptionFailureStillRejectsStartup(t *testing.T) {
 			} else {
 				encrypted[len(encrypted)-1] ^= 1
 			}
-			if err := store.SaveMailboxRecord(t.Context(), "mbx_primary", 0, encrypted, false); err != nil {
+			if err := store.WriteMailbox(t.Context(), "mbx_primary", 0, encrypted, storage.MailboxChange{}); err != nil {
 				t.Fatal(err)
 			}
 			s, err := newManager(t.Context(), store, vault, slog.Default(), "", nil, nil)

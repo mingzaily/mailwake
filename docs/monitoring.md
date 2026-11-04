@@ -12,6 +12,18 @@ The connection reuses the post-login capability list for both ID and IDLE. With 
 
 A folder rejection with an IMAP response code uses `last_error.code=imap_folder_rejected` and `params.response_code`, such as `UNAVAILABLE` or `NONEXISTENT`. Core keeps only `A-Z`, `0-9`, `-` and `/`, up to 32 characters. The localized message and diagnostics show this sanitized code and omit raw server explanations. An absent or fully filtered code uses `imap_folder_open_failed` without a response-code parameter.
 
+During password or Outlook login, a tagged `NO` with `AUTHENTICATIONFAILED`, `AUTHORIZATIONFAILED` or `EXPIRED` puts monitoring in `auth_required`. Core also uses this state for servers that reject a login with a bare `NO`. Other tagged `NO` codes, including `LIMIT`, `SERVERBUG` and `UNAVAILABLE`, return `imap_login_failed` and use the normal reconnect delay.
+
+### Outlook authorization
+
+The console's Outlook preset uses the registered Mailwake public client and Microsoft's device authorization flow. Enter the mailbox address, sign in with Microsoft, approve access and return to **Test connection**, then **Save changes**. The IMAP probe verifies access to the entered mailbox. Personal Outlook.com accounts must allow IMAP. Microsoft 365 administrators can restrict IMAP, consent or device sign-in through tenant policy.
+
+Core requests `https://outlook.office.com/IMAP.AccessAsUser.All` and `offline_access`. Each Outlook connection uses SASL XOAUTH2 over certificate-verified TLS to `outlook.office365.com:993`. Discovery, monitoring, private message reads and read flags all use that connection path. If Microsoft rejects the grant or the IMAP credentials, Core returns `outlook_reauthorize`. Open the mailbox settings and sign in again. Transient identity-service failures follow the normal reconnect path. Updating authorization for the same mailbox preserves its cursor and subscriptions.
+
+Connections to the same mailbox share one access-token renewal. Waiting for a renewal counts toward the IMAP login deadline. A waiting connection can cancel independently while the active renewal continues.
+
+[Microsoft IMAP OAuth](https://learn.microsoft.com/en-us/exchange/client-developer/legacy-protocols/how-to-authenticate-an-imap-pop-smtp-application-by-using-oauth) · [Device authorization protocol](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-device-code)
+
 ## Behavior
 
 | Situation | Behavior |

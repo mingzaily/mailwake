@@ -1,13 +1,16 @@
 package runtime
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
 	"github.com/mingzaily/mailwake/internal/delivery"
 	"github.com/mingzaily/mailwake/internal/fault"
 	"github.com/mingzaily/mailwake/internal/mail"
+	"github.com/mingzaily/mailwake/internal/outlook"
 	"github.com/mingzaily/mailwake/internal/settings"
+	"golang.org/x/oauth2"
 )
 
 func TestMailboxTargetChangesRequirePasswordBeforeProbeAndPersistence(t *testing.T) {
@@ -125,4 +128,47 @@ func TestBarkTargetChangesRequireKeyBeforeSendingAndPersistence(t *testing.T) {
 	if err != nil || after.Bark.Key != *input.Bark.Key || after.Bark.Endpoint != input.Bark.Endpoint || m.DeliveryView().Revision != revision+1 {
 		t.Fatal("replacement not persisted", err)
 	}
+}
+
+func TestOutlookReauthorizationVerifiesMailboxAndPreservesProgress(t *testing.T) {
+	m, store, _ := managerFixture(t, func(box settings.Mailbox) mail.Source {
+		access, err := box.Outlook.AccessToken(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if access == "rejected" {
+			return &rejectedOutlookSource{}
+		}
+		return &multiSource{}
+	})
+	ctx := t.Context()
+	input := settings.MailboxUpdate{Host: outlook.Host, Port: 993, Username: "owner@example.test", Outlook: &oauth2.Token{AccessToken: "approved", RefreshToken: "first"}}
+	view, err := m.CreateMailbox(ctx, settings.MailboxCreate{MailboxUpdate: input, Folders: mail.RealtimeFolders([]string{"INBOX"})})
+	if err != nil || !view.Outlook {
+		t.Fatal("create", err)
+	}
+	waitFor(t, func() bool { cp, _ := store.Checkpoint(ctx, view.ID, "INBOX"); return cp == "progress" })
+	input.Revision = view.Revision
+	input.Outlook = &oauth2.Token{AccessToken: "rejected", RefreshToken: "wrong"}
+	if err = m.UpdateMailbox(ctx, view.ID, input); fault.From(err, "").Code != mail.OutlookReauthorize {
+		t.Fatal("unverified account replaced a working mailbox", err)
+	}
+	input.Outlook = &oauth2.Token{AccessToken: "renewed", RefreshToken: "second"}
+	if err = m.UpdateMailbox(ctx, view.ID, input); err != nil {
+		t.Fatal("reauthorization", err)
+	}
+	cp, err := store.Checkpoint(ctx, view.ID, "INBOX")
+	if err != nil || cp != "progress" {
+		t.Fatal("lost progress", err)
+	}
+	subs, err := m.Subscriptions(view.ID)
+	if err != nil || len(subs.Folders) != 1 || subs.Folders[0].Name != "INBOX" {
+		t.Fatal("lost subscriptions", err)
+	}
+}
+
+type rejectedOutlookSource struct{ multiSource }
+
+func (*rejectedOutlookSource) Folders(context.Context) (*mail.FolderDiscovery, error) {
+	return nil, fault.New(mail.OutlookReauthorize)
 }

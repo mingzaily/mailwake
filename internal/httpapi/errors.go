@@ -14,6 +14,10 @@ func respondFault(c *gin.Context, err error) {
 
 	status := http.StatusBadRequest
 	switch failure.Code {
+	case "outlook_unavailable", "outlook_sign_in_interrupted":
+		status = http.StatusBadGateway
+	case "outlook_pending":
+		status = http.StatusConflict
 	case "discovery_busy":
 		status = http.StatusTooManyRequests
 		c.Header("Retry-After", "1")

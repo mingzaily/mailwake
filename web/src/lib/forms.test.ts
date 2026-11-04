@@ -46,6 +46,17 @@ test("mailbox validates required label, host and connection limits", () => {
     password: undefined,
     revision: 3,
   });
+  const custom = {
+    ...good,
+    host: " OUTLOOK.Office365.com ",
+    port: 1993,
+    password: "fixture",
+  };
+  expect(mailboxPayload(custom, 3, "fixture-handle")).toEqual({
+    ...custom,
+    host: "OUTLOOK.Office365.com",
+    revision: 3,
+  });
   expect(errorFields.current_password_invalid).toBe("current_password");
   expect(errorFields.setup_code_invalid).toBe("code");
 });

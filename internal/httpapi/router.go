@@ -160,7 +160,8 @@ func New(authService *auth.Service, runtime Runtime, store *storage.Store, log *
 	api.DELETE("/settings/delivery", delivery.Delete)
 	nativeRoutes(api, integrations.Native)
 	appManagementRoutes(r, api, runtime, store, integrations.Management, log)
-	mailboxes := mailboxHandlers{runtime: runtime, includeFolderDisplay: true}
+	mailboxes := mailboxHandlers{runtime: runtime, outlook: &outlookSignIn{}, includeFolderDisplay: true}
+	api.POST("/outlook/sign-in", mailboxes.outlook.start)
 	api.GET("/mailboxes", mailboxes.List)
 	api.POST("/mailboxes", mailboxes.Create)
 	api.GET("/mailboxes/:id", mailboxes.Get)
@@ -169,7 +170,7 @@ func New(authService *auth.Service, runtime Runtime, store *storage.Store, log *
 	api.GET("/mailboxes/:id/folders", mailboxes.Folders)
 	api.GET("/mailboxes/:id/subscriptions", mailboxes.Subscriptions)
 	api.PUT("/mailboxes/:id/subscriptions", mailboxes.UpdateSubscriptions)
-	testMailbox := mailboxTestHandler(runtime, func(c *gin.Context, folders *mail.FolderDiscovery) { c.JSON(200, folders) })
+	testMailbox := mailboxes.test(func(c *gin.Context, folders *mail.FolderDiscovery) { c.JSON(200, folders) })
 	api.POST("/mailboxes/test", testMailbox)
 	api.POST("/mailboxes/:id/test", testMailbox)
 	api.GET("/diagnostics", diagnosticsHandler(runtime, store, log))

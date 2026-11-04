@@ -80,7 +80,11 @@ type Dependencies struct {
 
 func New(ctx context.Context, store *storage.Store, vault *settings.Vault, log *slog.Logger, dependencies Dependencies, options Options) (*Manager, error) {
 	return newManagerWithFactories(ctx, store, vault, log, dependencies, func(m settings.Mailbox) mail.Source {
-		return imapsource.NewWithOptions(m.Host, m.Port, m.Username, m.Password, log.With("mailbox_id", m.ID), imapsource.Options{RootCAs: localtls.Roots(m.Host, options.IMAPRootCAs)})
+		opts := imapsource.Options{RootCAs: localtls.Roots(m.Host, options.IMAPRootCAs)}
+		if m.Outlook != nil {
+			opts.AccessToken = m.Outlook.AccessToken
+		}
+		return imapsource.NewWithOptions(m.Host, m.Port, m.Username, m.Password, log.With("mailbox_id", m.ID), opts)
 	}, func(d settings.Delivery) delivery.Sender {
 		return senderWithOptions(d, options.DeliveryRootCAs)
 	})
@@ -372,7 +376,7 @@ func (m *Manager) UpdateMailbox(ctx context.Context, id string, input settings.M
 	if err := duplicateIdentity(*m.identitySnapshot.Load(), next); err != nil {
 		return err
 	}
-	labelOnly := !invalid && input.Password == nil && next.Host == current.Host && next.Port == current.Port && next.Username == current.Username && next.Limit() == current.Limit()
+	labelOnly := !invalid && input.Outlook == nil && input.Password == nil && next.Host == current.Host && next.Port == current.Port && next.Username == current.Username && next.Limit() == current.Limit()
 	var source mail.Source
 	if !labelOnly {
 		source = b.budget.Wrap(m.newSource(next))

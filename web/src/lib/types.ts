@@ -5,6 +5,7 @@ export type Folder = { name: string; check: Check };
 export type Subscriptions = { revision: number; folders: Folder[] };
 export type Credential = { configured: boolean };
 export type Mailbox = {
+  outlook?: boolean;
   folder_display?: Pick<FolderDiscovery, "folder_roles" | "folder_names">;
   id: string;
   label: string;

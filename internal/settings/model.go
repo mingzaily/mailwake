@@ -12,9 +12,12 @@ import (
 	"github.com/mingzaily/mailwake/internal/fault"
 	"github.com/mingzaily/mailwake/internal/i18n"
 	"github.com/mingzaily/mailwake/internal/mail"
+	"github.com/mingzaily/mailwake/internal/outlook"
+	"golang.org/x/oauth2"
 )
 
 type Mailbox struct {
+	Outlook         *outlook.Grant      `json:"-"`
 	FolderDisplay   *mail.FolderDisplay `json:"folder_display,omitempty"`
 	ID              string              `json:"id"`
 	Label           string              `json:"label"`
@@ -26,13 +29,14 @@ type Mailbox struct {
 	Password        string              `json:"password"`
 }
 type MailboxUpdate struct {
-	Revision        int64   `json:"revision"`
-	Label           *string `json:"label"`
-	ConnectionLimit *int    `json:"connection_limit"`
-	Host            string  `json:"host"`
-	Port            int     `json:"port"`
-	Username        string  `json:"username"`
-	Password        *string `json:"password"`
+	Outlook         *oauth2.Token `json:"-"`
+	Revision        int64         `json:"revision"`
+	Label           *string       `json:"label"`
+	ConnectionLimit *int          `json:"connection_limit"`
+	Host            string        `json:"host"`
+	Port            int           `json:"port"`
+	Username        string        `json:"username"`
+	Password        *string       `json:"password"`
 }
 
 // MailboxCreate persists credentials and the initial subscriptions together.
@@ -56,6 +60,12 @@ func (m Mailbox) validate() error {
 	}
 	if strings.TrimSpace(m.Username) == "" {
 		return fault.New("config_account_required")
+	}
+	if m.Outlook != nil {
+		if m.Host != outlook.Host || m.Port != 993 || strings.ContainsAny(m.Username, "\x00\x01\r\n") {
+			return fault.New("outlook_account_invalid")
+		}
+		return nil
 	}
 	return credential(m.Password)
 }
@@ -155,12 +165,16 @@ func credential(value string) error {
 // Merge applies an update and validates the result.
 func (old Mailbox) Merge(u MailboxUpdate) (Mailbox, error) {
 	// Saved credentials belong to the original server and account.
-	if old.Password != "" && (u.Host != old.Host || u.Port != old.Port || u.Username != old.Username) {
-		if u.Password == nil || credential(*u.Password) != nil {
+	targetChanged := u.Host != old.Host || u.Port != old.Port || u.Username != old.Username
+	if targetChanged && u.Outlook == nil && (u.Password == nil || credential(*u.Password) != nil) {
+		if old.Outlook != nil {
+			return Mailbox{}, fault.New(mail.OutlookReauthorize)
+		}
+		if old.Password != "" {
 			return Mailbox{}, fault.New("mailbox_password_required_for_change")
 		}
 	}
-	m := Mailbox{ID: old.ID, Revision: old.Revision, Label: old.Label, Host: u.Host, Port: u.Port, Username: u.Username, Password: old.Password, ConnectionLimit: old.Limit()}
+	m := Mailbox{Outlook: old.Outlook, ID: old.ID, Revision: old.Revision, Label: old.Label, Host: u.Host, Port: u.Port, Username: u.Username, Password: old.Password, ConnectionLimit: old.Limit()}
 	if u.Label != nil {
 		m.Label = *u.Label
 	}
@@ -175,6 +189,11 @@ func (old Mailbox) Merge(u MailboxUpdate) (Mailbox, error) {
 	}
 	if u.Password != nil {
 		m.Password = *u.Password
+		m.Outlook = nil
+	}
+	if u.Outlook != nil {
+		m.Outlook = outlook.NewGrant(*u.Outlook)
+		m.Password = ""
 	}
 	return m, m.validate()
 }

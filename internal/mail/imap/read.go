@@ -44,7 +44,7 @@ func (s *Source) MarkRead(ctx context.Context, folder string, location mail.Loca
 		return fault.New("message_unavailable")
 	}
 	logging.RequestStage(ctx, "store_seen")
-	err = x.command(ctx, "message_unavailable", func() error {
+	err = x.command(ctx, "message_unavailable", func(context.Context) error {
 		return x.client.Store(protocol.UIDSetNum(protocol.UID(location.UID)), &protocol.StoreFlags{Op: protocol.StoreFlagsAdd, Silent: true, Flags: []protocol.Flag{protocol.FlagSeen}}, nil).Close()
 	})
 	if err != nil {

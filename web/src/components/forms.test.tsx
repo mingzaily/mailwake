@@ -609,3 +609,144 @@ test("subscription revision refresh keeps editing locked until save completion",
       .hasAttribute("disabled"),
   ).toBe(false);
 });
+
+test.each(["preset", "pasted host"])(
+  "Outlook sign-in via %s saves the tested mailbox with its authorization handle",
+  async (entry) => {
+    const saved = vi.fn();
+    const requests: Record<string, unknown>[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url, options) => {
+        requests.push(JSON.parse(options.body));
+        if (url.endsWith("/sign-in"))
+          return response({
+            authorization_id: "fixture-handle",
+            user_code: "DISPLAY",
+            verification_uri: "https://microsoft.com/devicelogin",
+          });
+        if (url.endsWith("/test")) return response({ folders: ["INBOX"] });
+        return response({
+          ...box,
+          outlook: true,
+          host: "outlook.office365.com",
+          username: "owner@example.test",
+        });
+      }),
+    );
+    mount(<MailboxEditor onSaved={saved} />);
+    fireEvent.change(screen.getByLabelText(catalog["ui.label"]), {
+      target: { value: "Work" },
+    });
+    if (entry === "preset") {
+      fireEvent.click(screen.getByRole("button", { name: "Outlook" }));
+    } else {
+      fireEvent.change(screen.getByLabelText(catalog["ui.imap_host"]), {
+        target: { value: "  OUTLOOK.Office365.com " },
+      });
+    }
+    expect(
+      screen.getByRole("button", { name: "Outlook", pressed: true }),
+    ).toBeDefined();
+    expect(screen.queryByLabelText(catalog["ui.mailbox_password"])).toBeNull();
+    const username = screen.getByLabelText(catalog["ui.mailbox_username"]);
+    fireEvent.change(username, { target: { value: "owner@example.test" } });
+    fireEvent.click(
+      screen.getByRole("button", { name: catalog["ui.outlook_sign_in"] }),
+    );
+    expect(
+      (
+        await screen.findByRole("link", { name: catalog["ui.outlook_open"] })
+      ).getAttribute("href"),
+    ).toBe("https://microsoft.com/devicelogin");
+    const testButton = screen.getByRole("button", {
+      name: catalog["ui.test_connection"],
+    });
+    fireEvent.change(username, { target: { value: "other@example.test" } });
+    expect(testButton.hasAttribute("disabled")).toBe(true);
+    fireEvent.change(username, { target: { value: "owner@example.test" } });
+    fireEvent.click(testButton);
+    const save = await screen.findByRole("button", {
+      name: catalog["ui.save"],
+    });
+    await waitFor(() => expect(save.hasAttribute("disabled")).toBe(false));
+    expect(screen.queryByText("DISPLAY")).toBeNull();
+    expect(
+      screen.queryByRole("link", { name: catalog["ui.outlook_open"] }),
+    ).toBeNull();
+    expect(
+      screen
+        .getAllByText(catalog["ui.connection_success"])
+        .some((node) => node.getAttribute("role") === "status"),
+    ).toBe(true);
+    fireEvent.click(save);
+    await waitFor(() => expect(saved).toHaveBeenCalled());
+    for (const body of requests.slice(1)) {
+      expect(body).toMatchObject({
+        outlook_authorization: "fixture-handle",
+        host: "outlook.office365.com",
+        username: "owner@example.test",
+        port: 993,
+      });
+      expect(body).not.toHaveProperty("password");
+    }
+  },
+);
+
+test.each(["outlook_reauthorize", "outlook_sign_in_interrupted"])(
+  "a %s response returns the mailbox to the sign-in step",
+  async (code) => {
+    let finish!: (result: Response) => void;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(
+        () =>
+          new Promise<Response>((resolve) => {
+            finish = resolve;
+          }),
+      ),
+    );
+    mount(<MailboxEditor />);
+    fireEvent.change(screen.getByLabelText(catalog["ui.label"]), {
+      target: { value: "Work" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Outlook" }));
+    fireEvent.change(screen.getByLabelText(catalog["ui.mailbox_username"]), {
+      target: { value: "demo@example.test" },
+    });
+    const signIn = screen.getByRole("button", {
+      name: catalog["ui.outlook_sign_in"],
+    });
+    const probe = screen.getByRole("button", {
+      name: catalog["ui.test_connection"],
+    });
+    const save = screen.getByRole("button", { name: catalog["ui.save"] });
+    fireEvent.click(signIn);
+    expect(signIn.getAttribute("aria-busy")).toBe("true");
+    expect(probe.getAttribute("aria-busy")).toBe("false");
+    finish(
+      response({
+        authorization_id: "first",
+        user_code: "DISPLAY",
+        verification_uri: "https://microsoft.com/devicelogin",
+      }),
+    );
+    await screen.findByText("DISPLAY");
+    fireEvent.click(probe);
+    await waitFor(() => expect(probe.getAttribute("aria-busy")).toBe("true"));
+    expect(save.getAttribute("aria-busy")).toBe("false");
+    finish(
+      response(
+        { error: { code, message: "Sign in again" } },
+        code === "outlook_reauthorize" ? 400 : 502,
+      ),
+    );
+    await screen.findByRole("button", { name: catalog["ui.outlook_sign_in"] });
+    expect(screen.queryByText("DISPLAY")).toBeNull();
+    expect(
+      screen.queryByRole("link", { name: catalog["ui.outlook_open"] }),
+    ).toBeNull();
+    expect(probe.hasAttribute("disabled")).toBe(true);
+    expect(save.hasAttribute("disabled")).toBe(true);
+  },
+);

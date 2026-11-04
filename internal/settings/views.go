@@ -7,6 +7,7 @@ type ConfiguredValue struct {
 	Configured bool `json:"configured"`
 }
 type MailboxView struct {
+	Outlook          bool                `json:"outlook,omitempty"`
 	FolderDisplay    *mail.FolderDisplay `json:"folder_display,omitempty"`
 	ID               string              `json:"id"`
 	Label            string              `json:"label"`
@@ -45,7 +46,7 @@ type DeliveryView struct {
 
 func configured(value string) ConfiguredValue { return ConfiguredValue{Configured: value != ""} }
 func (m Mailbox) View(connections int) MailboxView {
-	return MailboxView{FolderDisplay: m.FolderDisplay, ID: m.ID, Label: m.Label, Revision: m.Revision, ConnectionLimit: m.Limit(), ConnectionsInUse: connections, Host: m.Host, Port: m.Port, Username: m.Username, Password: configured(m.Password)}
+	return MailboxView{Outlook: m.Outlook != nil, FolderDisplay: m.FolderDisplay, ID: m.ID, Label: m.Label, Revision: m.Revision, ConnectionLimit: m.Limit(), ConnectionsInUse: connections, Host: m.Host, Port: m.Port, Username: m.Username, Password: configured(m.Password)}
 }
 func (d Delivery) View() DeliveryView {
 	return DeliveryView{NativePairingID: d.NativePairingID, Revision: d.Revision, Channel: d.Channel, Preview: d.Preview, RetryCount: d.RetryCount, Language: d.Language, Bark: BarkView{Endpoint: d.Bark.Endpoint, Key: configured(d.Bark.Key)}, Pushover: PushoverView{Token: configured(d.Pushover.Token), User: configured(d.Pushover.User)}, Webhook: WebhookView{URL: configured(d.Webhook.URL), Secret: configured(d.Webhook.Secret)}}

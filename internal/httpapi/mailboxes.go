@@ -9,7 +9,13 @@ import (
 
 type mailboxHandlers struct {
 	runtime              MailboxRuntime
+	outlook              *outlookSignIn
 	includeFolderDisplay bool
+}
+
+type mailboxUpdateRequest struct {
+	settings.MailboxUpdate
+	Authorization string `json:"outlook_authorization"`
 }
 
 func (h mailboxHandlers) List(c *gin.Context) {
@@ -25,8 +31,11 @@ func (h mailboxHandlers) List(c *gin.Context) {
 func (h mailboxHandlers) Create(c *gin.Context) { h.create(c, true) }
 
 func (h mailboxHandlers) create(c *gin.Context, allowFolders bool) {
-	var input settings.MailboxCreate
-	if !decodeRequest(c, &input) {
+	var input struct {
+		settings.MailboxCreate
+		Authorization string `json:"outlook_authorization"`
+	}
+	if !decodeRequest(c, &input) || !h.useAuthorization(c, input.Authorization, &input.MailboxUpdate) {
 		return
 	}
 	if len(input.Folders) > 0 && !allowFolders {
@@ -37,13 +46,16 @@ func (h mailboxHandlers) create(c *gin.Context, allowFolders bool) {
 		respondError(c, 400, fault.New("request_invalid"))
 		return
 	}
-	view, err := h.runtime.CreateMailbox(c.Request.Context(), input)
+	view, err := h.runtime.CreateMailbox(c.Request.Context(), input.MailboxCreate)
 	if err != nil {
 		respondFault(c, err)
 		return
 	}
 	if !h.includeFolderDisplay {
 		view.FolderDisplay = nil
+	}
+	if input.Authorization != "" {
+		h.outlook.clear(input.Authorization)
 	}
 	c.JSON(201, view)
 }
@@ -61,27 +73,22 @@ func (h mailboxHandlers) Get(c *gin.Context) {
 }
 
 func (h mailboxHandlers) Update(c *gin.Context) {
-	var input settings.MailboxUpdate
-	if !decodeRequest(c, &input) {
+	var input mailboxUpdateRequest
+	if !decodeRequest(c, &input) || !h.useAuthorization(c, input.Authorization, &input.MailboxUpdate) {
 		return
 	}
 	if input.Revision < 1 {
 		respondError(c, 400, fault.New("request_invalid"))
 		return
 	}
-	if err := h.runtime.UpdateMailbox(c.Request.Context(), c.Param("id"), input); err != nil {
+	if err := h.runtime.UpdateMailbox(c.Request.Context(), c.Param("id"), input.MailboxUpdate); err != nil {
 		respondFault(c, err)
 		return
 	}
-	view, err := h.runtime.Mailbox(c.Param("id"))
-	if err != nil {
-		respondFault(c, err)
-		return
+	if input.Authorization != "" {
+		h.outlook.clear(input.Authorization)
 	}
-	if !h.includeFolderDisplay {
-		view.FolderDisplay = nil
-	}
-	c.JSON(200, view)
+	h.Get(c)
 }
 
 func (h mailboxHandlers) Delete(c *gin.Context) {
@@ -136,15 +143,15 @@ func (h mailboxHandlers) UpdateSubscriptions(c *gin.Context) {
 	c.JSON(202, state)
 }
 
-// mailboxTestHandler shares input validation and probing while each client owns
+// test shares input validation and probing while each client owns
 // its response. App mailbox permission reveals connection success only.
-func mailboxTestHandler(runtime MailboxRuntime, respond func(*gin.Context, *mail.FolderDiscovery)) gin.HandlerFunc {
+func (h mailboxHandlers) test(respond func(*gin.Context, *mail.FolderDiscovery)) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var input settings.MailboxUpdate
-		if !decodeRequest(c, &input) {
+		var input mailboxUpdateRequest
+		if !decodeRequest(c, &input) || !h.useAuthorization(c, input.Authorization, &input.MailboxUpdate) {
 			return
 		}
-		folders, err := runtime.TestMailbox(c.Request.Context(), c.Param("id"), input)
+		folders, err := h.runtime.TestMailbox(c.Request.Context(), c.Param("id"), input.MailboxUpdate)
 		if err != nil {
 			respondFault(c, err)
 			return

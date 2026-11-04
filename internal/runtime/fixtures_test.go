@@ -33,7 +33,7 @@ func newService(ctx context.Context, store *storage.Store, vault *settings.Vault
 		if err != nil {
 			return nil, err
 		}
-		if err := store.SaveMailboxRecord(ctx, "mbx_primary", 0, encrypted, false); err != nil {
+		if err := store.WriteMailbox(ctx, "mbx_primary", 0, encrypted, storage.MailboxChange{}); err != nil {
 			return nil, err
 		}
 	}

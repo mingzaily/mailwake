@@ -17,7 +17,7 @@ func TestMailboxTransactionsAndIndependentRevisions(t *testing.T) {
 	defer s.Close()
 	ctx := t.Context()
 	for _, id := range []string{"mbx_a", "mbx_b"} {
-		if err := s.SaveMailboxRecord(ctx, id, 0, []byte(id), false); err != nil {
+		if err := s.WriteMailbox(ctx, id, 0, []byte(id), MailboxChange{}); err != nil {
 			t.Fatal(err)
 		}
 		if err := s.SaveSubscriptions(ctx, id, mail.Subscriptions{Revision: 2, Folders: mail.RealtimeFolders([]string{"INBOX"})}); err != nil {
@@ -30,7 +30,7 @@ func TestMailboxTransactionsAndIndependentRevisions(t *testing.T) {
 	if err := s.SaveSubscriptions(ctx, "mbx_a", mail.Subscriptions{Revision: 3, Folders: mail.RealtimeFolders([]string{"Archive"})}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SaveMailboxRecord(ctx, "mbx_a", 1, []byte("new"), true); err != nil {
+	if err := s.WriteMailbox(ctx, "mbx_a", 1, []byte("new"), MailboxChange{ResetCursors: true}); err != nil {
 		t.Fatal(err)
 	}
 	if cp, _ := s.Checkpoint(ctx, "mbx_a", "INBOX"); cp != "" {
@@ -39,7 +39,7 @@ func TestMailboxTransactionsAndIndependentRevisions(t *testing.T) {
 	if cp, _ := s.Checkpoint(ctx, "mbx_b", "INBOX"); cp != "progress" {
 		t.Fatal("identity change reset another mailbox")
 	}
-	if err := s.SaveMailboxRecord(ctx, "mbx_a", 1, []byte("stale"), false); fault.From(err, "").Code != "settings_conflict" {
+	if err := s.WriteMailbox(ctx, "mbx_a", 1, []byte("stale"), MailboxChange{}); fault.From(err, "").Code != "settings_conflict" {
 		t.Fatal("stale configuration saved", err)
 	}
 	if err := s.SaveDelivery(ctx, []byte("delivery"), "off", "webhook", false, 0); err != nil {
@@ -66,7 +66,7 @@ func TestMailboxTransactionsAndIndependentRevisions(t *testing.T) {
 	if err != nil || counts.Pending != 2 {
 		t.Fatal("delete removed queued events", counts, err)
 	}
-	if err := s.SaveMailboxRecord(ctx, "mbx_a", 2, []byte("revive"), false); fault.From(err, "").Code != "mailbox_not_found" {
+	if err := s.WriteMailbox(ctx, "mbx_a", 2, []byte("revive"), MailboxChange{}); fault.From(err, "").Code != "mailbox_not_found" {
 		t.Fatal("deleted mailbox revived", err)
 	}
 }
@@ -77,11 +77,11 @@ func TestMailboxLimitInsideTransaction(t *testing.T) {
 	}
 	defer s.Close()
 	for i := 0; i < 20; i++ {
-		if err := s.SaveMailboxRecord(t.Context(), fmt.Sprintf("mbx_%d", i), 0, []byte("encrypted"), false); err != nil {
+		if err := s.WriteMailbox(t.Context(), fmt.Sprintf("mbx_%d", i), 0, []byte("encrypted"), MailboxChange{}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := s.SaveMailboxRecord(t.Context(), "mbx_overflow", 0, []byte("encrypted"), false); fault.From(err, "").Code != "mailbox_limit_exceeded" {
+	if err := s.WriteMailbox(t.Context(), "mbx_overflow", 0, []byte("encrypted"), MailboxChange{}); fault.From(err, "").Code != "mailbox_limit_exceeded" {
 		t.Fatal("accepted twenty-first mailbox", err)
 	}
 	records, err := s.MailboxConfigurations(t.Context())
@@ -101,7 +101,7 @@ func TestCreateMailboxAndInitialFoldersRollbackTogether(t *testing.T) {
 		t.Fatal(err)
 	}
 	folders := []mail.Folder{{Name: "INBOX", Check: "5m"}}
-	if err := s.CreateMailboxRecord(t.Context(), "new", []byte("encrypted"), folders); err == nil {
+	if err := s.WriteMailbox(t.Context(), "new", 0, []byte("encrypted"), MailboxChange{InitialFolders: folders}); err == nil {
 		t.Fatal("expected persistence error")
 	}
 	records, err := s.MailboxConfigurations(t.Context())
@@ -111,7 +111,7 @@ func TestCreateMailboxAndInitialFoldersRollbackTogether(t *testing.T) {
 	if _, err := s.db.ExecContext(t.Context(), "DROP TRIGGER reject_initial_folders"); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.CreateMailboxRecord(t.Context(), "new", []byte("encrypted"), folders); err != nil {
+	if err := s.WriteMailbox(t.Context(), "new", 0, []byte("encrypted"), MailboxChange{InitialFolders: folders}); err != nil {
 		t.Fatal(err)
 	}
 	state, err := s.LoadSubscriptions(t.Context(), "new")

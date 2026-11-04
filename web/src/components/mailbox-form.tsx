@@ -9,7 +9,7 @@ import {
 import { FolderName } from "./folder-name";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
-import { ChevronDown } from "lucide-react";
+import { ArrowUpRight, Check, ChevronDown } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -27,6 +27,9 @@ import { api, APIError } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import {
   mailboxPayload,
+  mailboxConnection,
+  presetHost,
+  outlookHost,
   mailboxSchema,
   type MailboxForm,
 } from "@/lib/mailbox-schema";
@@ -39,9 +42,16 @@ import {
   FieldGroup,
   FieldSet,
   FieldLabel,
+  FieldTitle,
 } from "./ui/field";
 
+type OutlookSignIn = {
+  authorization_id: string;
+  user_code: string;
+  verification_uri: string;
+};
 const imapPresets = [
+  { group: "common", label: "ui.provider_outlook", host: outlookHost },
   { group: "common", label: "ui.provider_qq", host: "imap.qq.com" },
   { group: "common", label: "ui.provider_163", host: "imap.163.com" },
   { group: "common", label: "ui.provider_126", host: "imap.126.com" },
@@ -66,13 +76,8 @@ const imapPresets = [
   },
 ];
 
-function connectionSignature(values: MailboxForm) {
-  return JSON.stringify([
-    values.host,
-    values.port,
-    values.username.trim(),
-    values.password,
-  ]);
+function connectionSignature(values: MailboxForm, authorization?: string) {
+  return JSON.stringify(mailboxConnection(values, authorization));
 }
 
 function mailboxDefaults(mailbox?: Mailbox): MailboxForm {
@@ -109,8 +114,14 @@ export function MailboxEditor({
   const toast = useToast();
   const client = useQueryClient();
   const [error, setError] = useActionError();
-  const [busy, setBusy] = useState(false);
+  const [action, setAction] = useState<
+    "sign-in" | "test" | "save" | "reload"
+  >();
+  const busy = action !== undefined;
   const [mailbox, setMailbox] = useState(latest);
+  const [signIn, setSignIn] = useState<
+    OutlookSignIn & { username: string; mailbox?: string }
+  >();
   const [tested, setTested] = useState<{
     signature: string;
     folders: string[];
@@ -132,6 +143,7 @@ export function MailboxEditor({
   const conflict = !!latest && !!mailbox && latest.revision > mailbox.revision;
   useEffect(() => {
     if (conflict && !isDirty && !isSubmitting && !busy) {
+      setSignIn(undefined);
       reset(mailboxDefaults(latest));
       setMailbox(latest);
       setTested(undefined);
@@ -139,9 +151,10 @@ export function MailboxEditor({
   }, [conflict, isDirty, isSubmitting, busy, latest, reset]);
   async function reloadSettings() {
     if (!reload || busy || isSubmitting) return;
-    setBusy(true);
+    setAction("reload");
     try {
       const current = await reload();
+      setSignIn(undefined);
       reset(mailboxDefaults(current));
       setMailbox(current);
       setTested(undefined);
@@ -149,7 +162,7 @@ export function MailboxEditor({
     } catch (error) {
       setError(error);
     } finally {
-      setBusy(false);
+      setAction(undefined);
     }
   }
   const conflictError = conflict
@@ -159,9 +172,9 @@ export function MailboxEditor({
       })
     : undefined;
   const values = watch();
+  const matchedHost = presetHost(values);
   const selectedPreset = imapPresets.find(
-    (preset) =>
-      preset.host === values.host.trim().toLowerCase() && values.port === 993,
+    (preset) => preset.host === matchedHost,
   );
   function applyPreset(host: string) {
     setValue("host", host, { shouldDirty: true, shouldValidate: true });
@@ -173,8 +186,56 @@ export function MailboxEditor({
       ? undefined
       : 0;
   const overBudget = used !== undefined && used > values.connection_limit - 1;
-  const signature = connectionSignature(values);
+  const outlook = matchedHost === outlookHost;
+  const authorization =
+    outlook &&
+    signIn?.username === values.username.trim() &&
+    signIn.mailbox === mailbox?.id
+      ? signIn
+      : undefined;
+  const signature = connectionSignature(
+    values,
+    authorization?.authorization_id,
+  );
+  const needsSignIn =
+    outlook &&
+    !authorization &&
+    !(mailbox?.outlook && mailbox.username === values.username.trim());
+  async function signInToOutlook() {
+    const username = values.username.trim();
+    if (!username) {
+      fieldError(
+        "username",
+        { message: "config_account_required" },
+        { shouldFocus: true },
+      );
+      return;
+    }
+    setAction("sign-in");
+    setError(undefined);
+    setTested(undefined);
+    try {
+      const device = await api<OutlookSignIn>("/outlook/sign-in", {
+        method: "POST",
+        body: { username, mailbox_id: mailbox?.id },
+      });
+      setSignIn({ ...device, username, mailbox: mailbox?.id });
+    } catch (error) {
+      setError(error);
+    } finally {
+      setAction(undefined);
+    }
+  }
   function failed(error: unknown) {
+    if (
+      error instanceof APIError &&
+      ["outlook_reauthorize", "outlook_sign_in_interrupted"].includes(
+        error.failure.code,
+      )
+    ) {
+      setSignIn(undefined);
+      setTested(undefined);
+    }
     if (error instanceof APIError && errorFields[error.failure.code])
       fieldError(
         errorFields[error.failure.code] as keyof MailboxForm,
@@ -185,7 +246,7 @@ export function MailboxEditor({
   }
   async function test(values: MailboxForm) {
     if (conflict) return;
-    if (!mailbox && !values.password) {
+    if (!outlook && !mailbox && !values.password) {
       fieldError(
         "password",
         { message: t("credential_required") },
@@ -194,15 +255,22 @@ export function MailboxEditor({
       return;
     }
     setError(undefined);
-    setBusy(true);
+    setAction("test");
     setTested(undefined);
     try {
       const result = await api<FolderDiscovery>(
         mailbox ? `/mailboxes/${mailbox.id}/test` : "/mailboxes/test",
-        { method: "POST", body: mailboxPayload(values, mailbox?.revision) },
+        {
+          method: "POST",
+          body: mailboxPayload(
+            values,
+            mailbox?.revision,
+            authorization?.authorization_id,
+          ),
+        },
       );
       setTested({
-        signature: connectionSignature(values),
+        signature: connectionSignature(values, authorization?.authorization_id),
         folders: result.folders,
         roles: result.folder_roles,
         names: result.folder_names,
@@ -211,7 +279,7 @@ export function MailboxEditor({
     } catch (error) {
       failed(error);
     } finally {
-      setBusy(false);
+      setAction(undefined);
     }
   }
   async function save(values: MailboxForm) {
@@ -225,15 +293,24 @@ export function MailboxEditor({
       );
       return;
     }
-    if (!mailbox && tested?.signature !== connectionSignature(values)) {
+    if (
+      !mailbox &&
+      tested?.signature !==
+        connectionSignature(values, authorization?.authorization_id)
+    ) {
       return;
     }
+    setAction("save");
     try {
       const result = await api<Mailbox>(
         mailbox ? `/mailboxes/${mailbox.id}` : "/mailboxes",
         {
           method: mailbox ? "PUT" : "POST",
-          body: mailboxPayload(values, mailbox?.revision),
+          body: mailboxPayload(
+            values,
+            mailbox?.revision,
+            authorization?.authorization_id,
+          ),
         },
       );
       await client.cancelQueries({ queryKey: ["mailboxes"] });
@@ -257,6 +334,7 @@ export function MailboxEditor({
         ["mailboxes", language],
         mergeSavedMailbox,
       );
+      setSignIn(undefined);
       reset(mailboxDefaults(result));
       setMailbox(result);
       await client.invalidateQueries({ queryKey: ["mailboxes"] });
@@ -269,6 +347,8 @@ export function MailboxEditor({
       );
     } catch (error) {
       failed(error);
+    } finally {
+      setAction(undefined);
     }
   }
   const message = (name: keyof MailboxForm) =>
@@ -292,74 +372,15 @@ export function MailboxEditor({
             error={message("label")}
             {...register("label")}
           />
-          <div className="grid grid-cols-1 gap-5 @md/field-group:grid-cols-[minmax(0,1fr)_120px]">
-            <div className="flex flex-col gap-2">
-              <TextField
-                label={t("ui.imap_host")}
-                className="font-mono text-[13px] tabular-nums"
-                autoComplete="off"
-                spellCheck={false}
-                error={message("host")}
-                {...register("host")}
-              />
-              <div
-                role="group"
-                aria-label={t("ui.imap_quick_fill")}
-                className="flex flex-wrap gap-2"
-              >
-                {imapPresets
-                  .filter((preset) => preset.group === "common")
-                  .map((preset) => (
-                    <Button
-                      key={preset.host}
-                      type="button"
-                      variant="preset"
-                      size="xs"
-                      aria-pressed={selectedPreset === preset}
-                      disabled={busy || isSubmitting}
-                      onClick={() => applyPreset(preset.host)}
-                    >
-                      {t(preset.label)}
-                    </Button>
-                  ))}
-                <DropdownMenu modal={false}>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="preset"
-                      size="xs"
-                      disabled={busy || isSubmitting}
-                    >
-                      {selectedPreset && selectedPreset.group !== "common"
-                        ? t(selectedPreset.label)
-                        : t("ui.more_mail_providers")}
-                      <ChevronDown />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start">
-                    {["personal", "business"].map((group, index) => (
-                      <DropdownMenuGroup key={group}>
-                        {index > 0 && <DropdownMenuSeparator />}
-                        <DropdownMenuLabel>
-                          {t(`ui.mail_providers_${group}`)}
-                        </DropdownMenuLabel>
-                        {imapPresets
-                          .filter((preset) => preset.group === group)
-                          .map((preset) => (
-                            <DropdownMenuItem
-                              key={preset.host}
-                              disabled={busy || isSubmitting}
-                              onSelect={() => applyPreset(preset.host)}
-                            >
-                              {t(preset.label)}
-                            </DropdownMenuItem>
-                          ))}
-                      </DropdownMenuGroup>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            </div>
+          <div className="grid grid-cols-1 gap-x-3 gap-y-2 @2xs/field-group:grid-cols-[minmax(0,1fr)_5rem] @md/field-group:grid-cols-[minmax(0,1fr)_7.5rem] @md/field-group:gap-x-5">
+            <TextField
+              label={t("ui.imap_host")}
+              className="font-mono text-[13px] tabular-nums"
+              autoComplete="off"
+              spellCheck={false}
+              error={message("host")}
+              {...register("host")}
+            />
             <TextField
               label={t("ui.imap_port")}
               className="font-mono text-[13px] tabular-nums"
@@ -369,15 +390,121 @@ export function MailboxEditor({
               error={message("port")}
               {...register("port", { valueAsNumber: true })}
             />
+            <div
+              role="group"
+              aria-label={t("ui.imap_quick_fill")}
+              className="col-span-full flex flex-wrap gap-2"
+            >
+              {imapPresets
+                .filter((preset) => preset.group === "common")
+                .map((preset) => (
+                  <Button
+                    key={preset.host}
+                    type="button"
+                    variant="preset"
+                    size="xs"
+                    aria-pressed={selectedPreset === preset}
+                    disabled={busy || isSubmitting}
+                    onClick={() => applyPreset(preset.host)}
+                  >
+                    {t(preset.label)}
+                  </Button>
+                ))}
+              <DropdownMenu modal={false}>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="preset"
+                    size="xs"
+                    disabled={busy || isSubmitting}
+                  >
+                    {selectedPreset && selectedPreset.group !== "common"
+                      ? t(selectedPreset.label)
+                      : t("ui.more_mail_providers")}
+                    <ChevronDown />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  {["personal", "business"].map((group, index) => (
+                    <DropdownMenuGroup key={group}>
+                      {index > 0 && <DropdownMenuSeparator />}
+                      <DropdownMenuLabel>
+                        {t(`ui.mail_providers_${group}`)}
+                      </DropdownMenuLabel>
+                      {imapPresets
+                        .filter((preset) => preset.group === group)
+                        .map((preset) => (
+                          <DropdownMenuItem
+                            key={preset.host}
+                            disabled={busy || isSubmitting}
+                            onSelect={() => applyPreset(preset.host)}
+                          >
+                            {t(preset.label)}
+                          </DropdownMenuItem>
+                        ))}
+                    </DropdownMenuGroup>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
-          <div className="grid grid-cols-1 gap-5 @md/field-group:grid-cols-2">
-            <TextField
-              label={t("ui.mailbox_username")}
-              autoComplete="off"
-              spellCheck={false}
-              error={message("username")}
-              {...register("username")}
-            />
+          <TextField
+            label={t("ui.mailbox_username")}
+            autoComplete="off"
+            spellCheck={false}
+            error={message("username")}
+            {...register("username")}
+          />
+          {outlook ? (
+            <Field>
+              <FieldTitle>{t("ui.outlook_authorization")}</FieldTitle>
+              {authorization && tested?.signature === signature ? (
+                <div
+                  role="status"
+                  className="flex min-h-9 items-center gap-2 text-sm font-medium"
+                >
+                  <Check aria-hidden="true" className="size-4 text-primary" />
+                  {t("ui.connection_success")}
+                </div>
+              ) : authorization ? (
+                <div className="flex flex-col gap-2">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                    <output className="inline-flex min-h-9 items-center rounded-md border border-dashed bg-muted/40 px-3 font-mono text-base font-semibold tracking-wider select-all">
+                      {authorization.user_code}
+                    </output>
+                    <Button
+                      asChild
+                      variant="link"
+                      className="h-auto px-0 whitespace-normal text-start"
+                    >
+                      <a
+                        href={authorization.verification_uri}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {t("ui.outlook_open")}
+                        <ArrowUpRight aria-hidden="true" />
+                      </a>
+                    </Button>
+                  </div>
+                  <FieldDescription>
+                    {t("ui.outlook_code_hint")}
+                  </FieldDescription>
+                </div>
+              ) : (
+                <div>
+                  <BusyButton
+                    type="button"
+                    variant="outline"
+                    busy={action === "sign-in"}
+                    onClick={() => void signInToOutlook()}
+                  >
+                    {t("ui.outlook_sign_in")}
+                  </BusyButton>
+                </div>
+              )}
+            </Field>
+          ) : (
             <TextField
               label={t("ui.mailbox_password")}
               type="password"
@@ -390,7 +517,7 @@ export function MailboxEditor({
               error={message("password")}
               {...register("password")}
             />
-          </div>
+          )}
           <Field data-invalid={overBudget || !!message("connection_limit")}>
             <FieldLabel htmlFor={limitId}>
               {t("ui.connection_limit")}
@@ -425,19 +552,21 @@ export function MailboxEditor({
         <BusyButton
           type="button"
           variant="outline"
-          busy={busy}
-          disabled={isSubmitting || conflict}
+          busy={action === "test"}
+          disabled={busy || isSubmitting || conflict || needsSignIn}
           onClick={() => void handleSubmit(test)()}
         >
           {t("ui.test_connection")}
         </BusyButton>
         <BusyButton
           type="submit"
-          busy={isSubmitting}
+          busy={action === "save"}
           disabled={
             busy ||
+            isSubmitting ||
             conflict ||
             overBudget ||
+            needsSignIn ||
             (!mailbox && tested?.signature !== signature)
           }
         >

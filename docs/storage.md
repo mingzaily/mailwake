@@ -24,6 +24,8 @@ Activity submissions persist `failures` and `next_attempt` alongside the encrypt
 
 Each mailbox is encrypted separately under `mailbox:<id>`, with the full configuration name bound into AES-GCM authentication. Mailbox and channel settings use AES-256-GCM with a random 256-bit `secret.key` (0600). This protects a database leaked on its own; anyone with the complete directory and key can decrypt it. A missing original key makes encrypted configuration unavailable.
 
+An Outlook mailbox stores its refresh token in a separate vault-encrypted configuration record keyed by mailbox ID. Creating, replacing or deleting its grant commits with the mailbox settings. Token rotation compares the previous ciphertext to prevent a stale connection from overwriting a newer grant. Folder display updates and configuration revisions are independent of rotation. Access tokens and pending device sign-ins live in process memory.
+
 Administrator passwords use Argon2id with encoded parameters. Session IDs, setup codes and API tokens are stored as hashes. API tokens appear only in their creation response; the setup code appears only in its startup console line. Settings responses, diagnostics and runtime logs omit credentials. IMAP uses certificate-verified implicit TLS; notification channels use HTTPS with redirects disabled.
 
 ## Outbox payloads and history

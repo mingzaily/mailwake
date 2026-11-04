@@ -97,7 +97,7 @@ func (s *scheduler) failed(folders []mail.Folder, err error) {
 	failure := fault.From(err, "request_failed")
 	delay := s.backoff + time.Duration(rand.Int64N(int64(s.backoff/4)+1))
 	state := "reconnecting"
-	if failure.Code == mail.CodeAuthFailed {
+	if mail.RequiresAuthentication(failure.Code) {
 		delay = s.engine.authRetry
 		state = "auth_required"
 		s.authUntil = time.Now().Add(delay)

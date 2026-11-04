@@ -6,7 +6,9 @@ import (
 	"strings"
 
 	"github.com/mingzaily/mailwake/internal/mail"
+	"github.com/mingzaily/mailwake/internal/outlook"
 	"github.com/mingzaily/mailwake/internal/storage"
+	"golang.org/x/oauth2"
 )
 
 type StoredMailbox struct {
@@ -27,7 +29,17 @@ func (r *Repository) Mailboxes(ctx context.Context) ([]StoredMailbox, error) {
 		}
 		id := strings.TrimPrefix(record.Name, "mailbox:")
 		var m Mailbox
-		invalid := json.Unmarshal(plain, &m) != nil || m.ID != id || m.validate() != nil
+		invalid := json.Unmarshal(plain, &m) != nil || m.ID != id
+		if record.Outlook != nil {
+			name := storage.OutlookCredentialName(id)
+			refresh, err := r.vault.Open(name, record.Outlook)
+			if err != nil {
+				return nil, err
+			}
+			m.Outlook = outlook.NewGrant(oauth2.Token{RefreshToken: string(refresh)})
+			r.bindOutlook(name, m.Outlook, record.Outlook)
+		}
+		invalid = invalid || m.validate() != nil
 		if invalid {
 			m = Mailbox{ID: id}
 		}
@@ -39,20 +51,49 @@ func (r *Repository) Mailboxes(ctx context.Context) ([]StoredMailbox, error) {
 
 // CreateMailboxRecord saves both initial states in one storage transaction.
 func (r *Repository) CreateMailboxRecord(ctx context.Context, next Mailbox, folders []mail.Folder) error {
-	encrypted, err := r.encrypt(storage.MailboxConfigurationName(next.ID), next)
-	if err != nil {
-		return err
-	}
-	return r.store.CreateMailboxRecord(ctx, next.ID, encrypted, folders)
+	return r.writeMailbox(ctx, Mailbox{}, next, 0, folders)
 }
 
-// SaveMailboxRecord stores next if the saved revision still equals revision (0 creates it).
 func (r *Repository) SaveMailboxRecord(ctx context.Context, current, next Mailbox, revision int64) error {
-	encrypted, err := r.encrypt(storage.MailboxConfigurationName(next.ID), next)
+	return r.writeMailbox(ctx, current, next, revision, nil)
+}
+
+func (r *Repository) writeMailbox(ctx context.Context, current, next Mailbox, revision int64, folders []mail.Folder) error {
+	data, err := r.encrypt(storage.MailboxConfigurationName(next.ID), next)
 	if err != nil {
 		return err
 	}
-	return r.store.SaveMailboxRecord(ctx, next.ID, revision, encrypted, current.Identity() != next.Identity())
+	change := storage.MailboxChange{InitialFolders: folders, ResetCursors: revision > 0 && current.Identity() != next.Identity()}
+	name := storage.OutlookCredentialName(next.ID)
+	switch {
+	case next.Outlook == nil && revision > 0:
+		// A password save also repairs an invalid mailbox with a stored grant.
+		change.Outlook = []byte{}
+	case next.Outlook != current.Outlook:
+		change.Outlook, err = r.vault.Seal(name, []byte(next.Outlook.RefreshToken()))
+		if err != nil {
+			return err
+		}
+	}
+	err = r.store.WriteMailbox(ctx, next.ID, revision, data, change)
+	if err == nil && change.Outlook != nil && next.Outlook != nil {
+		r.bindOutlook(name, next.Outlook, change.Outlook)
+	}
+	return err
+}
+
+func (r *Repository) bindOutlook(name string, grant *outlook.Grant, previous []byte) {
+	grant.Bind(func(ctx context.Context, refresh string) error {
+		next, err := r.vault.Seal(name, []byte(refresh))
+		if err != nil {
+			return err
+		}
+		if err := r.store.RotateOutlookCredential(ctx, name, previous, next); err != nil {
+			return err
+		}
+		previous = next
+		return nil
+	})
 }
 
 // SaveDelivery stores next if the saved revision still equals revision.

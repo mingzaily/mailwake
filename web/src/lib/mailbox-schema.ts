@@ -11,6 +11,7 @@ export const mailboxSchema = z.object({
     ),
   host: z
     .string()
+    .trim()
     .min(1, "config_imap_address_invalid")
     .regex(/^[^/\s]+$/, "config_imap_address_invalid"),
   port: z
@@ -27,10 +28,30 @@ export const mailboxSchema = z.object({
     .max(100, "connection_limit_invalid"),
 });
 export type MailboxForm = z.infer<typeof mailboxSchema>;
-export function mailboxPayload(values: MailboxForm, revision?: number) {
+export const outlookHost = "outlook.office365.com";
+export function presetHost({ host, port }: Pick<MailboxForm, "host" | "port">) {
+  return port === 993 ? host.trim().toLowerCase() : undefined;
+}
+export function mailboxConnection(values: MailboxForm, authorization?: string) {
+  const outlook = presetHost(values) === outlookHost;
+  return {
+    host: outlook ? outlookHost : values.host.trim(),
+    port: values.port,
+    username: values.username.trim(),
+    password: outlook ? undefined : values.password || undefined,
+    ...(outlook && authorization
+      ? { outlook_authorization: authorization }
+      : {}),
+  };
+}
+export function mailboxPayload(
+  values: MailboxForm,
+  revision?: number,
+  authorization?: string,
+) {
   return {
     ...values,
-    password: values.password || undefined,
+    ...mailboxConnection(values, authorization),
     ...(revision !== undefined ? { revision } : {}),
   };
 }

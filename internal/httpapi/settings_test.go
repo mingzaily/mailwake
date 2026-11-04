@@ -28,7 +28,7 @@ func TestSettingsHTTPRedactsAllCredentials(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SaveMailboxRecord(t.Context(), "mbx_primary", 0, mailbox, false); err != nil {
+	if err := s.WriteMailbox(t.Context(), "mbx_primary", 0, mailbox, storage.MailboxChange{}); err != nil {
 		t.Fatal(err)
 	}
 	for name, plain := range map[string]string{
