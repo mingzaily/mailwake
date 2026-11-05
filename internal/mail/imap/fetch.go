@@ -68,6 +68,11 @@ func (x *connection) fetch(ctx context.Context, code string, set protocol.UIDSet
 				}
 			}
 			if !set.Contains(part.UID) {
+				// A decoder failure can end the item stream before UID arrives.
+				// Preserve that command error instead of reporting missing metadata.
+				if err := cmd.Close(); err != nil {
+					return err
+				}
 				return fault.New(code)
 			}
 			current := messages[part.UID]

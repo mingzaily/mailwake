@@ -24,6 +24,8 @@ The official App checks Pro for folder discovery and management modifications. R
 
 The owner separately grants `content` for all currently subscribed folders on this Core. `POST /api/v1/app/content` uses the controller credential and verifies content scope, the signed message reference, current subscription and mailbox identity. Body reading is free. HTTP handling lives in `internal/httpapi/app_management.go`; message-reference signatures live in `internal/coreidentity/message_reference.go`. Limits and privacy rules are in [HTML content](../../docs/html-content.md).
 
+The same permission covers the minimal subscription catalog, bounded recent-message pages and per-folder monitoring health. Capability discovery accepts every current App controller and reports its content permission. [App mail reads](../../docs/app-mail.md) defines these fields, signed cursors and resource invalidation rules; management and diagnostics scopes remain separate.
+
 ## Subscription directory and native receiving device
 
 - `GET /api/v1/app/folder-mailboxes` requires `folders` and returns `{mailboxes:[{id,label,revision,connection_limit}]}` without mailbox login or credential fields. Mailbox configuration endpoints continue to require `mailboxes`.

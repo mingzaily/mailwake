@@ -7,6 +7,7 @@ import (
 	"github.com/mingzaily/mailwake/internal/engine"
 	"github.com/mingzaily/mailwake/internal/fault"
 	"github.com/mingzaily/mailwake/internal/mail"
+	"github.com/mingzaily/mailwake/internal/mailview"
 	"github.com/mingzaily/mailwake/internal/settings"
 )
 
@@ -96,3 +97,16 @@ func (r testRuntime) ReadContent(context.Context, coreidentity.MessageReference)
 }
 
 func (r testRuntime) MarkRead(context.Context, coreidentity.MessageReference) error { return nil }
+
+func (testRuntime) MailCapabilities(context.Context) (mailview.Capabilities, error) {
+	return mailview.Capabilities{CoreID: "test-core", MailHistory: mailview.HistoryCapability{Version: 1, WindowDays: 30, MaxPageSize: 100}, MailHealth: mailview.HealthCapability{Version: 1}}, nil
+}
+func (testRuntime) MailFolders(context.Context, mailview.Reader, int, string) (mailview.Page[mailview.Folder], error) {
+	return mailview.Page[mailview.Folder]{CoreID: "test-core", Items: []mailview.Folder{}, Complete: true}, nil
+}
+func (testRuntime) MailHealth(context.Context, mailview.Reader, int, string) (mailview.Page[mailview.Health], error) {
+	return mailview.Page[mailview.Health]{CoreID: "test-core", Items: []mailview.Health{}, Complete: true}, nil
+}
+func (testRuntime) MailMessages(context.Context, mailview.Reader, mailview.MessageRequest) (mailview.Messages, error) {
+	return mailview.Messages{Page: mailview.Page[mailview.Message]{CoreID: "test-core", Items: []mailview.Message{}, Complete: true}}, nil
+}

@@ -15,6 +15,7 @@ This directory contains English technical references for contributors. Installat
 | Browser state, components and CSP | [Console](console.md) |
 | Pairing, encrypted push and revocation synchronization | [Native integration](native-push.md) |
 | Device authorization and resource scopes | [App management](../internal/appmanagement/README.md) |
+| App mail catalog, recent history and monitor health | [App mail reads](app-mail.md) |
 | MIME, HTML, image privacy and content budgets | [HTML content](html-content.md) |
 | SQLite, encryption, schema and persistence | [Storage](storage.md) |
 

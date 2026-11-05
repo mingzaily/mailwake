@@ -24,6 +24,8 @@ Mailbox, delivery and diagnostic handlers depend on the capabilities they use. `
 
 Each protected App registration specifies its method, path, scope and handler together. Authentication resolves the controller once, enforces that scope, and passes the controller explicitly to self-revocation and saved-test limiting. Unknown routes use the standard 404 response. Management authorization and push pairing retain independent lifecycles; selected-target revocation keeps its configuration revision and transaction boundaries.
 
+The [App mail read contract](app-mail.md) defines capability discovery, subscribed-folder catalog pagination, recent metadata scans and live monitor health. The three mail routes require the instance-wide `content` scope and return only current subscribed resources. Runtime signs progress cursors with the existing Core identity and issues the same message references as native notifications. History uses separate bounded IMAP connections; health reads engine state directly.
+
 ## Languages and error codes
 
 English is the default. The API, Web console and notification renderers share the embedded catalogs in `internal/i18n/locales/`. `internal/i18n/languages.json` defines these canonical codes and native names:

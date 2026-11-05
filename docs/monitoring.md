@@ -26,6 +26,8 @@ Connections to the same mailbox share one access-token renewal. Waiting for a re
 
 ## Behavior
 
+The [App mail read contract](app-mail.md) exposes current subscribed-folder health through a separate `content`-authorized endpoint. Its timestamps come from engine lifecycle updates, and it removes unsubscribed state when the desired subscription changes. Historical metadata scans own independent bounded connections and leave monitor checkpoints, notification creation and mailbox flags unchanged.
+
 | Situation | Behavior |
 | --- | --- |
 | Subscribing to a folder | Uses UIDNEXT at the time the folder opens as the baseline and skips existing mail |

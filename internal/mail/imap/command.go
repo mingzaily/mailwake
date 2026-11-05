@@ -34,6 +34,11 @@ func (x *connection) command(ctx context.Context, code string, run func(context.
 		return commandCtx.Err()
 	}
 	if err != nil {
+		// The IMAP parser wraps decoder failures as text. Preserve the history
+		// transport's size failure without inspecting provider-controlled text.
+		if limited, ok := x.conn.(*readLimitConn); ok && limited.exceeded.Load() {
+			return fault.New("sync_page_too_large")
+		}
 		var rejected *protocol.Error
 		if errors.As(err, &rejected) && rejected.Code != "" {
 			logging.RequestResponseCode(ctx, string(rejected.Code))

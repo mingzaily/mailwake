@@ -90,6 +90,7 @@ func appManagementRoutes(r *gin.Engine, admin *gin.RouterGroup, runtime Runtime,
 	})
 
 	app := appRouteRegistrar{group: r.Group(appPrefix), store: store}
+	appMailRoutes(app, runtime)
 	app.HandleController("GET", "/controller", "", func(c *gin.Context, controller storage.AppController) { c.JSON(200, viewController(controller)) })
 	app.HandleController("DELETE", "/controller", "", func(c *gin.Context, controller storage.AppController) {
 		if err := store.DeleteAppController(c.Request.Context(), controller.ID); err != nil {

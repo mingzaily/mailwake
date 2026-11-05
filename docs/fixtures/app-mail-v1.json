@@ -1,0 +1,271 @@
+{
+  "capabilities": {
+    "core_id": "example-core",
+    "mail_history": {
+      "version": 1,
+      "window_days": 30,
+      "max_page_size": 100
+    },
+    "mail_health": {
+      "version": 1
+    },
+    "permissions": {
+      "content": true
+    }
+  },
+  "capabilities_without_content": {
+    "core_id": "example-core",
+    "mail_history": {
+      "version": 1,
+      "window_days": 30,
+      "max_page_size": 100
+    },
+    "mail_health": {
+      "version": 1
+    },
+    "permissions": {
+      "content": false
+    }
+  },
+  "folders": {
+    "core_id": "example-core",
+    "items": [
+      {
+        "mailbox_id": "example-mailbox",
+        "account_id": "example-account",
+        "mailbox_label": "Personal",
+        "folder": "INBOX",
+        "folder_name": "Inbox",
+        "folder_role": "inbox",
+        "subscription_revision": 3
+      },
+      {
+        "mailbox_id": "example-mailbox-2",
+        "account_id": "example-account-2",
+        "mailbox_label": "Example 2",
+        "folder": "INBOX",
+        "folder_name": "Inbox",
+        "folder_role": "inbox",
+        "subscription_revision": 3
+      },
+      {
+        "mailbox_id": "example-mailbox-3",
+        "account_id": "example-account-3",
+        "mailbox_label": "Example 3",
+        "folder": "INBOX",
+        "folder_name": "Inbox",
+        "folder_role": "inbox",
+        "subscription_revision": 3
+      },
+      {
+        "mailbox_id": "example-mailbox-4",
+        "account_id": "example-account-4",
+        "mailbox_label": "Example 4",
+        "folder": "INBOX",
+        "folder_name": "Inbox",
+        "folder_role": "inbox",
+        "subscription_revision": 3
+      },
+      {
+        "mailbox_id": "example-mailbox-5",
+        "account_id": "example-account-5",
+        "mailbox_label": "Example 5",
+        "folder": "INBOX",
+        "folder_name": "Inbox",
+        "folder_role": "inbox",
+        "subscription_revision": 3
+      }
+    ],
+    "complete": true
+  },
+  "messages_empty_continuing": {
+    "core_id": "example-core",
+    "mailbox_id": "example-mailbox",
+    "account_id": "example-account",
+    "folder": "INBOX",
+    "subscription_revision": 3,
+    "window_start": "2026-10-06T12:00:00Z",
+    "window_end": "2026-11-05T12:00:00Z",
+    "uid_validity": 42,
+    "snapshot_max_uid": 9000,
+    "items": [],
+    "next_cursor": "mock-next-page",
+    "complete": false
+  },
+  "messages_complete": {
+    "core_id": "example-core",
+    "mailbox_id": "example-mailbox",
+    "account_id": "example-account",
+    "folder": "INBOX",
+    "subscription_revision": 3,
+    "window_start": "2026-10-06T12:00:00Z",
+    "window_end": "2026-11-05T12:00:00Z",
+    "uid_validity": 42,
+    "snapshot_max_uid": 9000,
+    "items": [
+      {
+        "message_ref": {
+          "core_id": "example-core",
+          "mailbox_id": "example-mailbox",
+          "account_id": "example-account",
+          "folder": "INBOX",
+          "uid_validity": 42,
+          "uid": 8990,
+          "signature": "mock-message-signature"
+        },
+        "sender": "alerts@example.test",
+        "sender_name": "Example alerts",
+        "subject": "A sample message",
+        "received_at": "2026-11-04T09:00:00Z",
+        "is_read": false
+      }
+    ],
+    "complete": true
+  },
+  "health": {
+    "core_id": "example-core",
+    "observed_at": "2026-11-05T12:00:00.123456789Z",
+    "items": [
+      {
+        "mailbox_id": "example-mailbox",
+        "account_id": "example-account",
+        "mailbox_label": "Personal",
+        "folder": "INBOX",
+        "folder_name": "Inbox",
+        "subscription_revision": 3,
+        "state": "healthy",
+        "updated_at": "2026-11-05T11:58:00Z",
+        "check": "5m",
+        "last_checked_at": "2026-11-05T11:57:00Z",
+        "folder_role": "inbox"
+      },
+      {
+        "mailbox_id": "example-mailbox-2",
+        "account_id": "example-account-2",
+        "mailbox_label": "Example 2",
+        "folder": "INBOX",
+        "folder_name": "Inbox",
+        "subscription_revision": 3,
+        "state": "starting",
+        "updated_at": "2026-11-05T11:58:00Z",
+        "check": "realtime",
+        "folder_role": "inbox"
+      },
+      {
+        "mailbox_id": "example-mailbox-3",
+        "account_id": "example-account-3",
+        "mailbox_label": "Example 3",
+        "folder": "INBOX",
+        "folder_name": "Inbox",
+        "subscription_revision": 3,
+        "state": "retrying",
+        "updated_at": "2026-11-05T11:58:00Z",
+        "check": "realtime",
+        "reason_code": "imap_command_timeout",
+        "last_checked_at": "2026-11-05T11:57:00Z",
+        "folder_role": "inbox"
+      },
+      {
+        "mailbox_id": "example-mailbox-4",
+        "account_id": "example-account-4",
+        "mailbox_label": "Example 4",
+        "folder": "INBOX",
+        "folder_name": "Inbox",
+        "subscription_revision": 3,
+        "state": "action_required",
+        "updated_at": "2026-11-05T11:58:00Z",
+        "check": "realtime",
+        "reason_code": "outlook_reauthorize",
+        "folder_role": "inbox"
+      },
+      {
+        "mailbox_id": "example-mailbox-5",
+        "account_id": "example-account-5",
+        "mailbox_label": "Example 5",
+        "folder": "INBOX",
+        "folder_name": "Inbox",
+        "subscription_revision": 3,
+        "state": "paused",
+        "updated_at": "2026-11-05T11:58:00Z",
+        "check": "15m",
+        "reason_code": "configuration_invalid",
+        "folder_role": "inbox"
+      }
+    ],
+    "complete": true
+  },
+  "errors": [
+    {
+      "status": 400,
+      "body": {
+        "error": {
+          "code": "request_invalid",
+          "message": "Synthetic error message."
+        }
+      }
+    },
+    {
+      "status": 401,
+      "body": {
+        "error": {
+          "code": "unauthorized",
+          "message": "Synthetic error message."
+        }
+      }
+    },
+    {
+      "status": 403,
+      "body": {
+        "error": {
+          "code": "content_permission_required",
+          "message": "Synthetic error message."
+        }
+      }
+    },
+    {
+      "status": 404,
+      "body": {
+        "error": {
+          "code": "message_not_found",
+          "message": "Synthetic error message."
+        }
+      }
+    },
+    {
+      "status": 409,
+      "body": {
+        "error": {
+          "code": "sync_cursor_invalid",
+          "message": "Synthetic error message."
+        }
+      }
+    },
+    {
+      "status": 413,
+      "body": {
+        "error": {
+          "code": "sync_page_too_large",
+          "message": "Synthetic error message."
+        }
+      }
+    },
+    {
+      "status": 503,
+      "body": {
+        "error": {
+          "code": "message_unavailable",
+          "message": "Synthetic error message."
+        }
+      }
+    },
+    {
+      "status": 504,
+      "body": {
+        "error": {
+          "code": "message_timeout",
+          "message": "Synthetic error message."
+        }
+      }
+    }
+  ]
+}

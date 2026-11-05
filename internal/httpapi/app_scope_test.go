@@ -53,6 +53,10 @@ func TestAppRoutesEnforceTheirOwnScopes(t *testing.T) {
 		{"POST", "/content", "content", map[string]any{}, 200},
 		{"POST", "/content/read", "content", map[string]any{}, 204},
 		{"GET", "/controller", "", nil, 200},
+		{"GET", "/capabilities", "", nil, 200},
+		{"GET", "/mail/folders", "content", nil, 200},
+		{"GET", "/mail/health", "content", nil, 200},
+		{"POST", "/mail/messages", "content", map[string]any{"mailbox_id": "box", "account_id": "account", "folder": "INBOX"}, 200},
 	}
 	for _, route := range routes {
 		t.Run(route.method+route.path, func(t *testing.T) {

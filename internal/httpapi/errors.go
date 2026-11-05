@@ -36,11 +36,11 @@ func respondFault(c *gin.Context, err error) {
 		status = http.StatusGatewayTimeout
 	case "message_content_invalid":
 		status = http.StatusUnprocessableEntity
-	case "message_too_large":
+	case "message_too_large", "sync_page_too_large":
 		status = http.StatusRequestEntityTooLarge
 	case "message_unavailable", "native_push_unavailable":
 		status = http.StatusServiceUnavailable
-	case "mailbox_duplicate", "setup_complete", "settings_conflict", "subscriptions_conflict":
+	case "mailbox_duplicate", "setup_complete", "settings_conflict", "subscriptions_conflict", "sync_cursor_invalid":
 		status = http.StatusConflict
 	case "unauthorized", "login_credentials_invalid":
 		status = http.StatusUnauthorized

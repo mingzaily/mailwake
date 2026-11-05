@@ -140,3 +140,30 @@ func (s budgetSource) ReadContent(ctx context.Context, folder string, location L
 	defer s.budget.release(false)
 	return s.source.ReadContent(ctx, folder, location)
 }
+
+// History uses one spare slot, leaving the watcher capacity available even while
+// monitoring is reconnecting and has temporarily released its leases.
+func (b *ConnectionBudget) acquireHistory(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.used >= b.limit || b.used > b.watchers {
+		return fault.New("connection_budget_exceeded")
+	}
+	b.used++
+	return nil
+}
+
+func (s budgetSource) ReadHistory(ctx context.Context, folder string, scan HistoryScan) (HistoryBatch, error) {
+	provider, ok := s.source.(HistorySource)
+	if !ok {
+		return HistoryBatch{}, fault.New("message_unavailable")
+	}
+	if err := s.budget.acquireHistory(ctx); err != nil {
+		return HistoryBatch{}, err
+	}
+	defer s.budget.release(false)
+	return provider.ReadHistory(ctx, folder, scan)
+}

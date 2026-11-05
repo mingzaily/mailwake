@@ -19,6 +19,9 @@ import (
 )
 
 type serverOptions struct {
+	searchReply             string
+	verifySearchReply       string
+	uidNext                 uint32
 	lowercasePermanentFlags bool
 	readScenario            string
 	fetchFailure            string
@@ -71,6 +74,7 @@ func scriptedServer(t *testing.T, options serverOptions) (*Source, <-chan string
 		idleTag := ""
 		identified, selected := false, false
 		seenFlag, stored := options.readScenario == "seen", false
+		searches := 0
 		for {
 			line, err := reader.ReadString('\n')
 			if err != nil {
@@ -153,7 +157,11 @@ func scriptedServer(t *testing.T, options serverOptions) (*Source, <-chan string
 				if command == "SELECT" {
 					access = "READ-WRITE"
 				}
-				fmt.Fprintf(conn, "* 0 EXISTS\r\n* OK [UIDVALIDITY 1] epoch\r\n* OK [UIDNEXT 1] next\r\n%s OK [%s] selected\r\n", tag, access)
+				uidNext := options.uidNext
+				if uidNext == 0 {
+					uidNext = 1
+				}
+				fmt.Fprintf(conn, "* 0 EXISTS\r\n* OK [UIDVALIDITY 1] epoch\r\n* OK [UIDNEXT %d] next\r\n%s OK [%s] selected\r\n", uidNext, tag, access)
 			case "FETCH":
 				failure := options.fetchFailure
 				if stored {
@@ -204,7 +212,15 @@ func scriptedServer(t *testing.T, options serverOptions) (*Source, <-chan string
 			case "CAPABILITY":
 				fmt.Fprintf(conn, "* CAPABILITY %s\r\n%s OK capabilities\r\n", options.caps, tag)
 			case "SEARCH":
-				fmt.Fprintf(conn, "* SEARCH 1\r\n%s OK search\r\n", tag)
+				reply := options.searchReply
+				if searches > 0 && options.verifySearchReply != "" {
+					reply = options.verifySearchReply
+				}
+				searches++
+				if reply == "" {
+					reply = "* SEARCH 1"
+				}
+				fmt.Fprintf(conn, "%s\r\n%s OK search\r\n", strings.ReplaceAll(reply, "{tag}", tag), tag)
 			case "IDLE":
 				idleTag = tag
 				fmt.Fprint(conn, "+ idling\r\n")

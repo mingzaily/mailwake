@@ -29,6 +29,7 @@ type FolderStatus struct {
 	MailboxLabel string       `json:"mailbox_label"`
 	Folder       string       `json:"folder"`
 	State        string       `json:"state"`
+	UpdatedAt    time.Time    `json:"updated_at"`
 	Check        string       `json:"check"`
 	NextCheck    *time.Time   `json:"next_check,omitempty"`
 	Mode         string       `json:"mode,omitempty"`
@@ -77,34 +78,42 @@ func New(source mail.Source, store Store, account string, subscriptions mail.Sub
 	e.connectionLimit = mail.DefaultConnectionLimit
 	e.eventNamespace = account
 	for _, f := range subscriptions.Folders {
-		e.status[f.Name] = FolderStatus{Folder: f.Name, State: "connecting"}
+		e.status[f.Name] = FolderStatus{Folder: f.Name, State: "connecting", UpdatedAt: time.Now().UTC()}
 	}
 	return e
 }
 
 func (e *Engine) Status() []FolderStatus {
+	_, items := e.StatusSnapshot()
+	return items
+}
+
+// StatusSnapshot binds the returned folders to their subscription revision.
+func (e *Engine) StatusSnapshot() (int64, []FolderStatus) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	items := make([]FolderStatus, 0, len(e.subscriptions.Folders))
 	for _, f := range e.subscriptions.Folders {
-		status, ok := e.status[f.Name]
-		if !ok {
-			status = FolderStatus{Folder: f.Name, State: "connecting"}
-		}
+		status := e.status[f.Name]
 		status.MailboxID, status.MailboxLabel, status.Check = e.account, e.label, f.Check
 		if f.Check == mail.Realtime {
 			status.NextCheck = nil
 		}
 		items = append(items, status)
 	}
-	return items
+	return e.subscriptions.Revision, items
 }
 
 func (e *Engine) update(folder string, fn func(*FolderStatus)) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	s := e.status[folder]
+	s, subscribed := e.status[folder]
+	if !subscribed {
+		// An unsubscribed worker may finish after the desired state is saved.
+		return
+	}
 	fn(&s)
+	s.UpdatedAt = time.Now().UTC()
 	e.status[folder] = s
 }
 
@@ -162,17 +171,6 @@ func (e *Engine) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		}
-		desiredNames := make(map[string]bool, len(desired.Folders))
-		for _, f := range desired.Folders {
-			desiredNames[f.Name] = true
-		}
-		e.mu.Lock()
-		for name := range e.status {
-			if !desiredNames[name] {
-				delete(e.status, name)
-			}
-		}
-		e.mu.Unlock()
 		for name := range realtime {
 			if _, exists := workers[name]; exists {
 				continue
@@ -217,6 +215,18 @@ func (e *Engine) UpdateSubscriptions(ctx context.Context, requested mail.Subscri
 	}
 	e.mu.Lock()
 	e.subscriptions = next
+	active := make(map[string]bool, len(folders))
+	for _, folder := range folders {
+		active[folder.Name] = true
+		if _, exists := e.status[folder.Name]; !exists {
+			e.status[folder.Name] = FolderStatus{Folder: folder.Name, State: "connecting", UpdatedAt: time.Now().UTC()}
+		}
+	}
+	for name := range e.status {
+		if !active[name] {
+			delete(e.status, name)
+		}
+	}
 	e.mu.Unlock()
 	select {
 	case e.changed <- struct{}{}:

@@ -72,6 +72,10 @@ type connection struct {
 }
 
 func (s *Source) connect(ctx context.Context) (*connection, error) {
+	return s.connectWithReadLimit(ctx, 0)
+}
+
+func (s *Source) connectWithReadLimit(ctx context.Context, limit int64) (*connection, error) {
 	d := tls.Dialer{NetDialer: &net.Dialer{Timeout: 15 * time.Second}, Config: s.tlsConfig}
 	var conn net.Conn
 	var err error
@@ -95,6 +99,9 @@ func (s *Source) connect(ctx context.Context) (*connection, error) {
 	}
 	if err != nil {
 		return nil, fault.New("imap_connection_failed")
+	}
+	if limit > 0 {
+		conn = &readLimitConn{Conn: conn, remaining: limit}
 	}
 	x := &connection{conn: conn, timeout: s.timeout, updates: make(chan struct{}, 1)}
 	options := &imapclient.Options{

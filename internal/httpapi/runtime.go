@@ -7,6 +7,7 @@ import (
 	"github.com/mingzaily/mailwake/internal/engine"
 	"github.com/mingzaily/mailwake/internal/fault"
 	"github.com/mingzaily/mailwake/internal/mail"
+	"github.com/mingzaily/mailwake/internal/mailview"
 	"github.com/mingzaily/mailwake/internal/settings"
 )
 
@@ -16,8 +17,15 @@ type Runtime interface {
 	MailboxRuntime
 	DeliveryRuntime
 	DiagnosticsRuntime
+	MailReadRuntime
 	MarkRead(context.Context, coreidentity.MessageReference) error
 	ReadContent(context.Context, coreidentity.MessageReference) (mail.Body, error)
+}
+type MailReadRuntime interface {
+	MailCapabilities(context.Context) (mailview.Capabilities, error)
+	MailFolders(context.Context, mailview.Reader, int, string) (mailview.Page[mailview.Folder], error)
+	MailHealth(context.Context, mailview.Reader, int, string) (mailview.Page[mailview.Health], error)
+	MailMessages(context.Context, mailview.Reader, mailview.MessageRequest) (mailview.Messages, error)
 }
 type MailboxRuntime interface {
 	Mailboxes() []settings.MailboxView
