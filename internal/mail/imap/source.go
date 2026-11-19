@@ -415,6 +415,10 @@ func (s *session) Poll(ctx context.Context, checkpoint string, detectCodes bool)
 			if int64(len(raw)) == item.RFC822Size && item.RFC822Size <= maxCodeMessageBytes {
 				if parsed, err := content.Extract(bytes.NewReader(raw), msg.Subject); err == nil {
 					msg.Code = parsed.Code
+					if parsed.CodeLifetime > 0 {
+						expiry := msg.ReceivedAt.Add(parsed.CodeLifetime)
+						msg.CodeExpiresAt = &expiry
+					}
 				}
 			}
 		}

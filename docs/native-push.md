@@ -33,7 +33,7 @@ Native notifications carry a Core-signed message reference containing the Core, 
 
 The App calls `POST /api/v1/app/content` over the confirmed HTTPS address with its device-bound controller credential and explicit owner content permission. Reading is free and uses a non-watcher connection from the mailbox budget. Core returns bounded plain text and optional sanitized HTML; the App controls remote image loading. [HTML content](html-content.md) owns MIME selection, read/response limits, error semantics and real-mail acceptance steps. Bodies and images stay in request memory, outside persistent history and diagnostics.
 
-Verification-code events create independent encrypted notification and activity plans in one transaction. Activity failure leaves ordinary notification state unchanged; activities expire 600 seconds after the original received_at. See [App management](../internal/appmanagement/README.md) for authorization and `internal/appmanagement/testdata/` for public signature vectors.
+Verification-code events create independent encrypted notification and activity plans in one transaction. Activity failure leaves ordinary notification state unchanged; activities use the explicit code expiry when present, capped at one hour after received_at; unknown validity uses a 600-second presentation window. See [App management](../internal/appmanagement/README.md) for authorization and `internal/appmanagement/testdata/` for public signature vectors.
 
 ## Pairing revocation synchronization
 
@@ -75,3 +75,7 @@ Expired submissions and failures whose next attempt would reach or exceed the ac
 For a From address without a name, the payload has `"sender": "alerts@example.org"` and omits `sender_name`. Clients decode the name as optional, retain both fields in local history, and use the address as the display fallback. A display name describes the sender; it provides no identity verification. The event and outbox retain the name under the same preview policy as the address. Third-party channel payloads retain their existing schema.
 
 Reading actions use the separate [mailbox read endpoint](html-content.md#mailbox-read-action). Body downloads remain read-only; opening a locally cached body also requires that action to synchronize the mailbox flag.
+
+## Verification-code validity
+
+The [content parser](html-content.md#verification-code-validity) owns recognized Chinese/English validity phrases and unknown-duration rules. The expiry uses the IMAP internal received time plus the parsed duration and persists with the event. Native notification plaintext and activity notification plaintext carry optional RFC3339 `code_expires_at`; third-party channel schemas stay unchanged. Activity identity binds the same expiry, with a one-hour presentation ceiling. Unknown email validity retains the 600-second activity window without claiming a real code expiry. The App retains the actual sender fields while using the mailbox label for its primary source display.

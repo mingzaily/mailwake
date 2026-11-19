@@ -9,18 +9,19 @@ import (
 )
 
 type Notification struct {
-	Location   *mail.Location `json:"location,omitempty"`
-	Test       bool           `json:"test,omitempty"`
-	ID         string         `json:"id"`
-	AccountID  string         `json:"account_id"`
-	MailboxID  string         `json:"mailbox_id"`
-	Account    string         `json:"account"`
-	Folder     string         `json:"folder"`
-	Sender     string         `json:"sender"`
-	SenderName string         `json:"sender_name,omitempty"`
-	Subject    string         `json:"subject"`
-	Code       string         `json:"code,omitempty"`
-	ReceivedAt time.Time      `json:"received_at"`
+	Location      *mail.Location `json:"location,omitempty"`
+	Test          bool           `json:"test,omitempty"`
+	ID            string         `json:"id"`
+	AccountID     string         `json:"account_id"`
+	MailboxID     string         `json:"mailbox_id"`
+	Account       string         `json:"account"`
+	Folder        string         `json:"folder"`
+	Sender        string         `json:"sender"`
+	SenderName    string         `json:"sender_name,omitempty"`
+	Subject       string         `json:"subject"`
+	Code          string         `json:"code,omitempty"`
+	CodeExpiresAt *time.Time     `json:"code_expires_at,omitempty"`
+	ReceivedAt    time.Time      `json:"received_at"`
 }
 
 func ID(account, folder, messageKey string) string {

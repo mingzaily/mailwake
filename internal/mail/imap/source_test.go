@@ -456,8 +456,9 @@ func TestPollDetectsCodesOnDemandAndKeepsMailUnread(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			message := "From: sender@example.org\r\nSubject: Sign in\r\n\r\nYour verification code is 482913\r\n"
-			appended, err := user.Append("Clients", strings.NewReader(message), &protocol.AppendOptions{Time: time.Now()})
+			received := time.Now().Add(-2 * time.Minute).Truncate(time.Second)
+			message := "From: sender@example.org\r\nSubject: Sign in\r\n\r\nYour verification code is 482913. This code expires in 10 min.\r\n"
+			appended, err := user.Append("Clients", strings.NewReader(message), &protocol.AppendOptions{Time: received})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -471,6 +472,14 @@ func TestPollDetectsCodesOnDemandAndKeepsMailUnread(t *testing.T) {
 			}
 			if batch.Messages[0].Code != want {
 				t.Fatalf("code=%q, want %q", batch.Messages[0].Code, want)
+			}
+			expiry := batch.Messages[0].CodeExpiresAt
+			if enabled {
+				if expiry == nil || !expiry.Equal(received.Add(10*time.Minute)) {
+					t.Fatalf("code expiry=%v, want received time plus ten minutes", expiry)
+				}
+			} else if expiry != nil {
+				t.Fatalf("code expiry=%v with detection disabled", expiry)
 			}
 			options := <-requests
 			if enabled {

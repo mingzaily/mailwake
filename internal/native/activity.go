@@ -34,6 +34,9 @@ type activityContent struct {
 
 func (s *Service) planActivities(n event.Notification, devices []storage.NativePairing, identity *coreidentity.Identity, audience string) ([]storage.NativeActivity, error) {
 	expiresAt := n.ReceivedAt.Unix() + 600
+	if n.CodeExpiresAt != nil {
+		expiresAt = min(n.CodeExpiresAt.Unix(), n.ReceivedAt.Unix()+3600)
+	}
 	if n.Test || n.Code == "" || expiresAt <= time.Now().Unix() {
 		return nil, nil
 	}

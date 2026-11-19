@@ -22,13 +22,14 @@ type Location struct {
 }
 
 type Message struct {
-	Location   *Location
-	Key        string
-	SenderName string
-	Sender     string
-	Subject    string
-	Code       string
-	ReceivedAt time.Time
+	Location      *Location
+	Key           string
+	SenderName    string
+	Sender        string
+	Subject       string
+	Code          string
+	CodeExpiresAt *time.Time
+	ReceivedAt    time.Time
 }
 
 // Batch includes the checkpoint that becomes valid after Messages are persisted.

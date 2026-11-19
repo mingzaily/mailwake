@@ -17,16 +17,17 @@ import (
 func (s *Service) Channel() string { return "native" }
 
 type plaintext struct {
-	MessageRef *coreidentity.MessageReference `json:"message_ref,omitempty"`
-	V          int                            `json:"v"`
-	MailboxID  string                         `json:"mailbox_id,omitempty"`
-	Account    string                         `json:"account"`
-	Folder     string                         `json:"folder"`
-	Sender     string                         `json:"sender"`
-	SenderName string                         `json:"sender_name,omitempty"`
-	Subject    string                         `json:"subject"`
-	Code       string                         `json:"code,omitempty"`
-	ReceivedAt string                         `json:"received_at"`
+	MessageRef    *coreidentity.MessageReference `json:"message_ref,omitempty"`
+	V             int                            `json:"v"`
+	MailboxID     string                         `json:"mailbox_id,omitempty"`
+	Account       string                         `json:"account"`
+	Folder        string                         `json:"folder"`
+	Sender        string                         `json:"sender"`
+	SenderName    string                         `json:"sender_name,omitempty"`
+	Subject       string                         `json:"subject"`
+	Code          string                         `json:"code,omitempty"`
+	CodeExpiresAt *time.Time                     `json:"code_expires_at,omitempty"`
+	ReceivedAt    string                         `json:"received_at"`
 }
 
 func notificationPlain(n event.Notification) ([]byte, error) {
@@ -42,7 +43,7 @@ func newPlaintext(n event.Notification, reference *coreidentity.MessageReference
 		V: 1, MessageRef: reference,
 		MailboxID: n.MailboxID, Account: n.Account, Folder: n.Folder,
 		Sender: n.Sender, SenderName: n.SenderName,
-		Subject: n.Subject, Code: n.Code,
+		Subject: n.Subject, Code: n.Code, CodeExpiresAt: n.CodeExpiresAt,
 		ReceivedAt: n.ReceivedAt.UTC().Format(time.RFC3339Nano),
 	}
 }

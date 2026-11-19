@@ -7,6 +7,7 @@ import (
 	"io"
 	"mime"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	_ "github.com/emersion/go-message/charset" // registers legacy charsets such as GBK and Big5
@@ -28,6 +29,8 @@ type Result struct {
 	Excerpt string
 	// Code is a detected verification code, or empty.
 	Code string
+	// CodeLifetime is the explicit validity duration, or zero when unknown.
+	CodeLifetime time.Duration
 }
 
 // Extract parses a message and derives its readable text, excerpt and verification code.
@@ -39,7 +42,9 @@ func Extract(raw io.Reader, subject string) (Result, error) {
 	}
 	truncated := len(text) > MaxTextBytes
 	text = clip(text, MaxTextBytes)
-	return Result{Truncated: truncated, Text: text, Excerpt: excerpt(text, ExcerptBytes), Code: DetectCode(subject, text)}, nil
+	code := DetectCode(subject, text)
+	return Result{Truncated: truncated, Text: text, Excerpt: excerpt(text, ExcerptBytes), Code: code,
+		CodeLifetime: codeLifetime(subject, text, code)}, nil
 }
 
 func readableText(raw io.Reader) (string, error) {

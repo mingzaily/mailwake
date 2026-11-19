@@ -13,6 +13,16 @@
 
 `text` and `truncated` are required. `html` is optional (clients also accept null). HTML responses always include `has_remote_images`; Core emits false when HTML is omitted. The HTTP response uses `Cache-Control: no-store`.
 
+## Verification-code validity
+
+The notification parser derives code validity from the decoded subject and selected readable body. It uses plain text when available and HTML converted to text otherwise. Whitespace normalization includes line breaks and nonbreaking spaces; MIME transfer encoding and character-set decoding happen before duration detection.
+
+Recognized phrases describe a code, an explicit code-entry deadline, or a standalone validity clause. English forms include `expires in/after`, `valid/active/good for`, `remain active/valid for`, `Code validity:`, and `enter/use ... code within`. Simplified and traditional Chinese forms include `有效期为/為`, `分钟内有效/分鐘內有效`, `将在…后失效`, and `请在…内输入验证码`. An English `It expires` statement requires an immediately preceding code-value statement. Link/session subjects and resend/support intervals keep their own meaning.
+
+Durations use positive whole ASCII numbers in seconds, minutes or hours. English unit spellings include `s/sec/secs/second/seconds`, `m/min/mins/minute/minutes`, and `h/hr/hrs/hour/hours`, case-insensitively. Equal durations in different units agree. Conflicting recognized durations, zero/negative values, numeric overflow, decimals, ranges and compound durations keep expiry unknown. Number words, fullwidth numbers and absolute clock deadlines are outside the supported grammar. The parser keeps complete numeric expressions together so a suffix such as the `5` in `1.5` becomes part of the unknown expression.
+
+Synthetic cases in `internal/content/code_validity_test.go` exercise these rules through `Extract`, including MIME variants and unrelated link/session lifetimes. Published phrasing references include the [Duende SMTP OTP template](https://docs.duendesoftware.com/identityserver/identity/user-management/reference/smtp-otp-sender/) and [Logto email template](https://docs.logto.io/connectors/email-connectors/email-templates). [Native push](native-push.md#verification-code-validity) owns persistence, encrypted expiry fields and activity presentation limits.
+
 ## MIME and privacy
 
 Core reads `BODYSTRUCTURE` on a short-lived, read-only IMAP connection, selects the display representations, and fetches their transfer-encoded bytes with `BODY.PEEK[part]`. CID images are fetched from the current message only when the sanitized presentation references them. Ordinary attachments, unused alternatives and unreferenced images are skipped. The total mailbox message may be larger than 1 MiB. The mailbox's unread flags and monitoring cursor stay unchanged. MIME transfer encodings and character sets are decoded. `multipart/alternative` selects the last supported plain and HTML representations. A `multipart/related` presentation uses its `start` root or first part; its CID namespace belongs to that presentation. Named attachments and forwarded messages stay outside the displayed body. HTML-only messages receive a readable text fallback with paragraphs, lists and safe links.

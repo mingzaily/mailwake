@@ -47,7 +47,8 @@ func TestSenderNameSurvivesPersistenceAndEncryptedDelivery(t *testing.T) {
 			if err := store.SaveDelivery(t.Context(), []byte("synthetic"), "subject", "native", false, 0); err != nil {
 				t.Fatal(err)
 			}
-			notification := event.Notification{ID: "sender-event", MailboxID: "mailbox", Account: "Work", Folder: "Clients", Sender: "sender@example.org", SenderName: name, Subject: "Hello", ReceivedAt: time.Now()}
+			expiry := time.Now().Add(5 * time.Minute)
+			notification := event.Notification{ID: "sender-event", MailboxID: "mailbox", Account: "Work", Folder: "Clients", Sender: "sender@example.org", SenderName: name, Subject: "Hello", ReceivedAt: time.Now(), Code: "482913", CodeExpiresAt: &expiry}
 			if err := store.Commit(t.Context(), "account", "Clients", "", "next", []event.Notification{notification}); err != nil {
 				t.Fatal(err)
 			}
@@ -73,6 +74,9 @@ func TestSenderNameSurvivesPersistenceAndEncryptedDelivery(t *testing.T) {
 			}
 			if delivered.Sender != notification.Sender || delivered.SenderName != name {
 				t.Fatalf("decrypted sender: %+v", delivered)
+			}
+			if delivered.CodeExpiresAt == nil || !delivered.CodeExpiresAt.Equal(expiry) {
+				t.Fatal("notification expiry differs after persistence and encryption")
 			}
 			var fields map[string]any
 			if err := json.Unmarshal(raw, &fields); err != nil {
@@ -101,6 +105,9 @@ func TestSenderNameSurvivesPersistenceAndEncryptedDelivery(t *testing.T) {
 			}
 			if activity.Notification.SenderName != name || activity.Notification.Sender != notification.Sender {
 				t.Fatal("activity sender differs")
+			}
+			if request.ExpiresAt != expiry.Unix() || activity.ExpiresAt != expiry.Unix() || activity.Notification.CodeExpiresAt == nil || !activity.Notification.CodeExpiresAt.Equal(expiry) {
+				t.Fatal("activity expiry differs from the encrypted notification")
 			}
 		})
 	}
