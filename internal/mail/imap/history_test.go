@@ -29,8 +29,8 @@ func TestHistoryKeepsFixedWindowAndUIDSnapshotWithoutReadingBodies(t *testing.T)
 		if i == 2 {
 			flags = []protocol.Flag{protocol.FlagSeen, protocol.FlagFlagged}
 		}
-		// The Date header deliberately disagrees with INTERNALDATE.
-		raw := fmt.Sprintf("From: =?UTF-8?B?5rWL6K+V?= <sender@example.test>\r\nSubject: message %d\r\nDate: Thu, 01 Jan 1970 00:00:00 +0000\r\n\r\nprivate body", i+1)
+		// The Date header deliberately disagrees with INTERNALDATE; the encoded name keeps its quotes.
+		raw := fmt.Sprintf("From: =?UTF-8?B?Iua1i+ivlSI=?= <sender@example.test>\r\nSubject: message %d\r\nDate: Thu, 01 Jan 1970 00:00:00 +0000\r\n\r\nprivate body", i+1)
 		added, err := user.Append("Clients", strings.NewReader(raw), &protocol.AppendOptions{Time: at.In(time.FixedZone("offset", -11*60*60)), Flags: flags})
 		if err != nil {
 			t.Fatal(err)

@@ -408,7 +408,7 @@ func (s *session) Poll(ctx context.Context, checkpoint string, detectCodes bool)
 		msg := mail.Message{Location: &mail.Location{UIDValidity: s.validity, UID: uint32(uid)}, Key: fmt.Sprintf("%d:%d", s.validity, uid), ReceivedAt: item.InternalDate, Subject: item.Envelope.Subject}
 		if len(item.Envelope.From) > 0 {
 			msg.Sender = item.Envelope.From[0].Addr()
-			msg.SenderName = item.Envelope.From[0].Name
+			msg.SenderName = mail.DisplayName(item.Envelope.From[0].Name)
 		}
 		if detectCodes {
 			raw := item.FindBodySection(section)

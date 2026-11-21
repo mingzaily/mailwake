@@ -113,7 +113,7 @@ func (s *Source) ReadHistory(ctx context.Context, folder string, scan mail.Histo
 		}
 		if len(v.Envelope.From) > 0 {
 			item.Sender = historyText(v.Envelope.From[0].Addr(), 512)
-			item.SenderName = historyText(v.Envelope.From[0].Name, 512)
+			item.SenderName = historyText(mail.DisplayName(v.Envelope.From[0].Name), 512)
 		}
 		result.Messages = append(result.Messages, item)
 	}

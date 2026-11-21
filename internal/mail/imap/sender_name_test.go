@@ -9,7 +9,7 @@ import (
 	"golang.org/x/text/encoding/simplifiedchinese"
 )
 
-func TestFromNamePreservesAddressAndDecodesHeaders(t *testing.T) {
+func TestFromNamePreservesAddressDecodesHeadersAndRemovesQuotes(t *testing.T) {
 	gbk, err := simplifiedchinese.GBK.NewEncoder().String("账单提醒")
 	if err != nil {
 		t.Fatal(err)
@@ -20,6 +20,9 @@ func TestFromNamePreservesAddressAndDecodesHeaders(t *testing.T) {
 		{"通知中心 <sender@example.org>", "通知中心"},
 		{"=?UTF-8?B?" + base64.StdEncoding.EncodeToString([]byte("通知中心")) + "?= <sender@example.org>", "通知中心"},
 		{"=?GBK?B?" + base64.StdEncoding.EncodeToString([]byte(gbk)) + "?= <sender@example.org>", "账单提醒"},
+		{`"Cindy" <sender@example.org>`, "Cindy"},
+		{`"\"Cindy\"" <sender@example.org>`, "Cindy"},
+		{"=?UTF-8?B?" + base64.StdEncoding.EncodeToString([]byte(`"Cindy"`)) + "?= <sender@example.org>", "Cindy"},
 	} {
 		t.Run(tc.from, func(t *testing.T) {
 			source, user := fixture(t)
