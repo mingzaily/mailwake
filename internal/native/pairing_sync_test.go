@@ -33,7 +33,7 @@ func TestPairingSyncWithoutDeliveries(t *testing.T) {
 				}
 				w.WriteHeader(tc.status)
 				if tc.status == 200 {
-					json.NewEncoder(w).Encode(relayPairing{pair.ID, tc.state, pair.DeviceID, pair.EncryptionKey})
+					json.NewEncoder(w).Encode(relayPairing{nil, pair.ID, tc.state, pair.DeviceID, pair.EncryptionKey})
 				} else {
 					json.NewEncoder(w).Encode(map[string]any{"error": map[string]string{"code": tc.code}})
 				}
@@ -66,7 +66,7 @@ func TestPairingSyncBackoffAndFairness(t *testing.T) {
 			return
 		}
 		p, _ := store.NativePairing(t.Context(), id)
-		json.NewEncoder(w).Encode(relayPairing{p.ID, "active", p.DeviceID, p.EncryptionKey})
+		json.NewEncoder(w).Encode(relayPairing{nil, p.ID, "active", p.DeviceID, p.EncryptionKey})
 	})
 	for _, id := range []string{"one", "two", "three"} {
 		addDevice(t, store, id, "key")

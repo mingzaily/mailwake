@@ -130,6 +130,7 @@ func (s *Service) send(ctx context.Context, n event.Notification, pairingID stri
 		return err
 	}
 	var devices []storage.NativePairing
+	var activityPlan []storage.NativeActivity
 	if len(items) == 0 {
 		if pairingID == "" {
 			return &delivery.Failure{Code: "native_target_required"}
@@ -178,11 +179,25 @@ func (s *Service) send(ctx context.Context, n event.Notification, pairingID stri
 			items = append(items, storage.NativeDelivery{EventID: n.ID, PairingID: p.ID, DeviceName: p.DeviceName, Envelope: string(raw), Signature: signature, ExpiresAt: expiresAt, State: "pending"})
 		}
 		activities, activityErr := s.planActivities(n, devices, identity, info.Audience)
+		activityPlan = activities
 		if activityErr != nil {
 			s.log.Warn("Activity planning failed", "code", safeCode(activityErr))
 		}
 		if err = s.store.SaveNativePlan(ctx, items, activities...); err != nil {
 			return err
+		}
+	}
+	for _, p := range devices {
+		activityID, err := s.tryActivityOnly(ctx, n, p, activityPlan, identity, info.Audience)
+		if err != nil {
+			return err
+		}
+		if activityID != "" {
+			for i := range items {
+				if items[i].PairingID == p.ID {
+					items[i].RelayID = activityID
+				}
+			}
 		}
 	}
 	var permanent, transient error

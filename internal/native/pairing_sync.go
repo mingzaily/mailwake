@@ -87,7 +87,11 @@ func (s *Service) checkActivePairing(ctx context.Context, p storage.NativePairin
 	}
 	switch result.Status {
 	case "active":
-		return nil
+		preference, err := validatedActivityPreference(p, result, info.Audience)
+		if err != nil {
+			return err
+		}
+		return s.store.SaveActivityPreference(ctx, preference)
 	case "revoked":
 		return s.revoke(ctx, p.ID)
 	default:

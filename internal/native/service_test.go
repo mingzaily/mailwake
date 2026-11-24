@@ -82,7 +82,7 @@ func TestPairingSelectsBeforeRevealingTokenAndResumes(t *testing.T) {
 			w.WriteHeader(503)
 			return
 		}
-		json.NewEncoder(w).Encode(relayPairing{saved.ID, "active", saved.DeviceID, saved.EncryptionKey})
+		json.NewEncoder(w).Encode(relayPairing{nil, saved.ID, "active", saved.DeviceID, saved.EncryptionKey})
 	})
 	created, err := service.Create(ctx)
 	if err != nil {
@@ -237,7 +237,7 @@ func TestRelayKeySubstitutionEndsPairingAndClearsToken(t *testing.T) {
 			json.NewEncoder(w).Encode(map[string]any{"claims": []Claim{claim}})
 			return
 		}
-		json.NewEncoder(w).Encode(relayPairing{p.ID, "active", v.Device.ID, v.Core.PublicKey})
+		json.NewEncoder(w).Encode(relayPairing{nil, p.ID, "active", v.Device.ID, v.Core.PublicKey})
 	})
 	created, err := service.Create(ctx)
 	if err != nil {

@@ -105,3 +105,9 @@ func (s *Store) NativeChecked(ctx context.Context, d NativeDelivery, state, code
 	_, err := s.db.ExecContext(ctx, "UPDATE native_deliveries SET state=?,error_code=?,check_step=?,next_check=? WHERE event_id=? AND pairing_id=? AND check_step=?", state, code, step, next, d.EventID, d.PairingID, d.CheckStep)
 	return err
 }
+
+// APNs accepted the activity; its delivery is complete and needs no ordinary status polling.
+func (s *Store) NativeActivityDelivered(ctx context.Context, eventID, pairingID, relayID string) error {
+	_, err := s.db.ExecContext(ctx, "UPDATE native_deliveries SET relay_id=?,state='accepted',accepted_at=?,next_check=0,envelope='',content_signature='' WHERE event_id=? AND pairing_id=? AND state='pending' AND relay_id=''", relayID, time.Now().UnixMilli(), eventID, pairingID)
+	return err
+}

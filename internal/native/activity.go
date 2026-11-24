@@ -3,6 +3,7 @@ package native
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/mingzaily/mailwake/internal/coreidentity"
@@ -55,7 +56,11 @@ func (s *Service) planActivities(n event.Notification, devices []storage.NativeP
 		request := activityRequest{PairingID: device.ID, ActivityID: n.ID, EventID: n.ID, Event: "start", ReceivedAt: content.ReceivedAt, ExpiresAt: expiresAt, UpdatedAt: content.UpdatedAt}
 		rawContext, _ := json.Marshal([]any{"mailwake-activity-v1", device.ID, n.ID, "start", n.ID, request.ReceivedAt, request.ExpiresAt, request.UpdatedAt})
 		contextID := hash(rawContext)
-		request.Envelope, err = encrypt(audience, device.ID, contextID, device.EncryptionKey, plain)
+		key := device.EncryptionKey
+		if device.ActivityKey != "" {
+			key = device.ActivityKey
+		}
+		request.Envelope, err = encrypt(audience, device.ID, contextID, key, plain)
 		if err != nil {
 			return nil, err
 		}
@@ -161,4 +166,67 @@ func (s *Service) recordActivityResult(ctx context.Context, item storage.NativeA
 		}
 	}
 	return s.store.FinishNativeActivity(ctx, item, "failed")
+}
+
+// Core authenticates the device preference with the signing key saved at pairing.
+func validatedActivityPreference(p storage.NativePairing, result relayPairing, audience string) (storage.NativePairing, error) {
+	p.ActivityKey = ""
+	p.ActivityOnly = false
+	pref := result.Activity
+	if pref == nil {
+		return p, nil
+	}
+	if _, err := coreidentity.PublicKey(pref.Key); err != nil {
+		return p, err
+	}
+	enabled, only := "0", "0"
+	if pref.Enabled {
+		enabled = "1"
+	}
+	if pref.Only {
+		only = "1"
+	}
+	text := strings.Join([]string{"mailwake-activity-key-v1", audience, p.DeviceID, pref.Key, enabled, only}, "\n")
+	if err := coreidentity.Verify(p.SigningKey, pref.Signature, text); err != nil {
+		return p, err
+	}
+	p.ActivityKey = pref.Key
+	p.ActivityOnly = pref.Enabled && pref.Only
+	return p, nil
+}
+
+// Only an explicit APNs acceptance suppresses the ordinary notification.
+func (s *Service) tryActivityOnly(ctx context.Context, n event.Notification, p storage.NativePairing, activities []storage.NativeActivity, identity *coreidentity.Identity, audience string) (string, error) {
+	if !p.ActivityOnly {
+		return "", nil
+	}
+	for _, item := range activities {
+		if item.EventID != n.ID || item.PairingID != p.ID {
+			continue
+		}
+		var result struct {
+			ID      string `json:"id"`
+			Outcome string `json:"apns_status"`
+		}
+		var body map[string]any
+		if err := json.Unmarshal([]byte(item.Request), &body); err != nil {
+			return "", err
+		}
+		body["wait_for_acceptance"] = true
+		body["activity_key"] = p.ActivityKey
+		err := s.client.call(ctx, identity, audience, "POST", "/v1/activities", body, &result, 202)
+		accepted := err == nil && result.ID != "" && result.Outcome == "accepted"
+		state := "failed"
+		if accepted {
+			state = "accepted"
+		}
+		if err := s.store.FinishNativeActivity(ctx, item, state); err != nil {
+			return "", err
+		}
+		if accepted {
+			return result.ID, s.store.NativeActivityDelivered(ctx, n.ID, p.ID, result.ID)
+		}
+		return "", nil
+	}
+	return "", nil
 }

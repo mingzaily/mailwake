@@ -79,3 +79,12 @@ Reading actions use the separate [mailbox read endpoint](html-content.md#mailbox
 ## Verification-code validity
 
 The [content parser](html-content.md#verification-code-validity) owns recognized Chinese/English validity phrases and unknown-duration rules. The expiry uses the IMAP internal received time plus the parsed duration and persists with the event. Native notification plaintext and activity notification plaintext carry optional RFC3339 `code_expires_at`; third-party channel schemas stay unchanged. Activity identity binds the same expiry, with a one-hour presentation ceiling. Unknown email validity retains the 600-second activity window without claiming a real code expiry. The App retains the actual sender fields while using the mailbox label for its primary source display.
+
+
+## Activity software keys and exclusive delivery
+
+Active pairing polling reads optional `activity: {key,enabled,only,signature}` from Relay. The device signs newline-joined `mailwake-activity-key-v1`, Relay audience, device ID, base64url P-256 SPKI key, enabled (`1`/`0`), and only (`1`/`0`). Core validates this proof with the device signing public key saved at pairing and persists the key and preference. Missing capability clears the activity preference. Activity envelopes use the registered software key; ordinary notifications retain the original device encryption key.
+
+For exclusive verification codes, Core submits the persisted activity with `wait_for_acceptance: true` and `activity_key`. Only an explicit `apns_status: accepted` response suppresses ordinary delivery. Missing capability, stale keys, disabled preferences, unavailable tokens, rejected or unknown outcomes, queued responses and HTTP failures immediately use ordinary delivery. A restart resumes the saved ordinary plan and may duplicate a previously accepted activity. Ordinary delivery acceptance and activity acceptance use the same existing event completion lifecycle; accepted activities require no ordinary-delivery polling. Pairing polling synchronizes preferences at most once per minute per pairing.
+
+The schema baseline adds activity_key and activity_only to native_pairings. Apply the current schema before enabling this capability on an existing installation.

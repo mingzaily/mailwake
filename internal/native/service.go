@@ -310,11 +310,18 @@ func validateClaim(identity *coreidentity.Identity, info Info, p storage.NativeP
 	return coreidentity.Verify(c.SigningKey, c.Signature, consentText(info.Audience, p.ID, identity.ID, c.DeviceID, encryptionID, p.TokenHash, strconv.FormatInt(c.ExpiresAt, 10)))
 }
 
+type activityPreference struct {
+	Key       string `json:"key"`
+	Enabled   bool   `json:"enabled"`
+	Only      bool   `json:"only"`
+	Signature string `json:"signature"`
+}
 type relayPairing struct {
-	ID            string `json:"id"`
-	Status        string `json:"status"`
-	DeviceID      string `json:"device_id"`
-	EncryptionKey string `json:"encryption_key"`
+	Activity      *activityPreference `json:"activity"`
+	ID            string              `json:"id"`
+	Status        string              `json:"status"`
+	DeviceID      string              `json:"device_id"`
+	EncryptionKey string              `json:"encryption_key"`
 }
 
 func (s *Service) Poll(ctx context.Context) error {
