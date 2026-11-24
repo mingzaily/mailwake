@@ -69,6 +69,7 @@ CREATE TABLE native_pairings (
  encryption_key TEXT NOT NULL DEFAULT '',
  activity_key TEXT NOT NULL DEFAULT '',
  activity_only INTEGER NOT NULL DEFAULT 0 CHECK(activity_only IN (0,1)),
+ activity_version INTEGER NOT NULL DEFAULT 0 CHECK(activity_version>=0),
  device_signature TEXT NOT NULL DEFAULT '',
  device_name TEXT NOT NULL DEFAULT '',
  error_code TEXT NOT NULL DEFAULT '',

@@ -311,6 +311,7 @@ func validateClaim(identity *coreidentity.Identity, info Info, p storage.NativeP
 }
 
 type activityPreference struct {
+	Version   int64  `json:"version"`
 	Key       string `json:"key"`
 	Enabled   bool   `json:"enabled"`
 	Only      bool   `json:"only"`

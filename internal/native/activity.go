@@ -3,6 +3,8 @@ package native
 import (
 	"context"
 	"encoding/json"
+	"github.com/mingzaily/mailwake/internal/fault"
+	"strconv"
 	"strings"
 	"time"
 
@@ -176,6 +178,9 @@ func validatedActivityPreference(p storage.NativePairing, result relayPairing, a
 	if pref == nil {
 		return p, nil
 	}
+	if pref.Version < 1 || pref.Version > 9007199254740991 || pref.Version < p.ActivityVersion {
+		return p, fault.New("native_protocol_invalid")
+	}
 	if _, err := coreidentity.PublicKey(pref.Key); err != nil {
 		return p, err
 	}
@@ -186,10 +191,11 @@ func validatedActivityPreference(p storage.NativePairing, result relayPairing, a
 	if pref.Only {
 		only = "1"
 	}
-	text := strings.Join([]string{"mailwake-activity-key-v1", audience, p.DeviceID, pref.Key, enabled, only}, "\n")
+	text := strings.Join([]string{"mailwake-activity-key-v2", audience, p.DeviceID, pref.Key, enabled, only, strconv.FormatInt(pref.Version, 10)}, "\n")
 	if err := coreidentity.Verify(p.SigningKey, pref.Signature, text); err != nil {
 		return p, err
 	}
+	p.ActivityVersion = pref.Version
 	p.ActivityKey = pref.Key
 	p.ActivityOnly = pref.Enabled && pref.Only
 	return p, nil

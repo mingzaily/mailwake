@@ -10,6 +10,7 @@ import (
 )
 
 type NativePairing struct {
+	ActivityVersion int64  `json:"-"`
 	ActivityKey     string `json:"-"`
 	ActivityOnly    bool   `json:"-"`
 	RevokedAt       int64  `json:"-"`
@@ -27,11 +28,11 @@ type NativePairing struct {
 	CreatedAt       int64  `json:"-"`
 }
 
-const pairingColumns = "id,state,token_hash,encrypted_token,expires_at,device_id,signing_key,encryption_key,device_signature,device_name,error_code,created_at,revoked_at,activity_key,activity_only"
+const pairingColumns = "id,state,token_hash,encrypted_token,expires_at,device_id,signing_key,encryption_key,device_signature,device_name,error_code,created_at,revoked_at,activity_key,activity_only,activity_version"
 
 func scanPairing(row interface{ Scan(...any) error }) (NativePairing, error) {
 	var p NativePairing
-	err := row.Scan(&p.ID, &p.State, &p.TokenHash, &p.EncryptedToken, &p.ExpiresAt, &p.DeviceID, &p.SigningKey, &p.EncryptionKey, &p.DeviceSignature, &p.DeviceName, &p.ErrorCode, &p.CreatedAt, &p.RevokedAt, &p.ActivityKey, &p.ActivityOnly)
+	err := row.Scan(&p.ID, &p.State, &p.TokenHash, &p.EncryptedToken, &p.ExpiresAt, &p.DeviceID, &p.SigningKey, &p.EncryptionKey, &p.DeviceSignature, &p.DeviceName, &p.ErrorCode, &p.CreatedAt, &p.RevokedAt, &p.ActivityKey, &p.ActivityOnly, &p.ActivityVersion)
 	return p, err
 }
 func (s *Store) CreateNativePairing(ctx context.Context, p NativePairing) error {
@@ -201,6 +202,6 @@ func (s *Store) DelayNativeUnlink(ctx context.Context, id string, next time.Time
 }
 
 func (s *Store) SaveActivityPreference(ctx context.Context, p NativePairing) error {
-	_, err := s.db.ExecContext(ctx, "UPDATE native_pairings SET activity_key=?,activity_only=? WHERE id=? AND state='active'", p.ActivityKey, p.ActivityOnly, p.ID)
+	_, err := s.db.ExecContext(ctx, "UPDATE native_pairings SET activity_key=?,activity_only=?,activity_version=? WHERE id=? AND state='active' AND activity_version<=?", p.ActivityKey, p.ActivityOnly, p.ActivityVersion, p.ID, p.ActivityVersion)
 	return err
 }

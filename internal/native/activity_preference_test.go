@@ -15,8 +15,8 @@ import (
 func TestActivityPreferenceAuthenticatesKeyAndDeliveryChoice(t *testing.T) {
 	v := vector(t)
 	p := storage.NativePairing{DeviceID: v.Device.ID, SigningKey: v.Device.PublicKey}
-	pref := &activityPreference{Key: v.Encryption.PublicKey, Enabled: true, Only: true}
-	text := strings.Join([]string{"mailwake-activity-key-v1", v.Audience, p.DeviceID, pref.Key, "1", "1"}, "\n")
+	pref := &activityPreference{Version: 1, Key: v.Encryption.PublicKey, Enabled: true, Only: true}
+	text := strings.Join([]string{"mailwake-activity-key-v2", v.Audience, p.DeviceID, pref.Key, "1", "1", "1"}, "\n")
 	pref.Signature, _ = coreidentity.Sign(fixedKey(t, v.Device), text)
 	got, err := validatedActivityPreference(p, relayPairing{Activity: pref}, v.Audience)
 	if err != nil || got.ActivityKey != pref.Key || !got.ActivityOnly {
@@ -119,5 +119,47 @@ func TestActivitiesEncryptToRegisteredSoftwareKeyAndKeepLegacyFallback(t *testin
 		if err = json.Unmarshal(plain, &content); err != nil || content.Notification.Code != "482913" {
 			t.Fatalf("activity decrypt: %s %v", plain, err)
 		}
+	}
+}
+
+func TestSignedActivityPreferenceRejectsVersionRollbackAndPreservesHighWater(t *testing.T) {
+	v := vector(t)
+	p := storage.NativePairing{DeviceID: v.Device.ID, SigningKey: v.Device.PublicKey, ActivityVersion: 2, ActivityKey: v.Core.PublicKey, ActivityOnly: false}
+	pref := &activityPreference{Version: 1, Key: v.Encryption.PublicKey, Enabled: true, Only: true}
+	text := strings.Join([]string{"mailwake-activity-key-v2", v.Audience, p.DeviceID, pref.Key, "1", "1", "1"}, "\n")
+	pref.Signature, _ = coreidentity.Sign(fixedKey(t, v.Device), text)
+	if _, err := validatedActivityPreference(p, relayPairing{Activity: pref}, v.Audience); err == nil {
+		t.Fatal("retired proof restored old key and exclusive delivery")
+	}
+	missing, err := validatedActivityPreference(p, relayPairing{}, v.Audience)
+	if err != nil || missing.ActivityVersion != 2 {
+		t.Fatal("missing capability cleared the version high-water")
+	}
+	if _, err = validatedActivityPreference(missing, relayPairing{Activity: pref}, v.Audience); err == nil {
+		t.Fatal("retired proof accepted after missing capability")
+	}
+	pref.Version = 3
+	text = strings.Join([]string{"mailwake-activity-key-v2", v.Audience, p.DeviceID, pref.Key, "1", "1", "3"}, "\n")
+	pref.Signature, _ = coreidentity.Sign(fixedKey(t, v.Device), text)
+	current, err := validatedActivityPreference(p, relayPairing{Activity: pref}, v.Audience)
+	if err != nil || current.ActivityVersion != 3 || !current.ActivityOnly {
+		t.Fatalf("newer preference rejected: %+v %v", current, err)
+	}
+	service, store := testService(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(404) })
+	_ = service
+	id := addDevice(t, store, "phone", v.Encryption.PublicKey)
+	current.ID = id
+	if err = store.SaveActivityPreference(t.Context(), current); err != nil {
+		t.Fatal(err)
+	}
+	stale := current
+	stale.ActivityVersion = 1
+	stale.ActivityKey = v.Core.PublicKey
+	if err = store.SaveActivityPreference(t.Context(), stale); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := store.NativePairing(t.Context(), id)
+	if err != nil || stored.ActivityVersion != 3 || stored.ActivityKey != pref.Key {
+		t.Fatalf("stored high-water regressed: %+v %v", stored, err)
 	}
 }
