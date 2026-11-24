@@ -178,7 +178,7 @@ func validatedActivityPreference(p storage.NativePairing, result relayPairing, a
 	if pref == nil {
 		return p, nil
 	}
-	if pref.Version < 1 || pref.Version > 9007199254740991 || pref.Version < p.ActivityVersion {
+	if pref.Version < 1 || pref.Version < p.ActivityVersion {
 		return p, fault.New("native_protocol_invalid")
 	}
 	if _, err := coreidentity.PublicKey(pref.Key); err != nil {

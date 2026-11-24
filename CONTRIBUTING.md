@@ -45,7 +45,7 @@ The binary is written to `bin/mailwake`. The `nomsgpack` build tag is used by th
 | `internal/content/` | Message parsing, HTML to text and verification code detection |
 | `internal/event/` | Notification values and stable event identities |
 | `internal/storage/` | Revision CAS, per-mailbox subscriptions/progress, durable outbox |
-| `internal/storage/migrations/` | Initial database baseline, applied transactionally with schema version 1 |
+| `internal/storage/migrations/` | Historical database baseline and ordered transactional upgrades |
 | `internal/delivery/` | Request attempts, retry policy, delivery state, notification text and shared HTTP rules |
 | `internal/delivery/bark/`, `pushover/`, `webhook/` | Channel adapters |
 | `internal/httpapi/` | Mailbox REST routes, cookies, CSRF, revision contracts, authenticated log queries and anonymous diagnostics |
@@ -66,7 +66,7 @@ Notification attempts default to one request. Automatic retries require explicit
 
 Add user-facing messages to all catalogs under `internal/i18n/locales/`, with matching keys and placeholders. English is the source catalog; `internal/i18n/languages.json` defines the nine supported languages and their native names. Business logic stores error codes and safe parameters; presentation code translates them. Runtime logs use fixed English messages, safe scalar attributes and the `logging` whitelist. Include mailbox_id on mailbox events and folder on Folder events. Keep credentials, message content, raw errors and credential URLs out of both outputs; the setup-code line uses a separate console handler. Test real sensitive fixture values against JSON stderr and the ring API.
 
-The initial database schema is embedded from `internal/storage/migrations/001_baseline.sql`. Before the first release, update this baseline directly and use fresh temporary databases in tests. Verify transaction rollback, persisted state and unsupported-version errors. See the [storage reference](docs/storage.md).
+The released database schema and incremental upgrades are embedded from `internal/storage/migrations/`. Preserve historical migrations and add a new migration for schema changes. Verify upgrades from released databases, fresh initialization, transaction rollback, persisted state and unsupported-version errors. See the [storage reference](docs/storage.md).
 
 ## Private data and manual verification
 

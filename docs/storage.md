@@ -12,13 +12,13 @@ Core stores its state under `MAILWAKE_DATA_DIR`. Keep the complete directory tog
 
 Credential encryption protects sensitive configuration inside the database. The complete directory, including the key and backups, requires private filesystem permissions.
 
-## Database baseline
+## Database migrations
 
-The development version creates new databases from `internal/storage/migrations/001_baseline.sql` in one transaction and records `PRAGMA user_version=1`. Existing version-1 databases open directly. Other schema versions fail with `database_version_unsupported`.
+The released version-1 schema is preserved in `internal/storage/migrations/001_baseline.sql`. Version 2 adds native activity public keys and preference versions through `002_activity_keys.sql`. Existing version-1 databases upgrade transactionally on open; new databases apply both steps in one transaction and finish at `PRAGMA user_version=2`. Version-2 databases open directly. Unsupported versions fail with `database_version_unsupported`.
 
-Before the first release, schema changes update the baseline directly. Development fixtures should use a fresh temporary directory when the schema changes.
+After publication, retain historical migrations and add incremental upgrades. Tests cover existing released data and fresh initialization.
 
-Activity submissions persist `failures` and `next_attempt` alongside the encrypted request and original expiry. A partial pending-work index supports the bounded due query. Terminal completion clears the encrypted request; late retry scheduling updates only pending rows. These fields belong to the initial schema baseline. Development databases created with an older baseline require a fresh data directory; the pre-release schema has no historical migration path.
+Activity submissions persist `failures` and `next_attempt` alongside the encrypted request and original expiry. A partial pending-work index supports the bounded due query. Terminal completion clears the encrypted request; late retry scheduling updates only pending rows. These fields belong to the initial schema baseline. Released schemas retain their historical migrations; subsequent changes use incremental upgrades.
 
 ## Encryption and access secrets
 

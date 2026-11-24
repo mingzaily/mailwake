@@ -28,7 +28,7 @@ Start with [README.md](README.md) and [CONTRIBUTING.md](CONTRIBUTING.md). This r
 - Use clear, affirmative English in code, comments, technical documents and logs. Keep contributor documentation and this file in English.
 - Validate external input, authentication, signatures and credentials at their trust boundary once. Carry validated ownership and permissions explicitly to downstream code.
 - Trust values generated and persisted by the same operation and invariants enforced by database constraints. Use natural business keys for idempotency.
-- Before the first release, modify the schema baseline directly. Keep changes focused on current formats and supported behavior.
+- After publication, evolve database schemas with incremental migrations and retain historical migrations. Preserve existing data during upgrades and initialize new databases through the same ordered migration history.
 - Use concrete types or injected functions for a single implementation and its test substitutes.
 - Keep user-facing messages in every catalog under `internal/i18n/locales/`; `internal/i18n/languages.json` defines the language set. English is the source. Preserve matching keys and placeholders. Business code returns stable error codes and safe parameters; presentation translates them.
 - Keep credentials, message content and credential URLs out of logs and diagnostics. Follow the logging attribute whitelist.

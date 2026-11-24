@@ -21,6 +21,9 @@ import (
 //go:embed migrations/001_baseline.sql
 var baseline string
 
+//go:embed migrations/002_activity_keys.sql
+var activityKeysMigration string
+
 var ErrCheckpointConflict = fault.New("checkpoint_conflict")
 
 type Store struct {
@@ -83,13 +86,7 @@ func Open(ctx context.Context, dir string) (_ *Store, err error) {
 	s := &Store{db: db, lock: lock}
 	var version int
 	if err = db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err == nil {
-		switch version {
-		case 0:
-			err = s.applyBaseline(ctx)
-		case 1:
-		default:
-			err = fault.New("database_version_unsupported")
-		}
+		err = s.migrate(ctx, version)
 	}
 	if err != nil {
 		s.Close()
@@ -98,15 +95,28 @@ func Open(ctx context.Context, dir string) (_ *Store, err error) {
 	return s, nil
 }
 
-// applyBaseline creates a new database. The product has no released schema to migrate.
-func (s *Store) applyBaseline(ctx context.Context) error {
+// migrate applies the remaining released schema steps in one transaction.
+func (s *Store) migrate(ctx context.Context, version int) error {
+	var steps []string
+	switch version {
+	case 0:
+		steps = []string{baseline, activityKeysMigration}
+	case 1:
+		steps = []string{activityKeysMigration}
+	case 2:
+		return nil
+	default:
+		return fault.New("database_version_unsupported")
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	if _, err = tx.ExecContext(ctx, baseline); err != nil {
-		return err
+	for _, step := range steps {
+		if _, err = tx.ExecContext(ctx, step); err != nil {
+			return err
+		}
 	}
 	return tx.Commit()
 }
