@@ -96,7 +96,7 @@ Subsequent requests send the same three resource fields plus `cursor`. `limit` m
 }
 ```
 
-Core fixes `T = window_end` at the first request, with the inclusive interval `[T - 30 × 24 hours, T]`. Filtering uses INTERNALDATE. The email Date header has no influence. Each round also fixes its upper UID bound at EXAMINE's UIDNEXT minus one. Newer UIDs enter the next round. `snapshot_max_uid` is zero for an empty initial UID space. Servers that omit UIDNEXT return `503 message_unavailable` because they cannot establish this bounded snapshot.
+Core fixes `T = window_end` at the first request, with the inclusive interval `[T - 30 × 24 hours, T]`. Filtering uses INTERNALDATE. The email Date header has no influence. Each round also fixes its upper UID bound at EXAMINE's UIDNEXT minus one. Servers that omit UIDNEXT, such as NetEase, use one past the highest existing UID from `UID SEARCH`, the same baseline that monitoring uses. Newer UIDs enter the next round. `snapshot_max_uid` is zero for an empty initial UID space.
 
 Pages scan descending finite UID ranges, at most 4096 UID positions per request. SEARCH uses a conservative date range followed by exact timestamp filtering. FETCH requests metadata for at most `limit` candidates. Imported messages can have old dates and large UIDs, so encountering an old message never ends the round. A page may contain zero `items` and a `next_cursor`. The client continues until `complete` is true. A complete scan covers this round's fixed range, while concurrent flag changes and deletions converge on the next refresh. Complete pages omit `next_cursor`.
 

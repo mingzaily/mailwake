@@ -206,3 +206,22 @@ func TestHistoryUsesExistingOutlookTokenProvider(t *testing.T) {
 		t.Fatalf("OAuth history: %+v %v", page, err)
 	}
 }
+
+func TestHistoryReadsFoldersWhenTheServerOmitsUIDNext(t *testing.T) {
+	now := time.Now()
+	scan := mail.HistoryScan{Start: now.Add(-time.Hour), End: now, Limit: 50}
+	t.Run("empty folder", func(t *testing.T) {
+		source, _, _, _ := scriptedServer(t, serverOptions{caps: "IMAP4rev1", omitUIDNext: true, searchReply: "* SEARCH"})
+		page, err := source.ReadHistory(t.Context(), "Clients", scan)
+		if err != nil || page.MaxUID != 0 || page.NextUID != 0 || len(page.Messages) != 0 {
+			t.Fatalf("empty folder: %+v %v", page, err)
+		}
+	})
+	t.Run("existing messages", func(t *testing.T) {
+		source, _, _, _ := scriptedServer(t, serverOptions{caps: "IMAP4rev1", omitUIDNext: true, searchReply: "* SEARCH 1", verifySearchReply: "* SEARCH"})
+		page, err := source.ReadHistory(t.Context(), "Clients", scan)
+		if err != nil || page.MaxUID != 1 || page.Validity != 1 {
+			t.Fatalf("snapshot without UIDNEXT: %+v %v", page, err)
+		}
+	})
+}

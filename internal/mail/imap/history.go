@@ -47,11 +47,13 @@ func (s *Source) ReadHistory(ctx context.Context, folder string, scan mail.Histo
 		return mail.HistoryBatch{}, fault.New("sync_cursor_invalid")
 	}
 	if scan.Validity == 0 {
-		// A fixed snapshot requires UIDNEXT from EXAMINE.
-		if selected.uidNext == 0 {
-			return mail.HistoryBatch{}, fault.New("message_unavailable")
+		// A fixed snapshot starts below the next UID. Servers that omit UIDNEXT
+		// from EXAMINE, such as NetEase, use the same SEARCH baseline as monitoring.
+		next, err := selected.baseline(ctx)
+		if err != nil {
+			return mail.HistoryBatch{}, err
 		}
-		scan.MaxUID, scan.NextUID = selected.uidNext-1, selected.uidNext-1
+		scan.MaxUID, scan.NextUID = next-1, next-1
 	}
 	result := mail.HistoryBatch{Validity: selected.validity, MaxUID: scan.MaxUID, Messages: []mail.HistoryMessage{}}
 	if scan.NextUID == 0 {

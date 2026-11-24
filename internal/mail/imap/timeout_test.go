@@ -22,6 +22,7 @@ type serverOptions struct {
 	searchReply             string
 	verifySearchReply       string
 	uidNext                 uint32
+	omitUIDNext             bool
 	lowercasePermanentFlags bool
 	readScenario            string
 	fetchFailure            string
@@ -161,7 +162,11 @@ func scriptedServer(t *testing.T, options serverOptions) (*Source, <-chan string
 				if uidNext == 0 {
 					uidNext = 1
 				}
-				fmt.Fprintf(conn, "* 0 EXISTS\r\n* OK [UIDVALIDITY 1] epoch\r\n* OK [UIDNEXT %d] next\r\n%s OK [%s] selected\r\n", uidNext, tag, access)
+				next := fmt.Sprintf("* OK [UIDNEXT %d] next\r\n", uidNext)
+				if options.omitUIDNext {
+					next = ""
+				}
+				fmt.Fprintf(conn, "* 0 EXISTS\r\n* OK [UIDVALIDITY 1] epoch\r\n%s%s OK [%s] selected\r\n", next, tag, access)
 			case "FETCH":
 				failure := options.fetchFailure
 				if stored {
