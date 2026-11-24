@@ -18,7 +18,7 @@ var otherKeywords = []string{
 }
 
 // candidate matches 4–8 digits, optionally split once by a space or hyphen ("915 406"),
-// or a 6–8 character uppercase letter-digit code ("G7K2QX").
+// or a 6–8 character uppercase code ("G7K2QX", "MR5SNQ", "QWXTRP").
 var candidate = regexp.MustCompile(`\b(\d{3,4}[ -]\d{3,4}|\d{4,8}|[A-Z0-9]{6,8})\b`)
 
 // keywordWindow is how far before a candidate, in bytes, a keyword may appear.
@@ -41,6 +41,11 @@ func firstCode(s string, keywordElsewhere bool) string {
 		raw := s[loc[0]:loc[1]]
 		code := strings.NewReplacer(" ", "", "-", "").Replace(raw)
 		if !plausible(code) || embedded(s, loc[0], loc[1]) {
+			continue
+		}
+		// An all-letter code counts only when the email sets it on its own line;
+		// inside a sentence the same shape is an ordinary capitalised word.
+		if !containsDigit(code) && !ownLine(s, loc[0], loc[1]) {
 			continue
 		}
 		window := s[max(0, loc[0]-keywordWindow):loc[0]]
@@ -78,8 +83,23 @@ func plausible(code string) bool {
 		// A bare four-digit year is far more common than a four-digit code near "code".
 		return !(len(code) == 4 && (strings.HasPrefix(code, "19") || strings.HasPrefix(code, "20")))
 	}
-	// Letter-digit codes need at least two digits and two letters to avoid plain words.
-	return digits >= 2 && len(code)-digits >= 2
+	// Letter codes are 6–8 characters with at least two letters; a code with no digits is
+	// accepted only on its own line (see firstCode).
+	return len(code) >= 6 && len(code)-digits >= 2
+}
+
+func containsDigit(s string) bool {
+	return strings.IndexFunc(s, unicode.IsDigit) >= 0
+}
+
+// ownLine reports whether only whitespace shares the candidate's line.
+func ownLine(s string, start, end int) bool {
+	lineStart := strings.LastIndexByte(s[:start], '\n') + 1
+	lineEnd := len(s)
+	if i := strings.IndexByte(s[end:], '\n'); i >= 0 {
+		lineEnd = end + i
+	}
+	return strings.TrimSpace(s[lineStart:start]) == "" && strings.TrimSpace(s[end:lineEnd]) == ""
 }
 
 // embedded rejects numbers that are part of amounts, dates, times, versions, phone

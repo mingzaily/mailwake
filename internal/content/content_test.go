@@ -5,6 +5,7 @@ import (
 	"mime/quotedprintable"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/text/encoding/simplifiedchinese"
 )
@@ -26,6 +27,11 @@ func TestDetectCode(t *testing.T) {
 		{"japanese", "", "認証コード: 402913", "402913"},
 		{"letter digit", "", "Your one-time code is G7K2QX.", "G7K2QX"},
 		{"otp", "", "OTP 5521 expires in 10 minutes", "5521"},
+		{"patreon one digit", "您的 Patreon 登录码", "这是您的登录码\n复制并粘贴以下代码，登录您的 Patreon 账户。\n验证码将在 15 分钟后过期。\nMR5SNQ\n如果这并非您本人的操作，请立即更改密码。\nPATREON", "MR5SNQ"},
+		{"one digit inline", "", "Your login code is AB3XYZ.", "AB3XYZ"},
+		{"letters on own line", "Your login code", "Use this code to sign in:\n  QWXTRP  \nIt expires in 10 minutes.", "QWXTRP"},
+		{"letters inside sentence", "", "Your verification code request was RECEIVED and PENDING review.", ""},
+		{"letters without keyword", "Weekly digest", "Top story\nPATREON\nRead more", ""},
 		{"amount", "您的 9 月账单已出", "本期应还金额 ¥3,284.50，到期还款日 2026.10.15。", ""},
 		{"order number", "Your package has shipped", "Order #12345678 shipped. Tracking 948271", ""},
 		{"shipping is not pin", "Shipping update", "Shipping 948271 departed", ""},
@@ -146,5 +152,19 @@ func TestInlineImageKeepsReadableTextAndCode(t *testing.T) {
 	result, err := Extract(strings.NewReader(raw), "")
 	if err != nil || result.Code != "482913" {
 		t.Fatalf("inline image changed text parsing: %v", err)
+	}
+}
+
+func TestHTMLOnlyLetterCodeIsDetectedWithItsValidity(t *testing.T) {
+	html := `<table><tr><td><h1>这是您的登录码</h1><p>复制并粘贴以下代码，登录您的 Patreon 账户。</p><p>验证码将在 15 分钟后过期。</p>` +
+		`<div style="letter-spacing:8px;border:1px solid #ddd">MR5SNQ</div><p>如果这并非您本人的操作，请<a href="https://example.test">立即更改密码</a>。</p>` +
+		`<p>PATREON</p></td></tr></table>`
+	raw := "Content-Type: text/html; charset=utf-8\r\n\r\n" + html
+	result, err := Extract(strings.NewReader(raw), "您的 Patreon 登录码")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Code != "MR5SNQ" || result.CodeLifetime != 15*time.Minute {
+		t.Fatalf("code = %q, lifetime = %v; text = %q", result.Code, result.CodeLifetime, result.Text)
 	}
 }
