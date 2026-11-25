@@ -64,7 +64,7 @@ func (s *Store) Failed(ctx context.Context, id string, failure *fault.Error, nex
 		return err
 	}
 	if dead {
-		if _, err = tx.ExecContext(ctx, "UPDATE native_deliveries SET envelope='',content_signature='',state=CASE WHEN relay_id='' AND state='pending' THEN 'failed' ELSE state END,error_code=CASE WHEN relay_id='' AND state='pending' THEN ? ELSE error_code END WHERE event_id=?", failure.Code, id); err != nil {
+		if _, err = tx.ExecContext(ctx, "UPDATE native_deliveries SET envelope='',content_signature='',state=CASE WHEN relay_id='' AND state='pending' THEN 'failed' ELSE state END,error_code=CASE WHEN relay_id='' AND state='pending' THEN ? ELSE error_code END WHERE event_id=? AND pull_pending=0", failure.Code, id); err != nil {
 			return err
 		}
 	}

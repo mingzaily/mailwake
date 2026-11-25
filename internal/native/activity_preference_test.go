@@ -35,10 +35,11 @@ func TestActivityPreferenceAuthenticatesKeyAndDeliveryChoice(t *testing.T) {
 }
 
 func TestActivityOnlyFallsBackUnlessRelayConfirmsAPNsAcceptance(t *testing.T) {
-	for _, outcome := range []string{"accepted", "rejected", "unknown", "queued", ""} {
+	for _, outcome := range []string{"accepted", "omitted", "omit_rejected", "rejected", "unknown", "queued", ""} {
 		t.Run(outcome, func(t *testing.T) {
 			v := vector(t)
 			pushes := 0
+			idForTest := ""
 			service, store := testService(t, func(w http.ResponseWriter, r *http.Request) {
 				switch r.URL.Path {
 				case "/v1/info":
@@ -50,9 +51,25 @@ func TestActivityOnlyFallsBackUnlessRelayConfirmsAPNsAcceptance(t *testing.T) {
 						t.Error("activity acceptance request missing key binding")
 					}
 					w.WriteHeader(202)
-					json.NewEncoder(w).Encode(map[string]string{"id": "activity-delivery", "status": "queued", "apns_status": outcome})
+					status := outcome
+					if outcome == "omit_rejected" {
+						status = "rejected"
+					}
+					if outcome == "omitted" {
+						status = "accepted"
+					}
+					json.NewEncoder(w).Encode(map[string]string{"id": "activity-delivery", "status": "queued", "apns_status": status})
 				case "/v1/push":
 					pushes++
+					var body struct {
+						Envelope Envelope `json:"envelope"`
+					}
+					json.NewDecoder(r.Body).Decode(&body)
+					plain := decryptNotification(t, v, idForTest, "code-event", body.Envelope)
+					var notification plaintext
+					if err := json.Unmarshal(plain, &notification); err != nil || notification.Quiet != (outcome == "accepted") {
+						t.Errorf("quiet notification: %s %v", plain, err)
+					}
 					w.WriteHeader(202)
 					json.NewEncoder(w).Encode(relayDelivery{ID: "ordinary", Status: "queued"})
 				default:
@@ -60,6 +77,20 @@ func TestActivityOnlyFallsBackUnlessRelayConfirmsAPNsAcceptance(t *testing.T) {
 				}
 			})
 			id := addDevice(t, store, "phone", v.Encryption.PublicKey)
+			idForTest = id
+			if outcome == "omitted" || outcome == "omit_rejected" {
+				invitation := storage.AppInvitation{ID: "invitation", TokenHash: "token", Management: true, Scopes: []string{"diagnostics"}, ExpiresAt: time.Now().Add(time.Hour).Unix()}
+				if err := store.CreateAppInvitation(t.Context(), invitation); err != nil {
+					t.Fatal(err)
+				}
+				controller, err := store.AcceptAppInvitation(t.Context(), "invitation", "token", storage.AppController{ID: "controller", DeviceID: "phone", DeviceName: "Phone"}, "credential")
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := store.SetActivityNotificationPreference(t.Context(), controller.ID, true); err != nil {
+					t.Fatal(err)
+				}
+			}
 			p, err := store.NativePairing(t.Context(), id)
 			if err != nil {
 				t.Fatal(err)
@@ -77,9 +108,23 @@ func TestActivityOnlyFallsBackUnlessRelayConfirmsAPNsAcceptance(t *testing.T) {
 				t.Fatal(err)
 			}
 			want := 1
-			if outcome == "accepted" {
+			if outcome == "omitted" {
 				want = 0
+				pending, err := store.PendingNativeNotifications(t.Context(), "phone")
+				if err != nil || len(pending) != 1 {
+					t.Fatalf("omitted event missing: %v %v", pending, err)
+				}
+				var envelope Envelope
+				if err := json.Unmarshal(pending[0].Envelope, &envelope); err != nil {
+					t.Fatal(err)
+				}
+				plain := decryptNotification(t, v, id, n.ID, envelope)
+				var payload plaintext
+				if err := json.Unmarshal(plain, &payload); err != nil || payload.Code != n.Code || !payload.Quiet {
+					t.Fatalf("pull decrypt: %s %v", plain, err)
+				}
 			}
+
 			if pushes != want {
 				t.Fatalf("ordinary deliveries=%d want=%d", pushes, want)
 			}

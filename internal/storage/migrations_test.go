@@ -2,16 +2,15 @@ package storage
 
 import (
 	"database/sql"
+	"fmt"
 	"path/filepath"
 	"testing"
 )
 
 func TestReleasedDatabaseUpgradesAndPreservesPairing(t *testing.T) {
-	for _, existing := range []bool{true, false} {
-		name := "fresh database"
-		if existing {
-			name = "released version 1"
-		}
+	for _, previousVersion := range []int{0, 1, 2} {
+		existing := previousVersion > 0
+		name := fmt.Sprintf("schema version %d", previousVersion)
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
 			if existing {
@@ -22,6 +21,12 @@ func TestReleasedDatabaseUpgradesAndPreservesPairing(t *testing.T) {
 				if _, err = db.ExecContext(t.Context(), baseline); err != nil {
 					db.Close()
 					t.Fatal(err)
+				}
+				if previousVersion == 2 {
+					if _, err := db.ExecContext(t.Context(), activityKeysMigration); err != nil {
+						db.Close()
+						t.Fatal(err)
+					}
 				}
 				_, err = db.ExecContext(t.Context(), "INSERT INTO native_pairings(id,state,token_hash,expires_at,device_id,signing_key,encryption_key,device_name,created_at) VALUES('paired-phone','active','',0,'phone','signing-public-key','encryption-public-key','iPhone',100)")
 				if err != nil {
@@ -37,7 +42,7 @@ func TestReleasedDatabaseUpgradesAndPreservesPairing(t *testing.T) {
 				t.Fatal(err)
 			}
 			var version int
-			if err = store.db.QueryRowContext(t.Context(), "PRAGMA user_version").Scan(&version); err != nil || version != 2 {
+			if err = store.db.QueryRowContext(t.Context(), "PRAGMA user_version").Scan(&version); err != nil || version != 3 {
 				store.Close()
 				t.Fatalf("schema version=%d error=%v", version, err)
 			}

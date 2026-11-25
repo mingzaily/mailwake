@@ -3,13 +3,13 @@ package native
 import (
 	"context"
 	"encoding/json"
-	"github.com/mingzaily/mailwake/internal/fault"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/mingzaily/mailwake/internal/coreidentity"
 	"github.com/mingzaily/mailwake/internal/event"
+	"github.com/mingzaily/mailwake/internal/fault"
 	"github.com/mingzaily/mailwake/internal/storage"
 )
 
@@ -201,7 +201,7 @@ func validatedActivityPreference(p storage.NativePairing, result relayPairing, a
 	return p, nil
 }
 
-// Only an explicit APNs acceptance suppresses the ordinary notification.
+// Only explicit APNs acceptance enables quiet or omitted ordinary delivery.
 func (s *Service) tryActivityOnly(ctx context.Context, n event.Notification, p storage.NativePairing, activities []storage.NativeActivity, identity *coreidentity.Identity, audience string) (string, error) {
 	if !p.ActivityOnly {
 		return "", nil
@@ -230,7 +230,7 @@ func (s *Service) tryActivityOnly(ctx context.Context, n event.Notification, p s
 			return "", err
 		}
 		if accepted {
-			return result.ID, s.store.NativeActivityDelivered(ctx, n.ID, p.ID, result.ID)
+			return result.ID, nil
 		}
 		return "", nil
 	}

@@ -24,6 +24,9 @@ var baseline string
 //go:embed migrations/002_activity_keys.sql
 var activityKeysMigration string
 
+//go:embed migrations/003_activity_notifications.sql
+var activityNotificationsMigration string
+
 var ErrCheckpointConflict = fault.New("checkpoint_conflict")
 
 type Store struct {
@@ -100,10 +103,12 @@ func (s *Store) migrate(ctx context.Context, version int) error {
 	var steps []string
 	switch version {
 	case 0:
-		steps = []string{baseline, activityKeysMigration}
+		steps = []string{baseline, activityKeysMigration, activityNotificationsMigration}
 	case 1:
-		steps = []string{activityKeysMigration}
+		steps = []string{activityKeysMigration, activityNotificationsMigration}
 	case 2:
+		steps = []string{activityNotificationsMigration}
+	case 3:
 		return nil
 	default:
 		return fault.New("database_version_unsupported")

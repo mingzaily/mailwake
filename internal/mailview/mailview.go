@@ -14,6 +14,9 @@ const MaxResponseBytes = 256 << 10
 type Reader struct{ ControllerID, DeviceID string }
 
 type Capabilities struct {
+	ActivityNotifications struct {
+		Version int `json:"version"`
+	} `json:"activity_notifications"`
 	CoreID      string            `json:"core_id"`
 	MailHistory HistoryCapability `json:"mail_history"`
 	MailHealth  HealthCapability  `json:"mail_health"`

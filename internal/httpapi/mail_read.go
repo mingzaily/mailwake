@@ -18,6 +18,7 @@ func appMailRoutes(app appRouteRegistrar, runtime MailReadRuntime) {
 			return
 		}
 		result.Permissions.Content = controller.HasScope("content")
+		result.ActivityNotifications.Version = 1
 		c.JSON(200, result)
 	})
 	app.HandleController("GET", "/mail/folders", "content", func(c *gin.Context, controller storage.AppController) {

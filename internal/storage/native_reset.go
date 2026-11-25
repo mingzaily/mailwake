@@ -32,7 +32,7 @@ func (s *Store) ResetNativePush(ctx context.Context) error {
 		"DELETE FROM configuration WHERE name='native.relay'",
 		"DELETE FROM native_pairings",
 		"DELETE FROM native_activities",
-		"DELETE FROM native_deliveries WHERE next_check>0 OR state IN ('pending','queued','sending')",
+		"DELETE FROM native_deliveries WHERE pull_pending=1 OR next_check>0 OR state IN ('pending','queued','sending')",
 		"DELETE FROM outbox WHERE channel='native' AND state='pending'",
 	} {
 		if _, err = tx.ExecContext(ctx, statement); err != nil {

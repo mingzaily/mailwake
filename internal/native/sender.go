@@ -17,6 +17,7 @@ import (
 func (s *Service) Channel() string { return "native" }
 
 type plaintext struct {
+	Quiet         bool                           `json:"quiet,omitempty"`
 	MessageRef    *coreidentity.MessageReference `json:"message_ref,omitempty"`
 	V             int                            `json:"v"`
 	MailboxID     string                         `json:"mailbox_id,omitempty"`
@@ -193,13 +194,35 @@ func (s *Service) send(ctx context.Context, n event.Notification, pairingID stri
 			return err
 		}
 		if activityID != "" {
-			for i := range items {
-				if items[i].PairingID == p.ID {
-					items[i].RelayID = activityID
-				}
+			reference, err := identity.MessageReference(n)
+			if err != nil {
+				return err
+			}
+			plain := newPlaintext(n, reference)
+			plain.Quiet = true
+			raw, err := fitPlaintext(&plain, func() ([]byte, error) { return json.Marshal(plain) })
+			if err != nil {
+				return err
+			}
+			envelope, err := encrypt(info.Audience, p.ID, n.ID, p.EncryptionKey, raw)
+			if err != nil {
+				return err
+			}
+			signature, err := coreidentity.Sign(identity.Key, contentText(info.Audience, p.ID, n.ID, envelope))
+			if err != nil {
+				return err
+			}
+			encoded, _ := json.Marshal(envelope)
+			if err := s.store.NativeActivityNotification(ctx, n.ID, p.ID, activityID, string(encoded), signature); err != nil {
+				return err
 			}
 		}
 	}
+	items, err = s.store.NativeDeliveries(ctx, n.ID)
+	if err != nil {
+		return err
+	}
+
 	var permanent, transient error
 	for _, d := range items {
 		if d.RelayID != "" {

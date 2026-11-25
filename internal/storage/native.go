@@ -108,7 +108,7 @@ func (s *Store) FinishNativePairing(ctx context.Context, id, state, code string)
 	return err
 }
 
-const cancelPairingDeliveries = "UPDATE native_deliveries SET state='cancelled',error_code='pairing_revoked',envelope='',content_signature='',next_check=0 WHERE pairing_id=? AND relay_id='' AND state='pending'"
+const cancelPairingDeliveries = "UPDATE native_deliveries SET state='cancelled',error_code='pairing_revoked',envelope='',content_signature='',next_check=0,pull_pending=0 WHERE pairing_id=? AND ((relay_id='' AND state='pending') OR pull_pending=1)"
 
 // RevokeNativePairing records a device revocation and cancels unsent work.
 func (s *Store) RevokeNativePairing(ctx context.Context, id string) (bool, error) {
