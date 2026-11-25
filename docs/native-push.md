@@ -95,7 +95,7 @@ Unpairing retains the device activity key and preference, and only revokes the s
 
 With signed `activity_only` enabled, accepted activities normally continue through ordinary delivery with optional `quiet:true` inside the encrypted notification plaintext. The extension persists the message as usual and selects passive interruption with no sound. Older clients ignore the field and can alert normally. All other activity outcomes retain ordinary notification behavior.
 
-`GET /api/v1/app/capabilities` advertises `activity_notifications:{version:1}`. Clients show “Also omit from Notification Center” only when activity-only is enabled and this device has a current management connection to a capable Core. Older Core versions retain their original activity-only behavior.
+`GET /api/v1/app/capabilities` advertises `activity_notifications:{version:1}`. The iOS app offers the **Omit** choice for duplicate notifications only when this device has a current management connection to a capable Core; choosing it also enables activity-only. Older Core versions retain their original activity-only behavior.
 
 All following endpoints accept any current `mwac_` controller credential and return `Cache-Control:no-store`. They operate on this device's preference and existing push ciphertext, so they require no additional management or content scope. Body reads still require `content`. Controller and pairing device IDs are both the KeyID of the same device signing public key; record IDs and device names are independent.
 
