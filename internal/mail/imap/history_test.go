@@ -16,15 +16,11 @@ import (
 	"github.com/mingzaily/mailwake/internal/mail"
 )
 
-func (s *Source) ReadHistory(ctx context.Context, folder string, scan mail.HistoryScan) (mail.HistoryBatch, error) {
-	var remaining atomic.Int64
-	remaining.Store(mail.HistoryReadBytes)
-	conn, err := s.OpenHistory(ctx, &remaining)
-	if err != nil {
-		return mail.HistoryBatch{}, err
-	}
-	defer conn.Close()
-	return conn.ReadHistory(ctx, folder, scan, &remaining)
+func budgetedHistory(t *testing.T, source *Source) *mail.BudgetedSource {
+	t.Helper()
+	history := mail.NewConnectionBudget(2).Wrap(source)
+	t.Cleanup(func() { history.RetireHistory() })
+	return history
 }
 
 func TestHistoryKeepsFixedWindowAndUIDSnapshotWithoutReadingBodies(t *testing.T) {
@@ -33,6 +29,7 @@ func TestHistoryKeepsFixedWindowAndUIDSnapshotWithoutReadingBodies(t *testing.T)
 			t.Error("history requested message content")
 		}
 	})
+	history := budgetedHistory(t, source)
 	end := time.Date(2026, 11, 5, 12, 0, 0, 0, time.UTC)
 	start := end.Add(-30 * 24 * time.Hour)
 	dates := []time.Time{end.Add(-time.Hour), start.Add(-60 * 24 * time.Hour), end, start, start.Add(-time.Second), end.Add(time.Second), start.Add(-30 * time.Hour)}
@@ -54,7 +51,7 @@ func TestHistoryKeepsFixedWindowAndUIDSnapshotWithoutReadingBodies(t *testing.T)
 	var got []uint32
 	pages := 0
 	for {
-		batch, err := source.ReadHistory(t.Context(), "Clients", scan)
+		batch, err := history.ReadHistory(t.Context(), "Clients", scan)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -103,22 +100,23 @@ func TestHistoryKeepsFixedWindowAndUIDSnapshotWithoutReadingBodies(t *testing.T)
 
 func TestHistoryBoundsSparseUIDRangesAndRejectsChangedValidity(t *testing.T) {
 	source, _ := fixture(t)
+	history := budgetedHistory(t, source)
 	end := time.Now().UTC()
 	scan := mail.HistoryScan{Start: end.Add(-30 * 24 * time.Hour), End: end, Limit: 50}
-	first, err := source.ReadHistory(t.Context(), "Clients", scan)
+	first, err := history.ReadHistory(t.Context(), "Clients", scan)
 	if err != nil || first.MaxUID != 0 || first.NextUID != 0 || len(first.Messages) != 0 {
 		t.Fatalf("empty: %+v %v", first, err)
 	}
 	scan.Validity, scan.MaxUID, scan.NextUID = first.Validity, ^uint32(0)-1, ^uint32(0)-1
-	page, err := source.ReadHistory(t.Context(), "Clients", scan)
+	page, err := history.ReadHistory(t.Context(), "Clients", scan)
 	if err != nil || page.NextUID != scan.NextUID-mail.HistoryUIDSpan || len(page.Messages) != 0 {
 		t.Fatalf("sparse page: %+v %v", page, err)
 	}
 	scan.Validity++
-	if _, err := source.ReadHistory(t.Context(), "Clients", scan); fault.From(err, "").Code != "sync_cursor_invalid" {
+	if _, err := history.ReadHistory(t.Context(), "Clients", scan); fault.From(err, "").Code != "sync_cursor_invalid" {
 		t.Fatal(err)
 	}
-	if _, err := source.ReadHistory(t.Context(), "missing", scan); fault.From(err, "").Code != "message_not_found" {
+	if _, err := history.ReadHistory(t.Context(), "missing", scan); fault.From(err, "").Code != "message_not_found" {
 		t.Fatal(err)
 	}
 }
@@ -126,11 +124,12 @@ func TestHistoryBoundsSparseUIDRangesAndRejectsChangedValidity(t *testing.T) {
 func TestHistoryProviderBudgetAndCancellation(t *testing.T) {
 	t.Run("oversized envelope", func(t *testing.T) {
 		source, user := fixture(t)
+		history := budgetedHistory(t, source)
 		now := time.Now().UTC().Truncate(time.Second)
 		if _, err := user.Append("Clients", strings.NewReader("Subject: "+strings.Repeat("x", mail.HistoryReadBytes+1024)+"\r\n\r\nbody"), &protocol.AppendOptions{Time: now}); err != nil {
 			t.Fatal(err)
 		}
-		_, err := source.ReadHistory(t.Context(), "Clients", mail.HistoryScan{Start: now.Add(-time.Hour), End: now, Limit: 50})
+		_, err := history.ReadHistory(t.Context(), "Clients", mail.HistoryScan{Start: now.Add(-time.Hour), End: now, Limit: 50})
 		if fault.From(err, "").Code != "sync_page_too_large" {
 			t.Fatalf("budget error: %v", err)
 		}
@@ -139,8 +138,9 @@ func TestHistoryProviderBudgetAndCancellation(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		source, user := fixtureWithFetch(t, func(*protocol.FetchOptions) { cancel() })
+		history := budgetedHistory(t, source)
 		appendMail(t, user, "metadata")
-		page, err := source.ReadHistory(ctx, "Clients", mail.HistoryScan{Start: time.Now().Add(-time.Hour), End: time.Now(), Limit: 50})
+		page, err := history.ReadHistory(ctx, "Clients", mail.HistoryScan{Start: time.Now().Add(-time.Hour), End: time.Now(), Limit: 50})
 		if err == nil || len(page.Messages) != 0 {
 			t.Fatalf("cancelled page: %+v %v", page, err)
 		}
@@ -158,8 +158,9 @@ func TestHistoryRejectsUnboundedOrMisdirectedSearchResponses(t *testing.T) {
 	for _, reply := range []string{`* ESEARCH (TAG "{tag}") UID ALL 1:4294967295`, `* ESEARCH (TAG "{tag}") ALL 1:3`, `* SEARCH 0 1`, `* SEARCH 9001`} {
 		t.Run(reply, func(t *testing.T) {
 			source, _, _, _ := scriptedServer(t, serverOptions{caps: "IMAP4rev1", searchReply: reply, uidNext: 9001})
+			history := budgetedHistory(t, source)
 			now := time.Now()
-			page, err := source.ReadHistory(t.Context(), "Clients", mail.HistoryScan{Start: now.Add(-30 * 24 * time.Hour), End: now, Limit: 50})
+			page, err := history.ReadHistory(t.Context(), "Clients", mail.HistoryScan{Start: now.Add(-30 * 24 * time.Hour), End: now, Limit: 50})
 			if fault.From(err, "").Code != "imap_metadata_failed" || len(page.Messages) != 0 {
 				t.Fatalf("invalid SEARCH accepted: %+v %v", page, err)
 			}
@@ -194,8 +195,9 @@ func TestHistoryOrdersOverlappingAndUnorderedSearchResults(t *testing.T) {
 
 func TestHistoryTreatsMissingFetchMetadataAsFailedPage(t *testing.T) {
 	source, _, _, _ := scriptedServer(t, serverOptions{caps: "IMAP4rev1", uidNext: 2, readScenario: "missing_flags"})
+	history := budgetedHistory(t, source)
 	now := time.Now()
-	page, err := source.ReadHistory(t.Context(), "Clients", mail.HistoryScan{Start: now.Add(-time.Hour), End: now, Limit: 50})
+	page, err := history.ReadHistory(t.Context(), "Clients", mail.HistoryScan{Start: now.Add(-time.Hour), End: now, Limit: 50})
 	if fault.From(err, "").Code != "imap_metadata_failed" || len(page.Messages) != 0 {
 		t.Fatalf("incomplete FETCH accepted: %+v %v", page, err)
 	}
@@ -203,8 +205,9 @@ func TestHistoryTreatsMissingFetchMetadataAsFailedPage(t *testing.T) {
 
 func TestHistorySkipsCandidateExpungedDuringRead(t *testing.T) {
 	source, _, _, _ := scriptedServer(t, serverOptions{caps: "IMAP4rev1", uidNext: 2, verifySearchReply: "* SEARCH"})
+	history := budgetedHistory(t, source)
 	now := time.Now()
-	page, err := source.ReadHistory(t.Context(), "Clients", mail.HistoryScan{Start: now.Add(-time.Hour), End: now, Limit: 50})
+	page, err := history.ReadHistory(t.Context(), "Clients", mail.HistoryScan{Start: now.Add(-time.Hour), End: now, Limit: 50})
 	if err != nil || len(page.Messages) != 0 || page.NextUID != 0 {
 		t.Fatalf("expunged candidate: %+v %v", page, err)
 	}
@@ -213,8 +216,9 @@ func TestHistorySkipsCandidateExpungedDuringRead(t *testing.T) {
 func TestHistoryUsesExistingOutlookTokenProvider(t *testing.T) {
 	source, _, _, _ := scriptedServer(t, serverOptions{caps: "IMAP4rev1 AUTH=XOAUTH2"})
 	source.accessToken = func(context.Context) (string, error) { return "fixture-access", nil }
+	history := budgetedHistory(t, source)
 	now := time.Now()
-	page, err := source.ReadHistory(t.Context(), "Clients", mail.HistoryScan{Start: now.Add(-time.Hour), End: now, Limit: 50})
+	page, err := history.ReadHistory(t.Context(), "Clients", mail.HistoryScan{Start: now.Add(-time.Hour), End: now, Limit: 50})
 	if err != nil || len(page.Messages) != 0 || page.NextUID != 0 {
 		t.Fatalf("OAuth history: %+v %v", page, err)
 	}
@@ -225,14 +229,16 @@ func TestHistoryReadsFoldersWhenTheServerOmitsUIDNext(t *testing.T) {
 	scan := mail.HistoryScan{Start: now.Add(-time.Hour), End: now, Limit: 50}
 	t.Run("empty folder", func(t *testing.T) {
 		source, _, _, _ := scriptedServer(t, serverOptions{caps: "IMAP4rev1", omitUIDNext: true, searchReply: "* SEARCH"})
-		page, err := source.ReadHistory(t.Context(), "Clients", scan)
+		history := budgetedHistory(t, source)
+		page, err := history.ReadHistory(t.Context(), "Clients", scan)
 		if err != nil || page.MaxUID != 0 || page.NextUID != 0 || len(page.Messages) != 0 {
 			t.Fatalf("empty folder: %+v %v", page, err)
 		}
 	})
 	t.Run("existing messages", func(t *testing.T) {
 		source, _, _, _ := scriptedServer(t, serverOptions{caps: "IMAP4rev1", omitUIDNext: true, searchReply: "* SEARCH 1", verifySearchReply: "* SEARCH"})
-		page, err := source.ReadHistory(t.Context(), "Clients", scan)
+		history := budgetedHistory(t, source)
+		page, err := history.ReadHistory(t.Context(), "Clients", scan)
 		if err != nil || page.MaxUID != 1 || page.Validity != 1 {
 			t.Fatalf("snapshot without UIDNEXT: %+v %v", page, err)
 		}
@@ -251,8 +257,7 @@ func TestHistoryReconnectsAfterSelectedTransportDrops(t *testing.T) {
 		}
 		return conn, err
 	}
-	history := mail.NewConnectionBudget(2).Wrap(source)
-	t.Cleanup(func() { history.RetireHistory() })
+	history := budgetedHistory(t, source)
 
 	now := time.Now()
 	scan := mail.HistoryScan{Start: now.Add(-time.Hour), End: now, Limit: 1}
@@ -274,8 +279,7 @@ func TestHistoryReadBudgetResetsBetweenPagesOnTheSameConnection(t *testing.T) {
 	source, user := fixture(t)
 	appendMail(t, user, strings.Repeat("a", mail.HistoryReadBytes*3/5))
 	appendMail(t, user, strings.Repeat("b", mail.HistoryReadBytes*3/5))
-	history := mail.NewConnectionBudget(2).Wrap(source)
-	t.Cleanup(func() { history.RetireHistory() })
+	history := budgetedHistory(t, source)
 
 	now := time.Now()
 	scan := mail.HistoryScan{Start: now.Add(-time.Hour), End: now, Limit: 1}
@@ -285,5 +289,69 @@ func TestHistoryReadBudgetResetsBetweenPagesOnTheSameConnection(t *testing.T) {
 			t.Fatalf("could not read %s page within a fresh budget: %v", subject, err)
 		}
 		scan.Validity, scan.MaxUID, scan.NextUID = page.Validity, page.MaxUID, page.NextUID
+	}
+}
+
+type blackholeHistoryConn struct {
+	net.Conn
+	dropWrites atomic.Bool
+}
+
+func (c *blackholeHistoryConn) Write(p []byte) (int, error) {
+	if c.dropWrites.Load() {
+		return len(p), nil
+	}
+	return c.Conn.Write(p)
+}
+
+func TestHistoryReconnectsWhenIdleTransportStopsResponding(t *testing.T) {
+	source, user := fixture(t)
+	appendMail(t, user, "first")
+	appendMail(t, user, "second")
+	var firstTransport *blackholeHistoryConn
+	dials := 0
+	source.dial = func(ctx context.Context, network, address string) (net.Conn, error) {
+		conn, err := (&net.Dialer{}).DialContext(ctx, network, address)
+		if err != nil {
+			return nil, err
+		}
+		dials++
+		if dials == 1 {
+			firstTransport = &blackholeHistoryConn{Conn: conn}
+			return firstTransport, nil
+		}
+		return conn, nil
+	}
+	history := budgetedHistory(t, source)
+	now := time.Now()
+	scan := mail.HistoryScan{Start: now.Add(-time.Hour), End: now, Limit: 1}
+	first, err := history.ReadHistory(t.Context(), "Clients", scan)
+	if err != nil || first.NextUID != 1 {
+		t.Fatalf("first page: %+v %v", first, err)
+	}
+	// Drop outgoing packets while the TCP socket itself stays open and silent.
+	firstTransport.dropWrites.Store(true)
+	scan.Validity, scan.MaxUID, scan.NextUID = first.Validity, first.MaxUID, first.NextUID
+	ctx, cancel := context.WithTimeout(t.Context(), mail.HistoryDeadline)
+	defer cancel()
+	page, err := history.ReadHistory(ctx, "Clients", scan)
+	if err != nil || len(page.Messages) != 1 || page.Messages[0].Location.UID != 1 || dials != 2 {
+		t.Fatalf("continuation: %+v %v, %d connection attempts", page, err, dials)
+	}
+}
+
+func TestHistoryTreatsBareLoginNoAsTemporaryWithoutMonitorConfirmation(t *testing.T) {
+	options := serverOptions{bareLoginFailure: true}
+	source, _, _, _ := scriptedServer(t, options)
+	history := budgetedHistory(t, source)
+
+	_, err := history.ReadHistory(t.Context(), "Clients", mail.HistoryScan{})
+	failure := fault.From(err, "")
+	if failure.Code != mail.HistoryUpstreamUnavailable || failure.Params["retry_after"] == "" {
+		t.Fatalf("unconfirmed bare NO: %+v", failure)
+	}
+	monitor, _, _, _ := scriptedServer(t, options)
+	if _, err := monitor.Open(t.Context(), "Clients"); fault.From(err, "").Code != mail.CodeAuthFailed {
+		t.Fatalf("monitor credential result: %v", err)
 	}
 }

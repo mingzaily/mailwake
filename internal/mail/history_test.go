@@ -20,13 +20,14 @@ type historyBudgetSource struct {
 func (s historyBudgetSource) OpenHistory(context.Context, *atomic.Int64) (HistoryConnection, error) {
 	return s, nil
 }
-func (s historyBudgetSource) Close() error       { return nil }
-func (s historyBudgetSource) Disconnected() bool { return false }
+func (s historyBudgetSource) Close() error                               { return nil }
+func (s historyBudgetSource) Probe(context.Context, *atomic.Int64) error { return nil }
+func (s historyBudgetSource) Disconnected() bool                         { return false }
 func (s historyBudgetSource) ReadHistory(ctx context.Context, _ string, _ HistoryScan, _ *atomic.Int64) (HistoryBatch, error) {
 	return s.readHistory(ctx)
 }
 
-func TestHistoryLeavesWatcherCapacityAndReleasesCancelledLease(t *testing.T) {
+func TestActiveHistoryRejectsAnotherPageAndKeepsWatcherCapacity(t *testing.T) {
 	budget := NewConnectionBudget(3)
 	entered := make(chan struct{})
 	source := budget.Wrap(historyBudgetSource{readHistory: func(ctx context.Context) (HistoryBatch, error) {
@@ -39,8 +40,10 @@ func TestHistoryLeavesWatcherCapacityAndReleasesCancelledLease(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { _, err := source.ReadHistory(ctx, "INBOX", HistoryScan{}); done <- err }()
 	<-entered
-	if _, err := source.ReadHistory(t.Context(), "INBOX", HistoryScan{}); fault.From(err, "").Code != "connection_budget_exceeded" {
-		t.Fatal("concurrent history admitted", err)
+	_, err := source.ReadHistory(t.Context(), "Archive", HistoryScan{})
+	failure := fault.From(err, "")
+	if failure.Code != HistoryBusy || failure.Params["retry_after"] != "1" || budget.InUse() != 1 {
+		t.Fatalf("concurrent history result %v, leases %d", failure, budget.InUse())
 	}
 	first, err := source.Open(t.Context(), "one")
 	if err != nil {
@@ -85,7 +88,8 @@ func (c *historyTestConnection) ReadHistory(ctx context.Context, folder string, 
 	}
 	return HistoryBatch{Validity: 42}, nil
 }
-func (c *historyTestConnection) Disconnected() bool { return c.disconnected }
+func (s *historyTestConnection) Probe(context.Context, *atomic.Int64) error { return nil }
+func (c *historyTestConnection) Disconnected() bool                         { return c.disconnected }
 func (c *historyTestConnection) Close() error {
 	c.closed = true
 	return nil
@@ -149,46 +153,73 @@ func TestIdleHistoryYieldsToManagementWithoutTakingWatcherCapacity(t *testing.T)
 	}
 }
 
-func TestHistoryBackoffIsSharedAcrossFoldersAndSkipsCredentialFailures(t *testing.T) {
-	for _, tc := range []struct{ loginError, want string }{
-		{"imap_login_failed", HistoryUpstreamUnavailable},
-		{"outlook_unavailable", HistoryUpstreamUnavailable},
-		{CodeAuthFailed, CodeAuthFailed},
-		{OutlookReauthorize, OutlookReauthorize},
-	} {
-		t.Run(tc.loginError, func(t *testing.T) {
+func TestHistoryBackoffIsSharedAcrossFolders(t *testing.T) {
+	for _, code := range []string{"imap_login_failed", "imap_connection_failed", "outlook_unavailable"} {
+		t.Run(code, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				budget := NewConnectionBudget(2)
 				var logins []time.Time
 				source := budget.Wrap(historyTestProvider{open: func(context.Context, *atomic.Int64) (HistoryConnection, error) {
 					logins = append(logins, time.Now())
 					if len(logins) == 1 {
-						return nil, fault.New(tc.loginError)
+						return nil, fault.New(code)
 					}
 					return &historyTestConnection{}, nil
 				}})
 				defer source.RetireHistory()
 				_, err := source.ReadHistory(t.Context(), "INBOX", HistoryScan{})
 				failure := fault.From(err, "")
-				if failure.Code != tc.want || budget.InUse() != 0 {
+				if failure.Code != HistoryUpstreamUnavailable || budget.InUse() != 0 {
 					t.Fatalf("failure %v, leases %d", err, budget.InUse())
 				}
-				if tc.want == HistoryUpstreamUnavailable {
-					seconds, err := strconv.Atoi(failure.Params["retry_after"])
-					if err != nil || seconds < 5 || seconds > 10 {
-						t.Fatal("retry-after", failure.Params)
-					}
-					_, err = source.ReadHistory(t.Context(), "Archive", HistoryScan{})
-					if fault.From(err, "").Code != tc.want || len(logins) != 1 {
-						t.Fatalf("backoff admitted a new login: %v, %v", err, logins)
-					}
-					time.Sleep(time.Duration(seconds) * time.Second)
+				seconds, err := strconv.Atoi(failure.Params["retry_after"])
+				if err != nil || seconds < 5 || seconds > 10 {
+					t.Fatal("retry-after", failure.Params)
 				}
+				_, err = source.ReadHistory(t.Context(), "Archive", HistoryScan{})
+				if fault.From(err, "").Code != HistoryUpstreamUnavailable || len(logins) != 1 {
+					t.Fatalf("backoff admitted a new login: %v, %v", err, logins)
+				}
+				time.Sleep(time.Duration(seconds) * time.Second)
 				if _, err := source.ReadHistory(t.Context(), "Archive", HistoryScan{}); err != nil {
 					t.Fatal(err)
 				}
 				if len(logins) != 2 || logins[1].Sub(logins[0]) < historyLoginInterval {
 					t.Fatalf("unpaced login attempts: %v", logins)
+				}
+			})
+		})
+	}
+}
+
+func TestHistoryCredentialFailureStaysBlockedUntilSourceReplacement(t *testing.T) {
+	for _, code := range []string{CodeAuthFailed, OutlookReauthorize} {
+		t.Run(code, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				budget := NewConnectionBudget(2)
+				logins := 0
+				source := budget.Wrap(historyTestProvider{open: func(context.Context, *atomic.Int64) (HistoryConnection, error) {
+					logins++
+					return nil, fault.New(code)
+				}})
+				for _, folder := range []string{"INBOX", "Archive"} {
+					_, err := source.ReadHistory(t.Context(), folder, HistoryScan{})
+					failure := fault.From(err, "")
+					if failure.Code != code || len(failure.Params) != 0 || budget.InUse() != 0 {
+						t.Fatalf("credential refusal %v, leases %d", failure, budget.InUse())
+					}
+					time.Sleep(time.Minute)
+				}
+				if logins != 1 {
+					t.Fatalf("credential failure allowed more logins: %d", logins)
+				}
+				source.RetireHistory()
+				replacement := budget.Wrap(historyTestProvider{open: func(context.Context, *atomic.Int64) (HistoryConnection, error) {
+					return &historyTestConnection{}, nil
+				}})
+				defer replacement.RetireHistory()
+				if _, err := replacement.ReadHistory(t.Context(), "INBOX", HistoryScan{}); err != nil {
+					t.Fatal(err)
 				}
 			})
 		})

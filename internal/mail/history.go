@@ -6,8 +6,11 @@ import (
 	"time"
 )
 
-const HistoryUIDSpan = 4096
-const HistoryReadBytes = 2 << 20
+const (
+	HistoryUIDSpan   = 4096
+	HistoryReadBytes = 2 << 20
+	HistoryDeadline  = 20 * time.Second
+)
 
 // HistoryScan describes a fixed read window and its next inclusive UID bound.
 type HistoryScan struct {
@@ -37,6 +40,7 @@ type HistoryProvider interface {
 // HistoryConnection serves one page at a time. Disconnected reports transport
 // loss so the caller can restart an uncommitted page on a fresh connection.
 type HistoryConnection interface {
+	Probe(context.Context, *atomic.Int64) error
 	ReadHistory(context.Context, string, HistoryScan, *atomic.Int64) (HistoryBatch, error)
 	Disconnected() bool
 	Close() error

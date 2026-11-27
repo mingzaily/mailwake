@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/mingzaily/mailwake/internal/coreidentity"
+	"github.com/mingzaily/mailwake/internal/engine"
 	"github.com/mingzaily/mailwake/internal/event"
 	"github.com/mingzaily/mailwake/internal/fault"
 	"github.com/mingzaily/mailwake/internal/logging"
@@ -14,7 +15,7 @@ import (
 )
 
 func (m *Manager) MailMessages(ctx context.Context, reader mailview.Reader, input mailview.MessageRequest) (mailview.Messages, error) {
-	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, mail.HistoryDeadline)
 	defer cancel()
 	identity, err := m.identity.Load(ctx)
 	if err != nil {
@@ -35,18 +36,23 @@ func (m *Manager) MailMessages(ctx context.Context, reader mailview.Reader, inpu
 			return mailview.Messages{}, fault.New("sync_cursor_invalid")
 		}
 	}
-	source, revision, err := m.historyResource(input)
+	resource, err := m.historyResource(input)
 	if err != nil {
 		return mailview.Messages{}, err
 	}
-	if input.Cursor != "" && cursor.Revision != revision {
+	if input.Cursor != "" && cursor.Revision != resource.revision {
 		return mailview.Messages{}, fault.New("sync_cursor_invalid")
 	}
-	cursor.Revision = revision
+	cursor.Revision = resource.revision
 	cursor.Scan.Limit = input.Limit
-	batch, err := source.ReadHistory(ctx, input.Folder, cursor.Scan)
+	var batch mail.HistoryBatch
+	if code := resource.monitor.AuthenticationFailure(); code != "" {
+		err = fault.New(code)
+	} else {
+		batch, err = resource.source.ReadHistory(ctx, input.Folder, cursor.Scan)
+	}
 	if err != nil {
-		if resourceErr := m.checkHistoryResource(input, source, revision); resourceErr != nil {
+		if resourceErr := m.checkHistoryResource(input, resource); resourceErr != nil {
 			return mailview.Messages{}, resourceErr
 		}
 		return mailview.Messages{}, historyError(ctx, err)
@@ -54,7 +60,7 @@ func (m *Manager) MailMessages(ctx context.Context, reader mailview.Reader, inpu
 	page := mailview.Messages{
 		Page:      mailview.Page[mailview.Message]{CoreID: identity.ID, Items: make([]mailview.Message, 0, len(batch.Messages))},
 		MailboxID: input.MailboxID, AccountID: input.AccountID, Folder: input.Folder,
-		SubscriptionRevision: revision, WindowStart: cursor.Scan.Start, WindowEnd: cursor.Scan.End,
+		SubscriptionRevision: resource.revision, WindowStart: cursor.Scan.Start, WindowEnd: cursor.Scan.End,
 		UIDValidity: batch.Validity, SnapshotMaxUID: batch.MaxUID,
 	}
 	for _, item := range batch.Messages {
@@ -71,7 +77,7 @@ func (m *Manager) MailMessages(ctx context.Context, reader mailview.Reader, inpu
 	if err := fitHistoryPage(&page, cursor, identity); err != nil {
 		return mailview.Messages{}, err
 	}
-	if err := m.checkHistoryResource(input, source, revision); err != nil {
+	if err := m.checkHistoryResource(input, resource); err != nil {
 		return mailview.Messages{}, err
 	}
 	if ctx.Err() != nil {
@@ -80,12 +86,18 @@ func (m *Manager) MailMessages(ctx context.Context, reader mailview.Reader, inpu
 	return page, nil
 }
 
-func (m *Manager) checkHistoryResource(input mailview.MessageRequest, source *mail.BudgetedSource, revision int64) error {
-	current, currentRevision, err := m.historyResource(input)
+type historyResource struct {
+	source   *mail.BudgetedSource
+	monitor  *engine.Engine
+	revision int64
+}
+
+func (m *Manager) checkHistoryResource(input mailview.MessageRequest, resource historyResource) error {
+	current, err := m.historyResource(input)
 	if err != nil {
 		return err
 	}
-	if current != source || currentRevision != revision {
+	if current.source != resource.source || current.revision != resource.revision {
 		return fault.New("sync_cursor_invalid")
 	}
 	return nil
@@ -96,7 +108,7 @@ func historyError(ctx context.Context, err error) error {
 	switch failure.Code {
 	case "sync_cursor_invalid", "sync_page_too_large":
 		return err
-	case mail.HistoryUpstreamUnavailable, mail.CodeAuthFailed, mail.OutlookReauthorize:
+	case mail.HistoryUpstreamUnavailable, mail.HistoryBusy, mail.CodeAuthFailed, mail.OutlookReauthorize:
 		logging.RequestCause(ctx, failure.Code)
 		params := map[string]string{"cause_code": failure.Code}
 		if seconds := failure.Params["retry_after"]; seconds != "" {
@@ -108,29 +120,29 @@ func historyError(ctx context.Context, err error) error {
 	}
 }
 
-func (m *Manager) historyResource(input mailview.MessageRequest) (*mail.BudgetedSource, int64, error) {
+func (m *Manager) historyResource(input mailview.MessageRequest) (historyResource, error) {
 	box, err := m.mailbox(input.MailboxID)
 	if err != nil {
-		return nil, 0, fault.New("message_not_found")
+		return historyResource{}, fault.New("message_not_found")
 	}
 	box.mu.RLock()
 	defer box.mu.RUnlock()
 	if box.deleted {
-		return nil, 0, fault.New("message_not_found")
+		return historyResource{}, fault.New("message_not_found")
 	}
 	if box.config.Identity() != input.AccountID {
-		return nil, 0, fault.New("sync_cursor_invalid")
+		return historyResource{}, fault.New("sync_cursor_invalid")
 	}
 	subs := box.monitor.Subscriptions()
 	for _, folder := range subs.Folders {
 		if folder.Name == input.Folder {
 			if box.source == nil {
-				return nil, 0, fault.New("message_unavailable")
+				return historyResource{}, fault.New("message_unavailable")
 			}
-			return box.source, subs.Revision, nil
+			return historyResource{source: box.source, monitor: box.monitor, revision: subs.Revision}, nil
 		}
 	}
-	return nil, 0, fault.New("message_not_found")
+	return historyResource{}, fault.New("message_not_found")
 }
 
 // Long folder paths and JSON escaping also consume response space. Shorten the

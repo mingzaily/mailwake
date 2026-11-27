@@ -26,6 +26,7 @@ func CheckConnectionBudget(folders []Folder, limit int) error {
 type ConnectionBudget struct {
 	mu                    sync.Mutex
 	limit, used, watchers int
+	activeHistory         *historyLease
 	idleHistory           *idleHistory
 }
 

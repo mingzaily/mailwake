@@ -261,6 +261,22 @@
     {
       "status": 503,
       "headers": {
+        "Retry-After": "1"
+      },
+      "body": {
+        "error": {
+          "code": "message_unavailable",
+          "message": "Synthetic error message.",
+          "params": {
+            "cause_code": "busy",
+            "retry_after": "1"
+          }
+        }
+      }
+    },
+    {
+      "status": 503,
+      "headers": {
         "Retry-After": "7"
       },
       "body": {

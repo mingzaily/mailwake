@@ -192,7 +192,8 @@ func (x *connection) Close() error { x.stop(); return x.client.Close() }
 func loginError(err error, authCode string, bareNoIsAuth bool) error {
 	var rejected *protocol.Error
 	if errors.As(err, &rejected) && rejected.Type == protocol.StatusResponseTypeNo {
-		// Monitoring and management retain their legacy bare NO classification.
+		// Monitoring and management treat a bare NO as a credential signal.
+		// History uses the monitor's state to corroborate that ambiguous reply.
 		if rejected.Code == "" && bareNoIsAuth {
 			return fault.New(authCode)
 		}

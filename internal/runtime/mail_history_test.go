@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -23,8 +24,9 @@ func (s *historySource) OpenHistory(context.Context, *atomic.Int64) (mail.Histor
 	return s, nil
 }
 
-func (s *historySource) Close() error       { return nil }
-func (s *historySource) Disconnected() bool { return false }
+func (s *historySource) Close() error                               { return nil }
+func (s *historySource) Probe(context.Context, *atomic.Int64) error { return nil }
+func (s *historySource) Disconnected() bool                         { return false }
 func (s *historySource) ReadHistory(ctx context.Context, _ string, scan mail.HistoryScan, _ *atomic.Int64) (mail.HistoryBatch, error) {
 	return s.read(ctx, scan)
 }
@@ -50,7 +52,7 @@ func TestMailHistoryPreservesWindowReferencesAndMonitoringProgress(t *testing.T)
 	var initial mail.HistoryScan
 	source := &historySource{read: func(ctx context.Context, scan mail.HistoryScan) (mail.HistoryBatch, error) {
 		deadline, ok := ctx.Deadline()
-		if !ok || time.Until(deadline) > 20*time.Second {
+		if !ok || time.Until(deadline) > mail.HistoryDeadline {
 			t.Fatal("unbounded history")
 		}
 		if scan.Validity == 0 {
@@ -250,7 +252,7 @@ func TestHistoryCredentialUpdateRetiresTheOldSource(t *testing.T) {
 	id, update := addMailbox(t, m, "imap.replace.test", 3)
 	subscribeMailbox(t, m, id)
 	input := historyRequest(t, m, id)
-	old, _, err := m.historyResource(input)
+	old, err := m.historyResource(input)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -261,11 +263,190 @@ func TestHistoryCredentialUpdateRetiresTheOldSource(t *testing.T) {
 	if err := m.UpdateMailbox(t.Context(), id, update); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := old.ReadHistory(t.Context(), "INBOX", mail.HistoryScan{}); fault.From(err, "").Code != "sync_cursor_invalid" {
+	if _, err := old.source.ReadHistory(t.Context(), "INBOX", mail.HistoryScan{}); fault.From(err, "").Code != "sync_cursor_invalid" {
 		t.Fatalf("old source admitted a history page: %v", err)
 	}
 	page, err := m.MailMessages(t.Context(), historyReader, input)
 	if err != nil || len(page.Items) != 1 || page.Items[0].Subject != "replacement connection" {
 		t.Fatalf("replacement history: %+v %v", page, err)
+	}
+}
+
+type monitoredHistorySource struct {
+	*historySource
+	authCode     string
+	historyOpens atomic.Int32
+}
+
+func (s *monitoredHistorySource) Open(ctx context.Context, folder string) (mail.Session, error) {
+	if s.authCode != "" {
+		return nil, fault.New(s.authCode)
+	}
+	return s.historySource.Open(ctx, folder)
+}
+
+func (s *monitoredHistorySource) OpenHistory(ctx context.Context, remaining *atomic.Int64) (mail.HistoryConnection, error) {
+	s.historyOpens.Add(1)
+	return s.historySource.OpenHistory(ctx, remaining)
+}
+
+func TestMailHistoryUsesMonitorsCredentialFailureBeforeOpeningConnection(t *testing.T) {
+	for _, code := range []string{mail.CodeAuthFailed, mail.OutlookReauthorize} {
+		t.Run(code, func(t *testing.T) {
+			read := func(context.Context, mail.HistoryScan) (mail.HistoryBatch, error) {
+				return mail.HistoryBatch{Validity: 42}, nil
+			}
+			refusing := &monitoredHistorySource{historySource: &historySource{read: read}, authCode: code}
+			replacement := &monitoredHistorySource{historySource: &historySource{read: read}}
+			m, _, _ := managerFixture(t, func(config settings.Mailbox) mail.Source {
+				if config.Password == "replacement-synthetic-password" {
+					return replacement
+				}
+				return refusing
+			})
+			id, update := addMailbox(t, m, "imap.auth.test", 3)
+			subscribeMailbox(t, m, id)
+			waitFor(t, func() bool { return m.Status()[0].State == "auth_required" })
+			input := historyRequest(t, m, id)
+			_, err := m.MailMessages(t.Context(), historyReader, input)
+			failure := fault.From(err, "")
+			if failure.Code != "message_unavailable" || failure.Params["cause_code"] != code || refusing.historyOpens.Load() != 0 {
+				t.Fatalf("monitor credential failure did not block history: %v", failure)
+			}
+			update.Password = ptr("replacement-synthetic-password")
+			if err := m.UpdateMailbox(t.Context(), id, update); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := m.MailMessages(t.Context(), historyReader, input); err != nil || replacement.historyOpens.Load() != 1 {
+				t.Fatalf("replacement source did not read history: %v", err)
+			}
+		})
+	}
+}
+
+func TestMailboxChangesCancelActiveHistoryAndReleaseTheLease(t *testing.T) {
+	for _, change := range []string{"replace", "delete"} {
+		t.Run(change, func(t *testing.T) {
+			entered, cancelled := make(chan struct{}), make(chan struct{})
+			source := &historySource{read: func(ctx context.Context, _ mail.HistoryScan) (mail.HistoryBatch, error) {
+				close(entered)
+				<-ctx.Done()
+				close(cancelled)
+				return mail.HistoryBatch{}, ctx.Err()
+			}}
+			m, _, _ := managerFixture(t, func(settings.Mailbox) mail.Source { return source })
+			id, update := addMailbox(t, m, "imap.retire.test", 3)
+			subscribeMailbox(t, m, id)
+			box, err := m.mailbox(id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			input := historyRequest(t, m, id)
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+			done := make(chan error, 1)
+			go func() { _, err := m.MailMessages(ctx, historyReader, input); done <- err }()
+			select {
+			case <-entered:
+			case <-ctx.Done():
+				t.Fatal("history did not start")
+			}
+			other := mailview.Reader{ControllerID: "other-controller", DeviceID: "other-device"}
+			_, err = m.MailMessages(ctx, other, input)
+			failure := fault.From(err, "")
+			if failure.Code != "message_unavailable" || failure.Params["cause_code"] != mail.HistoryBusy || failure.Params["retry_after"] != "1" {
+				t.Fatalf("concurrent controller did not receive busy response: %+v", failure)
+			}
+			want, leases := "sync_cursor_invalid", 1
+			switch change {
+			case "replace":
+				update.Password = ptr("replacement-synthetic-password")
+				if err := m.UpdateMailbox(t.Context(), id, update); err != nil {
+					t.Fatal(err)
+				}
+				waitFor(t, func() bool { return m.Status()[0].State == "watching" })
+			case "delete":
+				if err := m.DeleteMailbox(t.Context(), id); err != nil {
+					t.Fatal(err)
+				}
+				want, leases = "message_not_found", 0
+			}
+			select {
+			case <-cancelled:
+				if ctx.Err() != nil {
+					t.Fatal("caller deadline cancelled the page before mailbox retirement")
+				}
+			case <-ctx.Done():
+				t.Fatal("mailbox retirement did not cancel history")
+			}
+			if err := <-done; fault.From(err, "").Code != want || box.budget.InUse() != leases {
+				t.Fatalf("history result %v, leases %d", err, box.budget.InUse())
+			}
+		})
+	}
+}
+
+func TestManagerCloseJoinsHistoryLeaseFromRetiredSource(t *testing.T) {
+	for _, replace := range []bool{false, true} {
+		name := "current source"
+		if replace {
+			name = "retired source"
+		}
+		t.Run(name, func(t *testing.T) {
+			entered, cancelled, release := make(chan struct{}), make(chan struct{}), make(chan struct{})
+			releaseRead := sync.OnceFunc(func() { close(release) })
+			defer releaseRead()
+			source := &historySource{read: func(ctx context.Context, _ mail.HistoryScan) (mail.HistoryBatch, error) {
+				close(entered)
+				<-ctx.Done()
+				close(cancelled)
+				<-release
+				return mail.HistoryBatch{}, ctx.Err()
+			}}
+			m, _, _ := managerFixture(t, func(settings.Mailbox) mail.Source { return source })
+			id, update := addMailbox(t, m, "imap.shutdown.test", 3)
+			subscribeMailbox(t, m, id)
+			input := historyRequest(t, m, id)
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+			readDone := make(chan error, 1)
+			go func() { _, err := m.MailMessages(ctx, historyReader, input); readDone <- err }()
+			select {
+			case <-entered:
+			case <-ctx.Done():
+				t.Fatal("history did not start")
+			}
+			if replace {
+				update.Password = ptr("replacement-synthetic-password")
+				if err := m.UpdateMailbox(t.Context(), id, update); err != nil {
+					t.Fatal(err)
+				}
+			}
+			closed := make(chan struct{})
+			go func() { m.Close(); close(closed) }()
+			select {
+			case <-cancelled:
+				if ctx.Err() != nil {
+					t.Fatal("caller deadline cancelled the page before shutdown")
+				}
+			case <-ctx.Done():
+				t.Fatal("shutdown did not cancel history")
+			}
+			select {
+			case <-closed:
+				t.Fatal("shutdown returned while history still held the lease")
+			case <-time.After(50 * time.Millisecond):
+			}
+			// Release the test reader and join both entry points.
+			releaseRead()
+			select {
+			case <-closed:
+			case <-ctx.Done():
+				t.Fatal("shutdown did not finish after releasing history")
+			}
+			if err := <-readDone; err == nil {
+				t.Fatal("shutdown accepted a cancelled page")
+			}
+		})
 	}
 }

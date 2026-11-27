@@ -104,6 +104,19 @@ func (e *Engine) StatusSnapshot() (int64, []FolderStatus) {
 	return e.subscriptions.Revision, items
 }
 
+// AuthenticationFailure reports the mailbox credential error already observed
+// by a monitor. Folder status belongs to this source's configuration generation.
+func (e *Engine) AuthenticationFailure() string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	for _, status := range e.status {
+		if status.State == "auth_required" {
+			return status.LastError.Code
+		}
+	}
+	return ""
+}
+
 func (e *Engine) update(folder string, fn func(*FolderStatus)) {
 	e.mu.Lock()
 	defer e.mu.Unlock()

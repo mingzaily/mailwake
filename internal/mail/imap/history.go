@@ -47,7 +47,7 @@ func (c *readLimitConn) Close() error {
 }
 
 type historyConnection struct {
-	*connection
+	conn      *connection
 	transport *readLimitConn
 }
 
@@ -65,16 +65,25 @@ func (s *Source) OpenHistory(ctx context.Context, remaining *atomic.Int64) (mail
 		x.Close()
 		return nil, err
 	}
-	return &historyConnection{x, transport}, nil
+	return &historyConnection{conn: x, transport: transport}, nil
+}
+
+func (x *historyConnection) Close() error {
+	return x.conn.Close()
 }
 
 func (x *historyConnection) Disconnected() bool {
-	return x.client.State() == protocol.ConnStateLogout
+	return x.conn.client.State() == protocol.ConnStateLogout
+}
+
+func (x *historyConnection) Probe(ctx context.Context, remaining *atomic.Int64) error {
+	x.transport.remaining.Store(remaining)
+	return x.conn.command(ctx, "imap_connection_closed", func(context.Context) error { return x.conn.client.Noop().Wait() })
 }
 
 func (x *historyConnection) ReadHistory(ctx context.Context, folder string, scan mail.HistoryScan, remaining *atomic.Int64) (mail.HistoryBatch, error) {
 	x.transport.remaining.Store(remaining)
-	selected, err := x.selectFolder(ctx, folder, true)
+	selected, err := x.conn.selectFolder(ctx, folder, true)
 	if err != nil {
 		return mail.HistoryBatch{}, messageFolderError(err)
 	}
@@ -111,7 +120,7 @@ func (x *historyConnection) ReadHistory(ctx context.Context, folder string, scan
 		return result, nil
 	}
 	set := protocol.UIDSetNum(uids...)
-	items, err := x.fetch(ctx, "imap_metadata_failed", set, &protocol.FetchOptions{UID: true, InternalDate: true, Envelope: true, Flags: true}, 0)
+	items, err := x.conn.fetch(ctx, "imap_metadata_failed", set, &protocol.FetchOptions{UID: true, InternalDate: true, Envelope: true, Flags: true}, 0)
 	if err != nil {
 		return mail.HistoryBatch{}, err
 	}

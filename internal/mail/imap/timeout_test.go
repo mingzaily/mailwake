@@ -30,6 +30,7 @@ type serverOptions struct {
 	silent                  string
 	caps                    string
 	loginFailure            string
+	bareLoginFailure        bool
 	loginCaps               bool
 	requireID               bool
 	rejectID                bool
@@ -95,6 +96,10 @@ func scriptedServer(t *testing.T, options serverOptions) (*Source, <-chan string
 				case seen <- struct{}{}:
 				default:
 				}
+				continue
+			}
+			if command == "LOGIN" && options.bareLoginFailure {
+				fmt.Fprintf(conn, "%s NO login failed\r\n", tag)
 				continue
 			}
 			if (command == "LOGIN" || command == "AUTHENTICATE") && options.loginFailure != "" {
