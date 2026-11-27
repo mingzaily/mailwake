@@ -144,7 +144,7 @@ func TestScheduledRoundUsesOneReservedWatcherSlot(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer live.Close()
-	round, err := source.(ScheduledSource).OpenScheduled(t.Context())
+	round, err := source.OpenScheduled(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -2,6 +2,7 @@ package mail
 
 import (
 	"context"
+	"sync/atomic"
 	"time"
 )
 
@@ -27,6 +28,16 @@ type HistoryBatch struct {
 	Messages                  []HistoryMessage
 }
 
-type HistorySource interface {
-	ReadHistory(context.Context, string, HistoryScan) (HistoryBatch, error)
+// HistoryProvider opens a read-only connection. The atomic counter belongs to
+// one page and follows it across connection setup and any reconnect.
+type HistoryProvider interface {
+	OpenHistory(context.Context, *atomic.Int64) (HistoryConnection, error)
+}
+
+// HistoryConnection serves one page at a time. Disconnected reports transport
+// loss so the caller can restart an uncommitted page on a fresh connection.
+type HistoryConnection interface {
+	ReadHistory(context.Context, string, HistoryScan, *atomic.Int64) (HistoryBatch, error)
+	Disconnected() bool
+	Close() error
 }

@@ -3,8 +3,10 @@ package imap
 import (
 	"context"
 	"fmt"
+	"net"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 	"unicode/utf8"
@@ -13,6 +15,17 @@ import (
 	"github.com/mingzaily/mailwake/internal/fault"
 	"github.com/mingzaily/mailwake/internal/mail"
 )
+
+func (s *Source) ReadHistory(ctx context.Context, folder string, scan mail.HistoryScan) (mail.HistoryBatch, error) {
+	var remaining atomic.Int64
+	remaining.Store(mail.HistoryReadBytes)
+	conn, err := s.OpenHistory(ctx, &remaining)
+	if err != nil {
+		return mail.HistoryBatch{}, err
+	}
+	defer conn.Close()
+	return conn.ReadHistory(ctx, folder, scan, &remaining)
+}
 
 func TestHistoryKeepsFixedWindowAndUIDSnapshotWithoutReadingBodies(t *testing.T) {
 	source, user := fixtureWithFetch(t, func(options *protocol.FetchOptions) {
@@ -224,4 +237,53 @@ func TestHistoryReadsFoldersWhenTheServerOmitsUIDNext(t *testing.T) {
 			t.Fatalf("snapshot without UIDNEXT: %+v %v", page, err)
 		}
 	})
+}
+
+func TestHistoryReconnectsAfterSelectedTransportDrops(t *testing.T) {
+	source, user := fixture(t)
+	appendMail(t, user, "first")
+	appendMail(t, user, "second")
+	var transports []net.Conn
+	source.dial = func(ctx context.Context, network, address string) (net.Conn, error) {
+		conn, err := (&net.Dialer{}).DialContext(ctx, network, address)
+		if err == nil {
+			transports = append(transports, conn)
+		}
+		return conn, err
+	}
+	history := mail.NewConnectionBudget(2).Wrap(source)
+	t.Cleanup(func() { history.RetireHistory() })
+
+	now := time.Now()
+	scan := mail.HistoryScan{Start: now.Add(-time.Hour), End: now, Limit: 1}
+	first, err := history.ReadHistory(t.Context(), "Clients", scan)
+	if err != nil || len(first.Messages) != 1 || first.Messages[0].Location.UID != 2 || len(transports) != 1 {
+		t.Fatalf("first page: %+v, %v, %d connections", first, err, len(transports))
+	}
+	if err := transports[0].Close(); err != nil {
+		t.Fatal(err)
+	}
+	scan.Validity, scan.MaxUID, scan.NextUID = first.Validity, first.MaxUID, first.NextUID
+	second, err := history.ReadHistory(t.Context(), "Clients", scan)
+	if err != nil || len(second.Messages) != 1 || second.Messages[0].Location.UID != 1 || len(transports) != 2 {
+		t.Fatalf("continuation: %+v, %v, %d connections", second, err, len(transports))
+	}
+}
+
+func TestHistoryReadBudgetResetsBetweenPagesOnTheSameConnection(t *testing.T) {
+	source, user := fixture(t)
+	appendMail(t, user, strings.Repeat("a", mail.HistoryReadBytes*3/5))
+	appendMail(t, user, strings.Repeat("b", mail.HistoryReadBytes*3/5))
+	history := mail.NewConnectionBudget(2).Wrap(source)
+	t.Cleanup(func() { history.RetireHistory() })
+
+	now := time.Now()
+	scan := mail.HistoryScan{Start: now.Add(-time.Hour), End: now, Limit: 1}
+	for _, subject := range []string{"b", "a"} {
+		page, err := history.ReadHistory(t.Context(), "Clients", scan)
+		if err != nil || len(page.Messages) != 1 || page.Messages[0].Subject != strings.Repeat(subject, 1024) {
+			t.Fatalf("could not read %s page within a fresh budget: %v", subject, err)
+		}
+		scan.Validity, scan.MaxUID, scan.NextUID = page.Validity, page.MaxUID, page.NextUID
+	}
 }

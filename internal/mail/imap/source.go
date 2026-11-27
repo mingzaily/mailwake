@@ -72,10 +72,10 @@ type connection struct {
 }
 
 func (s *Source) connect(ctx context.Context) (*connection, error) {
-	return s.connectWithReadLimit(ctx, 0)
+	return s.connectWithReadLimit(ctx, nil)
 }
 
-func (s *Source) connectWithReadLimit(ctx context.Context, limit int64) (*connection, error) {
+func (s *Source) connectWithReadLimit(ctx context.Context, limit *readLimitConn) (*connection, error) {
 	d := tls.Dialer{NetDialer: &net.Dialer{Timeout: 15 * time.Second}, Config: s.tlsConfig}
 	var conn net.Conn
 	var err error
@@ -100,8 +100,9 @@ func (s *Source) connectWithReadLimit(ctx context.Context, limit int64) (*connec
 	if err != nil {
 		return nil, fault.New("imap_connection_failed")
 	}
-	if limit > 0 {
-		conn = &readLimitConn{Conn: conn, remaining: limit}
+	if limit != nil {
+		limit.Conn = conn
+		conn = limit
 	}
 	x := &connection{conn: conn, timeout: s.timeout, updates: make(chan struct{}, 1)}
 	options := &imapclient.Options{
@@ -133,13 +134,13 @@ func (s *Source) connectWithReadLimit(ctx context.Context, limit int64) (*connec
 	}
 	if err := x.command(ctx, "imap_login_failed", func(loginCtx context.Context) error {
 		if s.accessToken == nil {
-			return loginError(x.client.Login(s.username, s.password).Wait(), mail.CodeAuthFailed)
+			return loginError(x.client.Login(s.username, s.password).Wait(), mail.CodeAuthFailed, limit == nil)
 		}
 		token, err := s.accessToken(loginCtx)
 		if err != nil {
 			return err
 		}
-		return loginError(x.client.Authenticate(xoauth2{s.username, token}), mail.OutlookReauthorize)
+		return loginError(x.client.Authenticate(xoauth2{s.username, token}), mail.OutlookReauthorize, limit == nil)
 	}); err != nil {
 		x.Close()
 		return nil, err
@@ -188,12 +189,15 @@ func (s *Source) connectWithReadLimit(ctx context.Context, limit int64) (*connec
 
 func (x *connection) Close() error { x.stop(); return x.client.Close() }
 
-func loginError(err error, authCode string) error {
+func loginError(err error, authCode string, bareNoIsAuth bool) error {
 	var rejected *protocol.Error
 	if errors.As(err, &rejected) && rejected.Type == protocol.StatusResponseTypeNo {
-		// Some providers reject credentials with a bare NO.
+		// Monitoring and management retain their legacy bare NO classification.
+		if rejected.Code == "" && bareNoIsAuth {
+			return fault.New(authCode)
+		}
 		switch rejected.Code {
-		case "", protocol.ResponseCodeAuthenticationFailed, protocol.ResponseCodeAuthorizationFailed, protocol.ResponseCodeExpired:
+		case protocol.ResponseCodeAuthenticationFailed, protocol.ResponseCodeAuthorizationFailed, protocol.ResponseCodeExpired:
 			return fault.New(authCode)
 		}
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -18,7 +19,13 @@ type historySource struct {
 	read func(context.Context, mail.HistoryScan) (mail.HistoryBatch, error)
 }
 
-func (s *historySource) ReadHistory(ctx context.Context, _ string, scan mail.HistoryScan) (mail.HistoryBatch, error) {
+func (s *historySource) OpenHistory(context.Context, *atomic.Int64) (mail.HistoryConnection, error) {
+	return s, nil
+}
+
+func (s *historySource) Close() error       { return nil }
+func (s *historySource) Disconnected() bool { return false }
+func (s *historySource) ReadHistory(ctx context.Context, _ string, scan mail.HistoryScan, _ *atomic.Int64) (mail.HistoryBatch, error) {
 	return s.read(ctx, scan)
 }
 
@@ -222,5 +229,43 @@ func TestMailHistorySizeBudgetResumesAtOmittedMessage(t *testing.T) {
 	next, err := readMailCursor(identity, page.NextCursor, "messages", historyReader, time.Now())
 	if err != nil || next.Scan.NextUID != 100-uint32(len(page.Items)) {
 		t.Fatalf("omitted UID lost: %+v %v", next, err)
+	}
+}
+
+func TestHistoryCredentialUpdateRetiresTheOldSource(t *testing.T) {
+	source := func(subject string) *historySource {
+		return &historySource{read: func(context.Context, mail.HistoryScan) (mail.HistoryBatch, error) {
+			return mail.HistoryBatch{Validity: 42, MaxUID: 1, Messages: []mail.HistoryMessage{
+				{Location: mail.Location{UIDValidity: 42, UID: 1}, Subject: subject},
+			}}, nil
+		}}
+	}
+	replacement := "replacement-synthetic-password"
+	m, _, _ := managerFixture(t, func(config settings.Mailbox) mail.Source {
+		if config.Password == replacement {
+			return source("replacement connection")
+		}
+		return source("original connection")
+	})
+	id, update := addMailbox(t, m, "imap.replace.test", 3)
+	subscribeMailbox(t, m, id)
+	input := historyRequest(t, m, id)
+	old, _, err := m.historyResource(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.MailMessages(t.Context(), historyReader, input); err != nil {
+		t.Fatal(err)
+	}
+	update.Password = &replacement
+	if err := m.UpdateMailbox(t.Context(), id, update); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := old.ReadHistory(t.Context(), "INBOX", mail.HistoryScan{}); fault.From(err, "").Code != "sync_cursor_invalid" {
+		t.Fatalf("old source admitted a history page: %v", err)
+	}
+	page, err := m.MailMessages(t.Context(), historyReader, input)
+	if err != nil || len(page.Items) != 1 || page.Items[0].Subject != "replacement connection" {
+		t.Fatalf("replacement history: %+v %v", page, err)
 	}
 }

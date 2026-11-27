@@ -64,7 +64,7 @@ type mailboxRuntime struct {
 	config                       settings.Mailbox
 	invalid, deleted, overBudget bool
 	budget                       *mail.ConnectionBudget
-	source                       mail.Source
+	source                       *mail.BudgetedSource
 	monitor                      *engine.Engine
 	cancel                       context.CancelFunc
 	done                         chan struct{}
@@ -161,7 +161,11 @@ func (m *Manager) startMailbox(b *mailboxRuntime, state mail.Subscriptions) {
 		// either reach this engine through the snapshot or precede this read.
 		b.monitor.SetDetectCodes(m.detectCodes.Load())
 	}()
-	b.monitor = engine.New(b.source, m.store, b.config.ID, state, time.Minute, m.log)
+	var source mail.Source
+	if b.source != nil {
+		source = b.source
+	}
+	b.monitor = engine.New(source, m.store, b.config.ID, state, time.Minute, m.log)
 	b.monitor.SetDetectCodes(m.detectCodes.Load())
 	b.monitor.SetEventNamespace(b.config.Identity())
 	b.monitor.SetMailboxLabel(b.config.Label)
@@ -197,7 +201,14 @@ func (m *Manager) Close() {
 		for _, b := range boxes {
 			b.mu.Lock()
 			b.stop()
+			var historyDone <-chan struct{}
+			if b.source != nil {
+				historyDone = b.source.RetireHistory()
+			}
 			b.mu.Unlock()
+			if historyDone != nil {
+				<-historyDone
+			}
 		}
 		<-m.workerDone
 		<-m.nativeDone
@@ -377,7 +388,7 @@ func (m *Manager) UpdateMailbox(ctx context.Context, id string, input settings.M
 		return err
 	}
 	labelOnly := !invalid && input.Outlook == nil && input.Password == nil && next.Host == current.Host && next.Port == current.Port && next.Username == current.Username && next.Limit() == current.Limit()
-	var source mail.Source
+	var source *mail.BudgetedSource
 	if !labelOnly {
 		source = b.budget.Wrap(m.newSource(next))
 		directory, err := probeMailbox(ctx, source)
@@ -428,6 +439,9 @@ func (m *Manager) UpdateMailbox(ctx context.Context, id string, input settings.M
 		b.publish()
 		return nil
 	}
+	if b.source != nil {
+		b.source.RetireHistory()
+	}
 	b.source = source
 	b.invalid = false
 	b.budget.Resize(next.Limit())
@@ -463,6 +477,9 @@ func (m *Manager) DeleteMailbox(ctx context.Context, id string) error {
 	if err != nil {
 		m.startMailbox(b, b.monitor.Subscriptions())
 		return err
+	}
+	if b.source != nil {
+		b.source.RetireHistory()
 	}
 	m.log.Info("Mailbox deleted", "mailbox_id", id)
 	return nil

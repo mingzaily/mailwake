@@ -2,6 +2,7 @@ package imap
 
 import (
 	"context"
+	"crypto/tls"
 	"net"
 	"slices"
 	"strings"
@@ -19,26 +20,60 @@ import (
 // unsolicited responses, as the IMAP decoder consumes their contents.
 type readLimitConn struct {
 	net.Conn
-	remaining int64
-	exceeded  atomic.Bool
+	remaining atomic.Pointer[atomic.Int64]
+	exceeded  atomic.Pointer[atomic.Int64]
 }
 
 func (c *readLimitConn) Read(p []byte) (int, error) {
-	if c.remaining == 0 {
-		c.exceeded.Store(true)
+	budget := c.remaining.Load()
+	left := budget.Load()
+	if left <= 0 {
+		c.exceeded.Store(budget)
 		return 0, fault.New("sync_page_too_large")
 	}
-	n, err := c.Conn.Read(p[:min(int64(len(p)), c.remaining)])
-	c.remaining -= int64(n)
+	n, err := c.Conn.Read(p[:min(int64(len(p)), left)])
+	// A decoder read can remain blocked between pages. Charge the input to
+	// the page that owns the connection when those bytes arrive.
+	c.remaining.Load().Add(-int64(n))
 	return n, err
 }
 
-func (s *Source) ReadHistory(ctx context.Context, folder string, scan mail.HistoryScan) (mail.HistoryBatch, error) {
-	x, err := s.connectWithReadLimit(ctx, mail.HistoryReadBytes)
-	if err != nil {
-		return mail.HistoryBatch{}, err
+// History releases its transport before another operation can take the lease.
+func (c *readLimitConn) Close() error {
+	if secure, ok := c.Conn.(*tls.Conn); ok {
+		return secure.NetConn().Close()
 	}
-	defer x.Close()
+	return c.Conn.Close()
+}
+
+type historyConnection struct {
+	*connection
+	transport *readLimitConn
+}
+
+func (s *Source) OpenHistory(ctx context.Context, remaining *atomic.Int64) (mail.HistoryConnection, error) {
+	transport := &readLimitConn{}
+	transport.remaining.Store(remaining)
+	x, err := s.connectWithReadLimit(ctx, transport)
+	if err != nil {
+		return nil, err
+	}
+	// Each history command observes its page context. After setup, the
+	// authenticated connection outlives that first request.
+	x.stop()
+	if err := ctx.Err(); err != nil {
+		x.Close()
+		return nil, err
+	}
+	return &historyConnection{x, transport}, nil
+}
+
+func (x *historyConnection) Disconnected() bool {
+	return x.client.State() == protocol.ConnStateLogout
+}
+
+func (x *historyConnection) ReadHistory(ctx context.Context, folder string, scan mail.HistoryScan, remaining *atomic.Int64) (mail.HistoryBatch, error) {
+	x.transport.remaining.Store(remaining)
 	selected, err := x.selectFolder(ctx, folder, true)
 	if err != nil {
 		return mail.HistoryBatch{}, messageFolderError(err)

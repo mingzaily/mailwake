@@ -38,7 +38,12 @@ func respondFault(c *gin.Context, err error) {
 		status = http.StatusUnprocessableEntity
 	case "message_too_large", "sync_page_too_large":
 		status = http.StatusRequestEntityTooLarge
-	case "message_unavailable", "native_push_unavailable":
+	case "message_unavailable":
+		status = http.StatusServiceUnavailable
+		if seconds := failure.Params["retry_after"]; seconds != "" {
+			c.Header("Retry-After", seconds)
+		}
+	case "native_push_unavailable":
 		status = http.StatusServiceUnavailable
 	case "mailbox_duplicate", "setup_complete", "settings_conflict", "subscriptions_conflict", "sync_cursor_invalid":
 		status = http.StatusConflict

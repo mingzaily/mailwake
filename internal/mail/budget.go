@@ -26,6 +26,7 @@ func CheckConnectionBudget(folders []Folder, limit int) error {
 type ConnectionBudget struct {
 	mu                    sync.Mutex
 	limit, used, watchers int
+	idleHistory           *idleHistory
 }
 
 func NewConnectionBudget(limit int) *ConnectionBudget { return &ConnectionBudget{limit: limit} }
@@ -33,15 +34,32 @@ func (b *ConnectionBudget) InUse() int                { b.mu.Lock(); defer b.mu.
 
 // Resize changes admission for new connections. Existing test/discovery leases
 // finish normally and remain counted across configuration generations.
-func (b *ConnectionBudget) Resize(limit int)          { b.mu.Lock(); defer b.mu.Unlock(); b.limit = limit }
-func (b *ConnectionBudget) Wrap(source Source) Source { return budgetSource{source, b} }
+func (b *ConnectionBudget) Resize(limit int) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.limit = limit
+	if b.used > b.limit && b.idleHistory != nil {
+		b.closeIdleHistory()
+	}
+}
+
+func (b *ConnectionBudget) Wrap(source Source) *BudgetedSource {
+	return &BudgetedSource{source: source, budget: b}
+}
+
 func (b *ConnectionBudget) acquire(ctx context.Context, watcher bool) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if b.used >= b.limit || (watcher && b.watchers >= b.limit-1) {
+	if watcher && b.watchers >= b.limit-1 {
+		return fault.New("connection_budget_exceeded")
+	}
+	if b.used >= b.limit && b.idleHistory != nil {
+		b.closeIdleHistory()
+	}
+	if b.used >= b.limit {
 		return fault.New("connection_budget_exceeded")
 	}
 	b.used++
@@ -59,19 +77,20 @@ func (b *ConnectionBudget) release(watcher bool) {
 	}
 }
 
-type budgetSource struct {
-	source Source
-	budget *ConnectionBudget
+type BudgetedSource struct {
+	source  Source
+	budget  *ConnectionBudget
+	history historyState
 }
 
-func (s budgetSource) Folders(ctx context.Context) (*FolderDiscovery, error) {
+func (s *BudgetedSource) Folders(ctx context.Context) (*FolderDiscovery, error) {
 	if err := s.budget.acquire(ctx, false); err != nil {
 		return nil, err
 	}
 	defer s.budget.release(false)
 	return s.source.Folders(ctx)
 }
-func (s budgetSource) Open(ctx context.Context, folder string) (Session, error) {
+func (s *BudgetedSource) Open(ctx context.Context, folder string) (Session, error) {
 	if err := s.budget.acquire(ctx, true); err != nil {
 		return nil, err
 	}
@@ -95,7 +114,7 @@ func (s *budgetSession) Close() error {
 	return s.err
 }
 
-func (s budgetSource) OpenScheduled(ctx context.Context) (FolderConnection, error) {
+func (s *BudgetedSource) OpenScheduled(ctx context.Context) (FolderConnection, error) {
 	provider, ok := s.source.(ScheduledSource)
 	if !ok {
 		return nil, fault.New("scheduled_check_unavailable")
@@ -123,7 +142,7 @@ func (c *budgetConnection) Close() error {
 	return c.err
 }
 
-func (s budgetSource) MarkRead(ctx context.Context, folder string, location Location) error {
+func (s *BudgetedSource) MarkRead(ctx context.Context, folder string, location Location) error {
 	logging.RequestStage(ctx, "connection_budget")
 	if err := s.budget.acquire(ctx, false); err != nil {
 		return err
@@ -132,38 +151,11 @@ func (s budgetSource) MarkRead(ctx context.Context, folder string, location Loca
 	return s.source.MarkRead(ctx, folder, location)
 }
 
-func (s budgetSource) ReadContent(ctx context.Context, folder string, location Location) (Body, error) {
+func (s *BudgetedSource) ReadContent(ctx context.Context, folder string, location Location) (Body, error) {
 	logging.RequestStage(ctx, "connection_budget")
 	if err := s.budget.acquire(ctx, false); err != nil {
 		return Body{}, err
 	}
 	defer s.budget.release(false)
 	return s.source.ReadContent(ctx, folder, location)
-}
-
-// History uses one spare slot, leaving the watcher capacity available even while
-// monitoring is reconnecting and has temporarily released its leases.
-func (b *ConnectionBudget) acquireHistory(ctx context.Context) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if b.used >= b.limit || b.used > b.watchers {
-		return fault.New("connection_budget_exceeded")
-	}
-	b.used++
-	return nil
-}
-
-func (s budgetSource) ReadHistory(ctx context.Context, folder string, scan HistoryScan) (HistoryBatch, error) {
-	provider, ok := s.source.(HistorySource)
-	if !ok {
-		return HistoryBatch{}, fault.New("message_unavailable")
-	}
-	if err := s.budget.acquireHistory(ctx); err != nil {
-		return HistoryBatch{}, err
-	}
-	defer s.budget.release(false)
-	return provider.ReadHistory(ctx, folder, scan)
 }

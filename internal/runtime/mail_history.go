@@ -8,6 +8,7 @@ import (
 	"github.com/mingzaily/mailwake/internal/coreidentity"
 	"github.com/mingzaily/mailwake/internal/event"
 	"github.com/mingzaily/mailwake/internal/fault"
+	"github.com/mingzaily/mailwake/internal/logging"
 	"github.com/mingzaily/mailwake/internal/mail"
 	"github.com/mingzaily/mailwake/internal/mailview"
 )
@@ -45,12 +46,10 @@ func (m *Manager) MailMessages(ctx context.Context, reader mailview.Reader, inpu
 	cursor.Scan.Limit = input.Limit
 	batch, err := source.ReadHistory(ctx, input.Folder, cursor.Scan)
 	if err != nil {
-		switch fault.From(err, "message_unavailable").Code {
-		case "sync_cursor_invalid", "sync_page_too_large":
-			return mailview.Messages{}, err
-		default:
-			return mailview.Messages{}, messageError(ctx, err)
+		if resourceErr := m.checkHistoryResource(input, source, revision); resourceErr != nil {
+			return mailview.Messages{}, resourceErr
 		}
+		return mailview.Messages{}, historyError(ctx, err)
 	}
 	page := mailview.Messages{
 		Page:      mailview.Page[mailview.Message]{CoreID: identity.ID, Items: make([]mailview.Message, 0, len(batch.Messages))},
@@ -72,12 +71,8 @@ func (m *Manager) MailMessages(ctx context.Context, reader mailview.Reader, inpu
 	if err := fitHistoryPage(&page, cursor, identity); err != nil {
 		return mailview.Messages{}, err
 	}
-	_, currentRevision, err := m.historyResource(input)
-	if err != nil {
+	if err := m.checkHistoryResource(input, source, revision); err != nil {
 		return mailview.Messages{}, err
-	}
-	if currentRevision != revision {
-		return mailview.Messages{}, fault.New("sync_cursor_invalid")
 	}
 	if ctx.Err() != nil {
 		return mailview.Messages{}, messageError(ctx, ctx.Err())
@@ -85,7 +80,35 @@ func (m *Manager) MailMessages(ctx context.Context, reader mailview.Reader, inpu
 	return page, nil
 }
 
-func (m *Manager) historyResource(input mailview.MessageRequest) (mail.HistorySource, int64, error) {
+func (m *Manager) checkHistoryResource(input mailview.MessageRequest, source *mail.BudgetedSource, revision int64) error {
+	current, currentRevision, err := m.historyResource(input)
+	if err != nil {
+		return err
+	}
+	if current != source || currentRevision != revision {
+		return fault.New("sync_cursor_invalid")
+	}
+	return nil
+}
+
+func historyError(ctx context.Context, err error) error {
+	failure := fault.From(err, "message_unavailable")
+	switch failure.Code {
+	case "sync_cursor_invalid", "sync_page_too_large":
+		return err
+	case mail.HistoryUpstreamUnavailable, mail.CodeAuthFailed, mail.OutlookReauthorize:
+		logging.RequestCause(ctx, failure.Code)
+		params := map[string]string{"cause_code": failure.Code}
+		if seconds := failure.Params["retry_after"]; seconds != "" {
+			params["retry_after"] = seconds
+		}
+		return &fault.Error{Code: "message_unavailable", Params: params}
+	default:
+		return messageError(ctx, err)
+	}
+}
+
+func (m *Manager) historyResource(input mailview.MessageRequest) (*mail.BudgetedSource, int64, error) {
 	box, err := m.mailbox(input.MailboxID)
 	if err != nil {
 		return nil, 0, fault.New("message_not_found")
@@ -101,11 +124,10 @@ func (m *Manager) historyResource(input mailview.MessageRequest) (mail.HistorySo
 	subs := box.monitor.Subscriptions()
 	for _, folder := range subs.Folders {
 		if folder.Name == input.Folder {
-			source, ok := box.source.(mail.HistorySource)
-			if !ok {
+			if box.source == nil {
 				return nil, 0, fault.New("message_unavailable")
 			}
-			return source, subs.Revision, nil
+			return box.source, subs.Revision, nil
 		}
 	}
 	return nil, 0, fault.New("message_not_found")

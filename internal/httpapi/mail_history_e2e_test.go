@@ -9,7 +9,9 @@ import (
 	"log"
 	"net"
 	"net/http/httptest"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -23,6 +25,20 @@ import (
 	"github.com/mingzaily/mailwake/internal/settings"
 	"github.com/mingzaily/mailwake/internal/storage"
 )
+
+type historyLoginSession struct {
+	imapserver.Session
+	logins  *atomic.Int32
+	failure *atomic.Pointer[protocol.Error]
+}
+
+func (s historyLoginSession) Login(username, password string) error {
+	s.logins.Add(1)
+	if failure := s.failure.Load(); failure != nil {
+		return failure
+	}
+	return s.Session.Login(username, password)
+}
 
 func TestMailHistoryAcrossHTTPRuntimeAndIMAP(t *testing.T) {
 	cert := httptest.NewTLSServer(nil)
@@ -39,9 +55,11 @@ func TestMailHistoryAcrossHTTPRuntimeAndIMAP(t *testing.T) {
 	}
 	backend := imapmemserver.New()
 	backend.AddUser(user)
+	var logins atomic.Int32
+	var loginFailure atomic.Pointer[protocol.Error]
 	server := imapserver.New(&imapserver.Options{NewSession: func(*imapserver.Conn) (imapserver.Session, *imapserver.GreetingData, error) {
-		return backend.NewSession(), nil, nil
-	}, Caps: protocol.CapSet{protocol.CapIMAP4rev1: {}}, Logger: log.New(io.Discard, "", 0)})
+		return historyLoginSession{backend.NewSession(), &logins, &loginFailure}, nil, nil
+	}, Caps: protocol.CapSet{protocol.CapIMAP4rev1: {}, protocol.CapIdle: {}}, Logger: log.New(io.Discard, "", 0)})
 	done := make(chan struct{})
 	go func() { defer close(done); server.Serve(listener) }()
 	t.Cleanup(func() { server.Close(); <-done })
@@ -78,8 +96,8 @@ func TestMailHistoryAcrossHTTPRuntimeAndIMAP(t *testing.T) {
 		t.Fatal(err)
 	}
 	f := appFixture{router: New(auth, app.Manager, store, logger, Integrations{Native: app.Native, Management: app.Management}), grant: grant, coreID: identity.ID, service: app.Management, log: logger}
-	password := "synthetic-password"
-	mailbox, err := app.CreateMailbox(t.Context(), settings.MailboxCreate{MailboxUpdate: settings.MailboxUpdate{Host: "127.0.0.1", Port: listener.Addr().(*net.TCPAddr).Port, Username: "synthetic@example.test", Password: &password}, Folders: []mail.Folder{{Name: "INBOX", Check: "5m"}}})
+	password, connectionLimit := "synthetic-password", 2
+	mailbox, err := app.CreateMailbox(t.Context(), settings.MailboxCreate{MailboxUpdate: settings.MailboxUpdate{Host: "127.0.0.1", Port: listener.Addr().(*net.TCPAddr).Port, Username: "synthetic@example.test", Password: &password, ConnectionLimit: &connectionLimit}, Folders: []mail.Folder{{Name: "INBOX", Check: "realtime"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,6 +119,7 @@ func TestMailHistoryAcrossHTTPRuntimeAndIMAP(t *testing.T) {
 	}
 	input := mailview.MessageRequest{MailboxID: catalog.Items[0].MailboxID, AccountID: catalog.Items[0].AccountID, Folder: "INBOX", Limit: 100}
 	started := time.Now()
+	beforeHistory := logins.Load()
 	var all []mailview.Message
 	pages, bytes := 0, 0
 	for {
@@ -123,8 +142,8 @@ func TestMailHistoryAcrossHTTPRuntimeAndIMAP(t *testing.T) {
 		}
 		input.Cursor = page.NextCursor
 	}
-	if len(all) != 300 || pages != 3 {
-		t.Fatalf("incomplete history: %d messages in %d pages", len(all), pages)
+	if len(all) != 300 || pages != 3 || logins.Load() != beforeHistory+1 {
+		t.Fatalf("history: %d messages, %d pages, %d logins", len(all), pages, logins.Load()-beforeHistory)
 	}
 	for i, item := range all {
 		if item.Reference.UID != uint32(300-i) || item.IsRead != (item.Reference.UID%3 == 0) {
@@ -134,7 +153,7 @@ func TestMailHistoryAcrossHTTPRuntimeAndIMAP(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	t.Logf("local TLS IMAP: 300 imported messages, %d pages, %d JSON bytes, %s total; scheduled monitor remained healthy", pages, bytes, time.Since(started).Round(time.Millisecond))
+	t.Logf("local TLS IMAP: 300 imported messages, %d pages, %d JSON bytes, %s total; real-time monitor remained healthy", pages, bytes, time.Since(started).Round(time.Millisecond))
 	after, _ := store.Checkpoint(t.Context(), mailbox.ID, "INBOX")
 	currentEvents, _ := store.Recent(t.Context())
 	if after != checkpoint || len(events) != len(currentEvents) {
@@ -166,5 +185,44 @@ func TestMailHistoryAcrossHTTPRuntimeAndIMAP(t *testing.T) {
 	stale := f.do(t, "POST", appPrefix+"/mail/messages", input, headers)
 	if stale.Code != 409 || !strings.Contains(stale.Body.String(), "sync_cursor_invalid") {
 		t.Fatalf("old UIDVALIDITY accepted: %d %s", stale.Code, stale.Body.String())
+	}
+	// A management probe can reclaim the idle history lease even at capacity.
+	if err := app.Manager.TestSavedMailbox(t.Context(), mailbox.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	input.Cursor = ""
+	baseline := logins.Load()
+	loginFailure.Store(&protocol.Error{Type: protocol.StatusResponseTypeNo, Code: protocol.ResponseCodeAuthenticationFailed, Text: "private-provider-detail"})
+	rejected := f.do(t, "POST", appPrefix+"/mail/messages", input, headers)
+	if rejected.Code != 503 || rejected.Header().Get("Retry-After") != "" || !strings.Contains(rejected.Body.String(), `"cause_code":"mail_auth_failed"`) {
+		t.Fatalf("credential refusal: %d %s, headers %v", rejected.Code, rejected.Body.String(), rejected.Header())
+	}
+
+	// The response code is provider-defined. Both controllers share the mailbox backoff.
+	loginFailure.Store(&protocol.Error{Type: protocol.StatusResponseTypeNo, Code: "PROVIDER-SPECIFIC", Text: "private-provider-detail"})
+	otherCredential, _ := f.invite(t, []string{"content"})
+	otherHeaders := map[string]string{"Authorization": "Bearer " + otherCredential}
+	for _, device := range []map[string]string{headers, otherHeaders} {
+		retry := f.do(t, "POST", appPrefix+"/mail/messages", input, device)
+		seconds, err := strconv.Atoi(retry.Header().Get("Retry-After"))
+		if retry.Code != 503 || err != nil || seconds < 1 || seconds > 10 ||
+			!strings.Contains(retry.Body.String(), `"code":"message_unavailable"`) ||
+			!strings.Contains(retry.Body.String(), `"cause_code":"upstream_unavailable"`) ||
+			strings.Contains(retry.Body.String(), "private-provider-detail") {
+			t.Fatalf("temporary refusal: %d %s, headers %v", retry.Code, retry.Body.String(), retry.Header())
+		}
+	}
+	if logins.Load() != baseline+2 {
+		t.Fatalf("expected two logins for credential and temporary failures, got %d", logins.Load()-baseline)
+	}
+	var temporaryRefusals int
+	for _, request := range logging.AppRequests(logger) {
+		if request.Route == appPrefix+"/mail/messages" && request.CauseCode == "upstream_unavailable" && request.ResponseCode == "OTHER" {
+			temporaryRefusals++
+		}
+	}
+	if temporaryRefusals != 1 {
+		t.Fatalf("expected one logged provider response, got %d", temporaryRefusals)
 	}
 }

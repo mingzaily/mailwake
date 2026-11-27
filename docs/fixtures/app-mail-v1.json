@@ -259,6 +259,34 @@
       }
     },
     {
+      "status": 503,
+      "headers": {
+        "Retry-After": "7"
+      },
+      "body": {
+        "error": {
+          "code": "message_unavailable",
+          "message": "Synthetic error message.",
+          "params": {
+            "cause_code": "upstream_unavailable",
+            "retry_after": "7"
+          }
+        }
+      }
+    },
+    {
+      "status": 503,
+      "body": {
+        "error": {
+          "code": "message_unavailable",
+          "message": "Synthetic error message.",
+          "params": {
+            "cause_code": "mail_auth_failed"
+          }
+        }
+      }
+    },
+    {
       "status": 504,
       "body": {
         "error": {
